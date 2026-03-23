@@ -45,6 +45,7 @@ class Class:
 
 
 class Function:
+    # function | default function for modal decomposition
     EFD = EFD
     CEEFD = ceefd_real_cls.ceefd
     CEEMDAN = ceefd_real_cls.ceemdan
@@ -61,19 +62,3 @@ class Function:
     SVMD = svmd_cls.extract_mode
     EMD = emd
 
-# function | default function for modal decomposition
-EFD = Function.EFD
-CEEFD = Function.CEEFD
-CEEMDAN = Function.CEEMDAN
-VMD = Function.VMD
-EEMD = Function.EEMD
-FMD = Function.FMD
-EWT = Function.EWT
-SSA = Function.SSA
-RPSEMD = Function.RPSEMD
-CEEMD = Function.CEEMD
-MEMD = Function.MEMD
-ICEEMDAN = Function.ICEEMDAN
-LMD = Function.LMD
-SVMD = Function.SVMD
-EMD = Function.EMD

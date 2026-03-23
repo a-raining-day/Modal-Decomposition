@@ -4,7 +4,7 @@ from COLOR.colorful_print import printc
 
 EMD_cls = EMD
 
-def emd(S, T, spline_kind: str = "cubic", nbsym: int = 2, max_imf=-1, fs=None):
+def emd(S, T=None, spline_kind: str = "cubic", nbsym: int = 2, max_imf=-1, fs=None):
     if not isinstance(S, np.ndarray):
         S = np.array(S)
 

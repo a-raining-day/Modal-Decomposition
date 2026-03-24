@@ -1,6 +1,6 @@
 import numpy as np
 from numba import njit
-
+from typing import Tuple
 
 class SSA:
     def __init__(self, window_size=None):
@@ -14,7 +14,7 @@ class SSA:
         self.U_ = None
         self.V_ = None
 
-    def decompose(self, S, groups=None):
+    def decompose(self, S, groups=None) -> Tuple[np.ndarray, np.ndarray]:
         """
         :parameter:
         S: Signal
@@ -50,29 +50,20 @@ class SSA:
         RCs = []
 
         for group in groups:
-            RC = np.zeros((L, K))
+            x_group = np.zeros((L, K))
 
             for i in group:
-                Xi = sigma[i] * U[:, i:i + 1] @ VT[i:i + 1, :]
-
-                for j in range(L):
-                    for k in range(K):
-                        if j + k < L:
-                            continue
-                        elif j + k < K + L - 1:
-                            RC[j, k] += Xi[j + k - L, k] / min(j + 1, L, N - j - K + 1)
+                x_group += sigma[i] * np.outer(U[:, i], VT[i, :])
 
             rc = np.zeros(N)
-            for n in range(N):
-                count = 0
-                for j in range(L):
-                    for k in range(K):
-                        if j + k == n:
-                            rc[n] += RC[j, k]
-                            count += 1
-                if count > 0:
-                    rc[n] /= count
+            count = np.zeros(N)
+            for i in range(L):
+                for j in range(K):
+                    d = i + j
+                    rc[d] += x_group[i, j]
+                    count[d] += 1
 
+            rc = rc / count
             RCs.append(rc)
 
         self.components_ = np.array(RCs)
@@ -80,7 +71,7 @@ class SSA:
         self.U_ = U
         self.V_ = VT
 
-        return self.components_
+        return self.components_, np.zeros((1, self.components_.shape[1]))
 
 
 @njit

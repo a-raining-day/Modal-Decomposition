@@ -1,10 +1,21 @@
 from PyEMD import EMD
 import numpy as np
-from COLOR.colorful_print import printc
+from .COLOR.colorful_print import printc
+from typing import Tuple
 
 EMD_cls = EMD
 
-def emd(S, T=None, spline_kind: str = "cubic", nbsym: int = 2, max_imf=-1, fs=None):
+def emd(S, T=None, spline_kind: str = "cubic", nbsym: int = 2, max_imf=-1, fs=None) -> Tuple[np.ndarray, np.ndarray]:
+    """
+
+    :param S:
+    :param T:
+    :param spline_kind:
+    :param nbsym:
+    :param max_imf:
+    :param fs:
+    :return: IMFs (2-dim), Res: None
+    """
     if not isinstance(S, np.ndarray):
         S = np.array(S)
 
@@ -20,4 +31,6 @@ def emd(S, T=None, spline_kind: str = "cubic", nbsym: int = 2, max_imf=-1, fs=No
 
     EMD_cls = EMD(spline_kind, nbsym)
 
-    EMD_cls.emd(S, T, max_imf=max_imf)
+    IMFs = EMD_cls.emd(S, T, max_imf=max_imf)
+
+    return IMFs[:-1, :], IMFs[-1, :]

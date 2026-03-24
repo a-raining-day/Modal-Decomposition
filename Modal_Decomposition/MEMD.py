@@ -4,7 +4,7 @@ from scipy.signal import find_peaks
 from scipy.interpolate import make_interp_spline, interp1d
 
 
-def memd(S, d, k=None, max_imf=None, sd_thresh=0.2, max_iter=10):
+def memd(S, d=None, k=None, max_imf=None, sd_thresh=0.2, max_iter=10):
     """
     :param S: Signal，(d, N)，d -> channels，N -> time points
     :param d: channels or dimensions
@@ -17,6 +17,12 @@ def memd(S, d, k=None, max_imf=None, sd_thresh=0.2, max_iter=10):
 
     if not isinstance(S, np.ndarray):
         S = np.array(S)
+
+    if S.ndim != 2:
+        raise ValueError(f"dim of S must be 2-dim, not {S.ndim}!")
+
+    if d is None:
+        d = S.shape[0]
 
     if S.shape[0] != d:
         raise ValueError(f"shape of S should be: ({d}, N)，but get -> {S.shape}")

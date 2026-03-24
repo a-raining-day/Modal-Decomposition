@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from scipy.signal import hilbert
+from typing import Tuple
 
 class SVMD:
     def __init__(self, num_modes=3, alpha=2000, tol=1e-7):
@@ -23,7 +24,12 @@ class SVMD:
 
         return mode
 
-    def decompose(self, S):
+    def decompose(self, S) -> Tuple[np.ndarray, np.ndarray]:
+        """
+
+        :param S: Signal (1-dim)
+        :return: IMFs(2-dim), Res(1-dim)
+        """
         Res = S
         for _ in range(self.num_modes):
             mode = self.extract_mode(Res)
@@ -32,4 +38,4 @@ class SVMD:
 
             Res -= mode
 
-        return np.array(self.modes)
+        return np.array(self.modes), Res

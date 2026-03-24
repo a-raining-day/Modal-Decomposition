@@ -3,6 +3,7 @@ Modal Decomposition:
     LMD、CEEMDAN、EFD、CEEFD、VMD、EEMD、FMD、EWT、SSA、RPSEMD、CEEMD、MEMD、ICEEMDAN、EMD
 """
 import numpy as np
+from typing import Literal
 
 from .EFD import EFD
 from .CEEFD import CEEFD
@@ -19,11 +20,35 @@ from .LMD import lmd
 from .SVMD import SVMD
 from .EMD import emd
 
+__all__ = ["Class", "Function"]
 
-def is_increasing(S) -> bool:
-    diff = np.ediff1d(S)
-    epsilon = 1e-8
-    return np.all(diff > epsilon)
+def is_increasing(S, threshold=2, tolerance: Literal["high", "mid", "low"]="high") -> bool:
+    def count_extrema(x):
+        interior = x[1:-1]
+        left = x[:-2]
+        right = x[2:]
+        maxima = (interior > left) & (interior > right)
+        minima = (interior < left) & (interior < right)
+        return np.sum(maxima) + np.sum(minima)
+
+    if tolerance == "high":
+        ans_3 = count_extrema(S) <= threshold
+        return ans_3
+
+    elif tolerance == "mid":
+        diff = np.diff(S)
+
+        sign_changes = np.diff(np.sign(diff))
+
+        count = np.sum(np.abs(sign_changes) == 2)
+
+        ans_1 = count <= threshold  # one way to check
+        return ans_1
+
+    else:
+        # the second way
+        ans_2 = np.all(S[1:] >= S[:-1]) or np.all(S[1:] <= S[:-1])
+        return ans_2
 
 ceefd_cls = CEEFD
 ceefd_real_cls = CEEFD()
@@ -59,6 +84,6 @@ class Function:
     MEMD = memd
     ICEEMDAN = iceemdan
     LMD = lmd
-    SVMD = svmd_cls.extract_mode
+    SVMD = svmd_cls.decompose
     EMD = emd
 

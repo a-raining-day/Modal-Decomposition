@@ -1,6 +1,6 @@
 import numpy as np
 from .EMD import emd
-from . import is_increasing
+from .help_function import is_increasing
 
 
 def iceemdan(S, T=None, Ne=300, epsilon_0=None, max_imf=None, verbose: bool=False, spline_kind: str = "cubic", nbsym: int = 2, emd_max_imf=-1, fs=None):

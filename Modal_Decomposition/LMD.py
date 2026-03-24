@@ -1,12 +1,12 @@
 import numpy as np
 import scipy.signal as sg
 import scipy.interpolate as ip
-from . import is_increasing
+from .help_function import is_increasing
 from scipy.signal import argrelextrema
 from scipy.signal import hilbert
 
 
-def lmd(S, max_pf=None, max_iter=100, eps=0.01):
+def lmd(S, max_pf=None, max_iter=37, eps=0.05):
     """
     :param S: Signal (1-dim)
     :param max_pf: max num of pfs
@@ -61,25 +61,38 @@ def lmd(S, max_pf=None, max_iter=100, eps=0.01):
             m_values = np.array(m_values)
             a_values = np.array(a_values)
 
+            t_mid = np.clip(t_mid, 0, T - 1)
+            a_values = np.maximum(a_values, 1e-10)
+            a_values = np.minimum(a_values, 1e10)
+
             try:
-                # 三次样条插值
-                m_interp = ip.CubicSpline(t_mid, m_values, extrapolate=True)
-                a_interp = ip.CubicSpline(t_mid, a_values, extrapolate=True)
+                m_interp = ip.PchipInterpolator(t_mid, m_values, extrapolate=False)
+                a_interp = ip.PchipInterpolator(t_mid, a_values, extrapolate=False)
 
                 m_t = m_interp(t)
                 a_t = a_interp(t)
+
+                if np.any(np.isnan(m_t)) or np.any(np.isnan(a_t)):
+                    raise ValueError("NaN in interpolation")
+
             except:
-                m_t = np.interp(t, t_mid, m_values)
-                a_t = np.interp(t, t_mid, a_values)
+                m_t = np.interp(t, t_mid, m_values, left=m_values[0], right=m_values[-1])
+                a_t = np.interp(t, t_mid, a_values, left=a_values[0], right=a_values[-1])
 
             a_t = np.maximum(a_t, 1e-10)
+            a_t = np.minimum(a_t, 1e10)
 
             h_new = h - m_t
             s_new = h_new / a_t
 
             a_total = a_total * a_t
+            a_total = np.clip(a_total, 1e-20, 1e20)
 
             a_deviation = np.max(np.abs(a_t - 1.0))
+
+            if np.var(a_t) < 1e-6:
+                s = s_new
+                break
 
             if a_deviation < eps:
                 s = s_new
@@ -89,6 +102,11 @@ def lmd(S, max_pf=None, max_iter=100, eps=0.01):
             s = s_new
 
         current_pf = a_total * s
+
+        if np.any(np.isnan(current_pf)) or np.any(np.isinf(current_pf)):
+            print(f"Warning: PF {pf_idx + 1} contains invalid values. Stopping decomposition.")
+            break
+
         PFs.append(current_pf)
 
         residue = residue - current_pf
@@ -110,7 +128,7 @@ def lmd(S, max_pf=None, max_iter=100, eps=0.01):
             PFs.pop()  # remove
             break
 
-    return np.array(PFs), residue
+    return np.array(PFs, dtype=np.float64), residue
 
 def compute_envelope(signal):
     analytic_signal = hilbert(signal)
@@ -120,7 +138,7 @@ def compute_envelope(signal):
 
 if __name__ == "__main__":
     t = np.linspace(0, 10, 1000)
-    S = np.sin(2 * np.pi * 5 * t) * (1 + 0.5 * np.sin(2 * np.pi * 0.5 * t))  # 调幅信号
+    S = np.sin(2 * np.pi * 5 * t) * (1 + 0.5 * np.sin(2 * np.pi * 0.5 * t))
 
     PFs, residue = lmd(S, max_pf=5, eps=0.01)
 

@@ -1,7 +1,7 @@
 import numpy as np
+from .help_function import is_increasing
 from .EMD import emd
-from . import is_increasing
-from COLOR.colorful_print import printc
+from .COLOR.colorful_print import printc
 
 def rpsemd(S, T=None, f=None, M=4, max_imf=None, fs=1.0, spline_kind: str = "cubic", nbsym: int = 2, emd_max_imf=-1):
     """
@@ -13,6 +13,9 @@ def rpsemd(S, T=None, f=None, M=4, max_imf=None, fs=1.0, spline_kind: str = "cub
     :param M: num of phases
     :return: IMFs, Res -> np.ndarray(2-dim)
     """
+
+    if not isinstance(S, np.ndarray):
+        S = np.array(S)
 
     if f is None:
         N = len(S)
@@ -32,7 +35,7 @@ def rpsemd(S, T=None, f=None, M=4, max_imf=None, fs=1.0, spline_kind: str = "cub
     phi = np.array([2.0 * np.pi * i / M for i in range(M)])
 
     IMFs = []
-    Res = None
+    Res = S
 
     if max_imf is None:
         max_imf = int(np.log2(len(S)))
@@ -41,16 +44,16 @@ def rpsemd(S, T=None, f=None, M=4, max_imf=None, fs=1.0, spline_kind: str = "cub
         orders = []
         for m in range(M):
             Am_t = np.sin(2 * np.pi * T * f + phi[m])
-            Xm_t = S + Am_t
+            Xm_t = Res + Am_t
 
             _IMFs, _Res = emd(Xm_t, T, spline_kind=spline_kind, nbsym=nbsym, max_imf=emd_max_imf)
             orders.append(_IMFs[0, :])
 
         IMF = np.average(orders, axis=0)
         IMFs.append(IMF)
-        S = S - IMF
+        Res = Res - IMF
 
-        if np.std(S) < 1e-10 or is_increasing(S) or is_increasing(-S):
+        if np.std(Res) < 1e-10 or is_increasing(Res) or is_increasing(-Res):
             break
 
     return np.array(IMFs), np.array(Res)

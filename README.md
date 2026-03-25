@@ -41,8 +41,9 @@ cd Motal-Decomposition
 pip install -r requirements.txt
 ```
 
-*Well, some libs should installed by yourself, don't use `pip install -r requirements.txt`, because `torch, torchvision` need installed on Official Web*
+*Well, some libs should be installed by yourself, don't use `pip install -r requirements.txt`, because `Triton` need installed by GitHub.*
 
+*`Triton` please visite this url: https://github.com/woct0rdho/triton-windows/releases*
 
 ## Dependence
 

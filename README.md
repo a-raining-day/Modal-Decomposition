@@ -41,6 +41,9 @@ cd Motal-Decomposition
 pip install -r requirements.txt
 ```
 
+*Well, some libs should installed by yourself, don't use `pip install -r requirements.txt`, because `torch, torchvision` need installed on Official Web*
+
+
 ## Dependence
 
 This lib's dependence are:
@@ -58,8 +61,6 @@ This lib's dependence are:
 - vmdpy
 
 *Other dependence please read "requirements.txt"*
-
-*Well, some libs should installed by yourself, don't use `pip install -r requirements.txt`, because `torch, torchvision` need installed on Official Web*
 
 ## Codes Resource
 

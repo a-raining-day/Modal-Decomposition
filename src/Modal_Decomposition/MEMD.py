@@ -149,7 +149,7 @@ def generate_primes(n):
     return primes
 
 
-def compute_local_mean(signal, vectors, projections, T):
+def compute_local_mean(signal, vectors, T):
     """
     signal: now signal (d, N)
     vectors: directional vector (d, k)
@@ -231,23 +231,3 @@ def should_stop(residue):
             return True
 
     return False
-
-
-if __name__ == "__main__":
-    # example: 3-channel，1000 time points
-    N = 1000
-    t = np.linspace(0, 10, N)
-
-    S = np.zeros((3, N))
-    S[0] = np.sin(2 * np.pi * 5 * t) + 0.5 * np.sin(2 * np.pi * 20 * t)
-    S[1] = 0.8 * np.sin(2 * np.pi * 3 * t) + 0.3 * np.sin(2 * np.pi * 15 * t)
-    S[2] = 0.6 * np.sin(2 * np.pi * 8 * t) + 0.4 * np.sin(2 * np.pi * 12 * t)
-
-    # add noise
-    S += 0.1 * np.random.randn(3, N)
-
-    imfs, residue = memd(S, d=3, k=128, max_imf=5)
-
-    print(f"finish -> {len(imfs)} IMFs")
-    print(f"IMFs shape: {imfs.shape}")
-    print(f"shape of Res: {residue.shape}")

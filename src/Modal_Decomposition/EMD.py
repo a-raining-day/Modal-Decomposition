@@ -18,7 +18,7 @@ Description: (if None write None)
 
 from PyEMD import EMD
 import numpy as np
-from COLOR.colorful_print import printc
+from .COLOR.colorful_print import printc
 from typing import Tuple
 
 EMD_cls = EMD

@@ -16,7 +16,7 @@ Description: (if None write None)
     Realize the EWT
 """
 
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union
 import numpy as np
 
 def ewt \
@@ -30,7 +30,7 @@ def ewt \
     lengthFilter: int = 10,
     sigmaFilter: int = 5,
     need_mfd: bool = False,
-    need_boundaries: bool = False) -> Tuple[np.ndarray, np.ndarray] | Tuple[np.ndarray, np.ndarray, np.ndarray] | Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    need_boundaries: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
     """
     :param S: Signal
     :param N:
@@ -59,15 +59,3 @@ def ewt \
 
     if not need_mfd and not need_boundaries:
         return ewt[:-1, :], ewt[-1, :]
-
-
-if __name__ == '__main__':
-    import numpy as np
-
-    S = np.random.rand(1, 500).squeeze()
-
-    EWT, mfb, boundarire = ewt(S)
-
-    print(EWT)
-
-    print(type(EWT))

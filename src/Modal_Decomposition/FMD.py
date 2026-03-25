@@ -41,7 +41,7 @@ def estimate_period(signal):
        period = len(signal)
     return period
 
-def fmd(S, n, L=100, max_iters=10):
+def fmd(S, n=10, L=100, max_iters=10):
     """
     :param S: Signal (2-dim)
     :param n: store n IMFs
@@ -65,4 +65,5 @@ def fmd(S, n, L=100, max_iters=10):
            modes.append(filtered_signal)
        if len(modes) >= n:
            break
+
     return modes[:n]

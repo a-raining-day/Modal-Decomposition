@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68.2.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Modal-Decomposition"
+version = "0.0.1"
+authors = [
+  {name = "Mao_HaoChuan", email = "2215269365@qq.com"},
+]
+description = "a package for modal decomposition"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "colorama",
+    "numpy",
+    "EMD-signal",
+    "numba",
+    "ewtpy",
+    "scipy",
+    "antropy",
+    "tqdm",
+    "vmdpy"
+]
+optional-dependencies = {"dev"=["pytest>=7.0", "black"], "plot"=["matplotlib"]}
+
+[project.urls]
+homepage = "https://github.com/a-raining-day/Modal-Decomposition"
+repository = "https://github.com/a-raining-day/Modal-Decomposition.git"
+
+[tool.setuptools]
+package-dir = {"" = "src"}

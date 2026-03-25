@@ -157,14 +157,3 @@ def compute_envelope(signal):
     analytic_signal = hilbert(signal)
     amplitude_envelope = np.abs(analytic_signal)
     return amplitude_envelope
-
-
-if __name__ == "__main__":
-    t = np.linspace(0, 10, 1000)
-    S = np.sin(2 * np.pi * 5 * t) * (1 + 0.5 * np.sin(2 * np.pi * 0.5 * t))
-
-    PFs, residue = lmd(S, max_pf=5, eps=0.01)
-
-    reconstructed = np.sum(PFs, axis=0) + residue
-    error = np.max(np.abs(S - reconstructed))
-    print(f"error: {error:.6f}")

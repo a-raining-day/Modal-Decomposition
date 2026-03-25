@@ -18,10 +18,13 @@ Description: (if None write None)
 import numpy as np
 from .help_function import is_increasing
 from .EMD import emd
-from COLOR.colorful_print import printc
+from .COLOR import printc
 
 def rpsemd(S, T=None, f=None, M=4, max_imf=None, fs=1.0, spline_kind: str = "cubic", nbsym: int = 2, emd_max_imf=-1):
     """
+    :param emd_max_imf:
+    :param nbsym:
+    :param spline_kind:
     :param fs:
     :param T: time axis
     :param max_imf: max num of IMFs

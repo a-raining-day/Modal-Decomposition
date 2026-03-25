@@ -87,7 +87,7 @@ class CEEFD:
         """
         :return: other_IMFs (ndarray-2D), IMF_ (np.ndarray-2D), Res (ndarray), Res_ (ndarray)
         """
-        from Modal_Decomposition.EFD import EFD
+        from .EFD import EFD
         import antropy as ant
 
         CEEMDAN = self.give_ceemdan()

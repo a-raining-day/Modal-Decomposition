@@ -41,6 +41,12 @@ cd Motal-Decomposition
 pip install -r requirements.txt
 ```
 
+***Or***:
+
+```shell
+pip install Modal-Decomposition
+```
+
 *Well, some libs should be installed by yourself, don't use `pip install -r requirements.txt`, because `Triton` need installed by GitHub.*
 
 *`Triton` please visite this url: https://github.com/woct0rdho/triton-windows/releases*
@@ -51,15 +57,15 @@ This lib's dependence are:
 
 ***Python: 3.10***
 
-- antropy
-- colorama (for printc)
-- einops
-- EMD-signal
-- ewtpy
-- numba
-- numpy
-- scipy
-- vmdpy
+- [antropy](https://github.com/raphaelvallat/antropy)
+- [colorama](https://github.com/tartley/colorama)
+- [einops](https://github.com/arogozhnikov/einops)
+- [EMD-signal](https://github.com/laszukdawid/PyEMD)
+- [ewtpy](https://github.com/vrcarva/ewtpy)
+- [numba](https://github.com/numba/numba)
+- [numpy](https://github.com/numpy/numpy)
+- [scipy](https://github.com/scipy/scipy)
+- [vmdpy](https://github.com/vrcarva/vmdpy)
 
 *Other dependence please read "requirements.txt"*
 

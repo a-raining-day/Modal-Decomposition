@@ -19,7 +19,7 @@ Description: (if None write None)
 """
 
 import numpy as np
-from COLOR.colorful_print import printc
+from .COLOR import printc
 
 def EFD(S, T=None, fs=None):
     """

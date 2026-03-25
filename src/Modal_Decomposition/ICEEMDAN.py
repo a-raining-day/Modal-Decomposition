@@ -23,6 +23,9 @@ from .help_function import is_increasing
 
 def iceemdan(S, T=None, Ne=300, epsilon_0=None, max_imf=None, verbose: bool=False, spline_kind: str = "cubic", nbsym: int = 2, emd_max_imf=-1, fs=None):
     """
+    :param emd_max_imf:
+    :param nbsym:
+    :param spline_kind:
     :param verbose: is print formation
     :param S: Signal (1-dim)
     :param Ne: total num of samples (times of add noise), default 300

@@ -38,6 +38,7 @@ Modify:
     2026.3.25 - Optimize the cost of import, from 5.001s to 0.747s. Put some heavy lib into internal of the function
     2026.3.26 - Optimize the description of the type of input and output. now, the dim of input and output is more clear.
     2026.3.29 - Optimize the SSA.decompose function, time changed from 40min averagely to 2s averagely.
+    2026.3.30 - Rebuilding All.
 """
 from .help_function import is_increasing
 

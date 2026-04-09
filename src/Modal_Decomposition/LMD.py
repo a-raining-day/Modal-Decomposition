@@ -18,36 +18,43 @@ Description: (if None write None)
 Modify:
     2026.3.25 - Optimize the use of scipy
     2026.4.3  - Finish the Optimization of the LMD.
+    2026.4.7  - LMD can support the decompose completely now.
+    2026.4.9  - Change some hardcode parameters to args.
 """
 
 import numpy as np
 from .help_function import is_increasing
 from typing import Union, Tuple
 
-EPS_STABLE = 1e-12
-MIN_AMP = 1e-12
-MAX_AMP = 1e12
-CONVERGE_MEAN = 1e-3
-SMOOTH_WINDOW = 5
 
 def lmd(
     S: Union[list, np.ndarray],
-    max_pf: int | None = None,
+    max_pf: Union[int, None] = None,
     max_iter: int = 37,
-    eps: float = 0.05
+    eps: float = 0.05,
+    eps_stable: float = 1e-12,
+    min_amp: float = 1e-12,
+    max_amp: float = 1e12,
+    converge_mean: float = 1e-3,
+    smooth_window: int = 5
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     LMD: Local mean decomposition
 
     :param S: Signal (1-dim)
-    :param max_pf: the max num of the PFs. Default log2(N)
+    :param max_pf: the max num of the PFs. Default log2(N), -1 means decompose completely.
     :param max_iter: max iteration for each iter of decomposing the PFs. Default 37, according the paper.
     :param eps: Envelope convergence threshold
+    :param eps_stable:
+    :param min_amp:
+    :param max_amp:
+    :param converge_mean:
+    :param smooth_window:
 
     Returns:
         PFs: (n_pf, N), Res: (N,)
     """
-    from scipy.signal import argrelextrema, hilbert, savgol_filter
+    from scipy.signal import argrelextrema, savgol_filter
 
     if S.ndim == 0:
         raise ValueError("The dim of the S must be 1-dim, not 0")
@@ -71,58 +78,113 @@ def lmd(
     residue = S.copy()
     PFs: list[np.ndarray] = []
 
-    for _ in range(max_pf):
-        h = residue.copy()
-        a_total = np.ones(n_samples, dtype=np.float64)
-        converged = False
+    if max_pf != -1:
+        for _ in range(max_pf):
+            h = residue.copy()
+            a_total = np.ones(n_samples, dtype=np.float64)
+            converged = False
 
-        for __ in range(max_iter):
-            max_loc = argrelextrema(h, np.greater)[0]
-            min_loc = argrelextrema(h, np.less)[0]
-            ext_idx = np.unique(np.concatenate([max_loc, min_loc]))
+            for __ in range(max_iter):
+                max_loc = argrelextrema(h, np.greater)[0]
+                min_loc = argrelextrema(h, np.less)[0]
+                ext_idx = np.unique(np.concatenate([max_loc, min_loc]))
 
-            if len(ext_idx) < 3:
+                if len(ext_idx) < 3:
+                    break
+
+                ext_idx, ext_vals = _mirror_extend_real(h, ext_idx, n_samples)
+                ext_idx = np.sort(ext_idx)
+
+                t_mid = (ext_idx[:-1] + ext_idx[1:]) / 2.0
+                m_vals = (ext_vals[:-1] + ext_vals[1:]) / 2.0
+                a_vals = np.abs(ext_vals[:-1] - ext_vals[1:]) / 2.0
+
+                m_t = _safe_interpolate(t_mid, m_vals, t)
+                a_t = _safe_interpolate(t_mid, a_vals, t)
+
+                a_t = np.clip(a_t, min_amp, max_amp)
+                a_t = savgol_filter(a_t, smooth_window, 2)
+
+                if _check_convergence(m_t, a_t, eps, converge_mean):
+                    converged = True
+                    break
+
+                s_new = (h - m_t) / a_t
+                a_total = np.clip(a_total * a_t, min_amp, max_amp)
+                h = s_new
+
+            if not converged:
                 break
 
-            ext_idx, ext_vals = _mirror_extend_real(h, ext_idx, n_samples)
-            ext_idx = np.sort(ext_idx)
+            current_pf = np.clip(a_total * s_new, -max_amp, max_amp)
 
-            t_mid = (ext_idx[:-1] + ext_idx[1:]) / 2.0
-            m_vals = (ext_vals[:-1] + ext_vals[1:]) / 2.0
-            a_vals = np.abs(ext_vals[:-1] - ext_vals[1:]) / 2.0
-
-            m_t = _safe_interpolate(t_mid, m_vals, t)
-            a_t = _safe_interpolate(t_mid, a_vals, t)
-
-            a_t = np.clip(a_t, MIN_AMP, MAX_AMP)
-            a_t = savgol_filter(a_t, SMOOTH_WINDOW, 2)
-
-            if _check_convergence(m_t, a_t, eps):
-                converged = True
+            if np.any(np.isnan(current_pf)) or np.any(np.isinf(current_pf)):
                 break
 
-            s_new = (h - m_t) / a_t
-            a_total = np.clip(a_total * a_t, MIN_AMP, MAX_AMP)
-            h = s_new
+            if np.sum(current_pf ** 2) < eps_stable:
+                break
 
-        if not converged:
-            break
+            PFs.append(current_pf)
+            residue -= current_pf
 
-        current_pf = np.clip(a_total * s_new, -MAX_AMP, MAX_AMP)
+            if (is_increasing(residue) or is_increasing(-residue) or
+                    np.sum(residue ** 2) < eps_stable or
+                    len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2):
+                break
 
-        if np.any(np.isnan(current_pf)) or np.any(np.isinf(current_pf)):
-            break
+    else:
+        while True:
+            h = residue.copy()
+            a_total = np.ones(n_samples, dtype=np.float64)
+            converged = False
 
-        if np.sum(current_pf ** 2) < EPS_STABLE:
-            break
+            for __ in range(max_iter):
+                max_loc = argrelextrema(h, np.greater)[0]
+                min_loc = argrelextrema(h, np.less)[0]
+                ext_idx = np.unique(np.concatenate([max_loc, min_loc]))
 
-        PFs.append(current_pf)
-        residue -= current_pf
+                if len(ext_idx) < 3:
+                    break
 
-        if (is_increasing(residue) or is_increasing(-residue) or
-                np.sum(residue ** 2) < EPS_STABLE or
-                len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2):
-            break
+                ext_idx, ext_vals = _mirror_extend_real(h, ext_idx, n_samples)
+                ext_idx = np.sort(ext_idx)
+
+                t_mid = (ext_idx[:-1] + ext_idx[1:]) / 2.0
+                m_vals = (ext_vals[:-1] + ext_vals[1:]) / 2.0
+                a_vals = np.abs(ext_vals[:-1] - ext_vals[1:]) / 2.0
+
+                m_t = _safe_interpolate(t_mid, m_vals, t)
+                a_t = _safe_interpolate(t_mid, a_vals, t)
+
+                a_t = np.clip(a_t, min_amp, max_amp)
+                a_t = savgol_filter(a_t, smooth_window, 2)
+
+                if _check_convergence(m_t, a_t, eps, converge_mean):
+                    converged = True
+                    break
+
+                s_new = (h - m_t) / a_t
+                a_total = np.clip(a_total * a_t, min_amp, max_amp)
+                h = s_new
+
+            if not converged:
+                break
+
+            current_pf = np.clip(a_total * s_new, -max_amp, max_amp)
+
+            if np.any(np.isnan(current_pf)) or np.any(np.isinf(current_pf)):
+                break
+
+            if np.sum(current_pf ** 2) < eps_stable:
+                break
+
+            PFs.append(current_pf)
+            residue -= current_pf
+
+            if (is_increasing(residue) or is_increasing(-residue) or
+                    np.sum(residue ** 2) < eps_stable or
+                    len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2):
+                break
 
     del h, a_total, t
     return np.array(PFs, dtype=np.float64), residue
@@ -166,8 +228,8 @@ def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.nda
 
     return res
 
-def _check_convergence(m_t: np.ndarray, a_t: np.ndarray, eps: float) -> bool:
-    mean_ok = np.max(np.abs(m_t)) < CONVERGE_MEAN
+def _check_convergence(m_t: np.ndarray, a_t: np.ndarray, eps: float, converge_mean) -> bool:
+    mean_ok = np.max(np.abs(m_t)) < converge_mean
     envelope_ok = np.max(np.abs(a_t - 1.0)) < eps
     return mean_ok and envelope_ok
 

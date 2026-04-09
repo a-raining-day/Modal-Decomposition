@@ -43,6 +43,7 @@ Modify:
     2026.4.3  - Finish the Optimization of the modal decomposition method. Except the MEMD method.
     2026.4.4  - Add the parameter to describe lib.
     2026.4.6  - Change the position of the entrance of importing 'threading'. Try to reduce the cost of the import.
+    2026.4.9  - Fix the import error of Class.VMD. From "vmdpy.EWT1D" to "vmdpy.VMD".
 """
 
 
@@ -129,7 +130,7 @@ class Class:
     def VMD(cls, **kwargs):
         if "EWT1D" not in cls.__cache:
             try:
-                Module = import_module("vmdpy").EWT1D
+                Module = import_module("vmdpy").VMD
                 cls.__cache["VMD"] = Module
                 return Module(**kwargs)
             except ImportError:

@@ -15,6 +15,7 @@ Description: (if None write None)
 Modify:  (must)
     2026.3.25 - Create.
     2026.4.3  - Finish the Optimization of the SVMD. Give two kind of SVMD.
+    2026.5.1  - The decomposition with JIT is Error.
 """
 
 import numpy as np
@@ -134,6 +135,9 @@ class SVMD:
         return modes, residual
 
 def give_svmd_JIT():
+    from .Error.RealizationError import RealizationError
+    raise RealizationError("this method' realization is error.")
+
     from scipy.fft import fft, ifft, fftfreq
     from numba import jit, prange, complex128, float64
     import numba as nb
@@ -204,7 +208,7 @@ def give_svmd_JIT():
             for n in range(N):
                 re = np.real(sum_modes_hat[n]) - prev_recon[n]
                 recon_error += re * re
-                sig_norm += signal_hat[n].real * signal_hat[n].real
+                sig_norm += np.sum(np.abs(signal_hat)**2) / N
 
             if it > 1 and np.sqrt(recon_error) / (np.sqrt(sig_norm) + eps) < tol:
                 break
@@ -225,6 +229,7 @@ def give_svmd_JIT():
             residual[n] = np.real(signal_hat[n]) - recon_val
 
         return modes, residual
+
     class NumbaSVMD(SVMD):
 
         def decompose(self, signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -254,7 +259,7 @@ def give_svmd_JIT():
 def svmd \
     (
         S: Union[list, np.ndarray],
-        faster: bool = False,
+        use_JIT: bool = False,
         num_modes: int = 3,
         alpha: float = 2000,
         tau: float = 0.0,
@@ -264,7 +269,7 @@ def svmd \
     """
 
     :param S: Signal (N,)
-    :param faster: if True, use Numba version.
+    :param use_JIT: if True, use Numba version.
     :param num_modes: the num of modes
     :param alpha:
     :param tau:
@@ -273,7 +278,7 @@ def svmd \
     :return: IMFs(num_modes, N), Res(N,)
     """
 
-    if not faster:
+    if not use_JIT:
         Cls = SVMD(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
         IMFs, Res = Cls(S)
 

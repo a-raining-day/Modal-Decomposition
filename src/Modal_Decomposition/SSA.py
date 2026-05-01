@@ -15,7 +15,7 @@ Description: (if None write None)
 
 Modify:  (must)
     2026.3.25 - Create.
-    2026.3.29 - Optimize the SSA.decompose function, it's faster now. Please use SSA() which means SSA.decompose_fast().
+    2026.3.29 - Optimize the SSA.decompose function, it's use_JIT now. Please use SSA() which means SSA.decompose_fast().
 """
 
 import numpy as np
@@ -165,7 +165,7 @@ class SSA:
         :param S: Signal (1-dim)
         :param L:
         :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
-        :param faster: if you choose True, function will be faster with wasting memory.
+        :param faster: if you choose True, function will be use_JIT with wasting memory.
         :return: IMFs (2-dim)
         """
 

@@ -23,7 +23,7 @@ All entrance of functions or class are stored in `Modal_Decomposition/__init__.p
 | EFD      | Empirical Fourier Decomposition                                             |   `Function.EFD(signal)`    |                                                                                                                        [10.1016/j.ymssp.2021.108155](https://www.sciencedirect.com/science/article/abs/pii/S0888327021005355?via%3Dihub)                                                                                                                        |
 | EMD      | Empirical Mode Decomposition                                                |   `Function.EMD(signal)`    |                                                                                              [10.1098/rspa.1998.0193](https://www.semanticscholar.org/paper/The-empirical-mode-decomposition-and-the-Hilbert-Huang-Shen/3842d81b0375dae8ae92734aa2a5d4aeed7a91d1)                                                                                               |
 | EWT      | Empirical Wavelet Transform                                                 |   `Function.EWT(signal)`    |                                                                                                                                                  [10.48550/arXiv.2304.06274](https://arxiv.org/abs/2304.06274)                                                                                                                                                  |
-| FMD      | Filtered Mode Decomposition                                                 |   `Function.MEMD(signal)`   |                                                                                                                                            [10.1109/TIE.2022.3156156](https://ieeexplore.ieee.org/document/9732251)                                                                                                                                             |
+| FMD      | Filtered Mode Decomposition                                                 |   `Function.FMD(signal)`    |                                                                                                                                            [10.1109/TIE.2022.3156156](https://ieeexplore.ieee.org/document/9732251)                                                                                                                                             |
 | ICEEMDAN | Improved Complete Ensemble Empirical Mode Decomposition with Adaptive Noise | `Function.ICEEMDAN(signal)` |                                                                                                                                [10.1007/s10470-021-01901-3](https://link.springer.com/article/10.1007/s10470-021-01901-3#citeas)                                                                                                                                |
 | LMD      | Local Mean Decomposition                                                    |   `Function.LMD(signal)`    |                                                                                                                                     [10.1098/rsif.2005.0058](https://royalsocietypublishing.org/doi/10.1098/rsif.2005.0058)                                                                                                                                     |
 | MEMD     | Multivariate Empirical Mode Decomposition                                   |   `Function.MEMD(signal)`   |                                                                                                                                                  [10.48550/arXiv.2206.00926](https://arxiv.org/abs/2206.00926)                                                                                                                                                  |
@@ -47,41 +47,17 @@ pip install -r requirements.txt
 pip install Modal-Decomposition
 ```
 
-*Well, some libs should be installed by yourself, don't use `pip install -r requirements.txt`, because `Triton` need installed by GitHub.*
-
-*`Triton` please visite this url: https://github.com/woct0rdho/triton-windows/releases*
-
 ## Dependence
 
 This lib's dependence are:
 
 ***Python: 3.10***
 
-- [antropy](https://github.com/raphaelvallat/antropy)
-- [colorama](https://github.com/tartley/colorama)
-- [einops](https://github.com/arogozhnikov/einops)
 - [EMD-signal](https://github.com/laszukdawid/PyEMD)
 - [ewtpy](https://github.com/vrcarva/ewtpy)
-- [numba](https://github.com/numba/numba)
-- [numpy](https://github.com/numpy/numpy)
-- [scipy](https://github.com/scipy/scipy)
 - [vmdpy](https://github.com/vrcarva/vmdpy)
-- [psutil](https://github.com/giampaolo/psutil)
 
 *Other dependence please read "requirements.txt"*
-
-## Codes Resource
-
-All codes from :
-
-- Github:
-  - EMD-signal -> EMD, CEEFD, CEEMDAN, EEMD
-  - ewtpy -> EWT
-  - vmdpy -> VMD
-
-
-- Myself:
-  - CEEMD, EFD, FMD, ICEEMDAN, LMD, MEMD, RPSEMD, SSA, SVMD
 
 ## Url
 

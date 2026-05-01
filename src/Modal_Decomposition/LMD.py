@@ -20,10 +20,11 @@ Modify:
     2026.4.3  - Finish the Optimization of the LMD.
     2026.4.7  - LMD can support the decompose completely now.
     2026.4.9  - Change some hardcode parameters to args.
+    2026.5.1  - Fix the dependence of "help_function.py".
 """
 
 import numpy as np
-from .help_function import is_increasing
+from .Utils import is_monotonic
 from typing import Union, Tuple
 
 
@@ -127,9 +128,11 @@ def lmd(
             PFs.append(current_pf)
             residue -= current_pf
 
-            if (is_increasing(residue) or is_increasing(-residue) or
+            if (
+                    is_monotonic(residue) or
                     np.sum(residue ** 2) < eps_stable or
-                    len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2):
+                    len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2
+            ):
                 break
 
     else:

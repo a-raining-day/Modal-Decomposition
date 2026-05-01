@@ -15,18 +15,18 @@ Description: (if None write None)
 Modify:  (must)
     2026.3.25 - Create.
     2026.5.1  - Fix the problem when calculating projections.
+    2026.5.2  - Fix the error of using Check_Time_and_Signal.
 """
 
 import numpy as np
 from typing import Union, Tuple
-from .Utils import Check_Time_and_Signal
 
 
 def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2, max_iter=10, spline_kind: str="linear") -> Tuple[np.ndarray, np.ndarray]:
     """
     MEMD: Multimodal Empirical Mode Decomposition
 
-    :param S: Signal (2-dim), (d, N) | d -> channels,N -> time points
+    :param S: Signal (2-dim), (d, N) | d -> channels | N -> time points
     :param d: channels or dimensions
     :param k: number of directional vector,default: d * 128
     :param max_imf: max num of IMFs
@@ -35,20 +35,25 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
     :param spline_kind: spline kind.
     :return: IMFs (IMFs_num, d, N), Res (2-dim), None
     """
-
-    S, T, N = Check_Time_and_Signal(S)
+    S = np.asarray(S, dtype=np.float64)
+    if S.ndim == 1:
+        S = S.reshape(1, -1)
+    elif S.ndim != 2:
+        raise ValueError(f"Signal must be 1D or 2D, got shape {S.shape}")
+    d_infer, N = S.shape
 
     if d is None:
-        d = S.shape[0]
-
-    if S.shape[0] != d:
-        raise ValueError(f"shape of S should be: ({d}, N)，but get -> {S.shape}")
+        d = d_infer
+    elif d != d_infer:
+        raise ValueError(f"Declared d={d} but signal has shape {S.shape}")
 
     if k is None:
         k = d * 128
 
     if max_imf is None:
         max_imf = int(np.log2(N))
+
+    T = np.arange(N, dtype=np.float64)
 
     vectors = generate_hammersley_points(k, d)  # dhape: (d, k)
 

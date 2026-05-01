@@ -16,30 +16,31 @@ Description: (if None write None)
 Modify:  (must)
     2026.3.25 - Create
     2026.4.2  - Finish the Optimization of the CEEMD.
+    2026.5.1  - Fix the error of the decomposition.
 """
 
 from typing import Union, Tuple, Optional
-from time import sleep
 import numpy as np
 from .EMD import emd
 from .Utils import monotonic_increasing, monotonic_decreasing, Check_Time_and_Signal
 from warnings import warn
 
 
-def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, N_whitenoise=37, beta=0.3, max_imf: Optional[int]=None, dead_line: int=10, verbose: bool=False) \
+def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray] = None, N_whitenoise=37, beta=0.2, max_imf: Optional[int] = None, dead_line: int = 10, verbose: bool = False) \
         -> Tuple[np.ndarray, np.ndarray, None]:
     """
-    CEEMD: Complementary Ensemble Empirical Mode Decomposition
+        CEEMD: Complementary Ensemble Empirical Mode Decomposition
 
-    :param S: Signal (1-dim)
-    :param T: the time axis.
-    :param N_whitenoise: the num of the added whitenoise.
-    :param beta:
-    :param max_imf: -1, None or other int | -1 means decompose completely, None means give a int auto, other int means the num of the IMFs
-    :param dead_line: Sometime it'll be in unuseful cycle, when the average of the N's sequence with added whitenoise is empty([]). It'll be forced exit when the time of the cycle above the deadline.
-    :param verbose:
-    :return: IMFs (n_IMFs, N), Res (N,), None
-    """
+        :param S: Signal (1-dim)
+        :param T: the time axis.
+        :param N_whitenoise: the num of the added whitenoise.
+        :param beta:
+        :param max_imf: -1, None or other int | -1 means decompose completely, None means give a int auto, other int means the num of the IMFs
+        :param dead_line: Sometime it'll be in unuseful cycle, when the average of the N's sequence with added whitenoise is empty([]). It'll be forced exit when the time of the cycle above the deadline.
+        :param verbose:
+        :return: IMFs (n_IMFs, N), Res (N,), None
+        """
+
     if beta <= 0:
         raise ValueError("The beta should > 0")
 
@@ -57,54 +58,46 @@ def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, N_whiteno
     if max_imf is None:
         max_imf = int(np.log2(len(S))) + 2
 
-    Res = S
-    IMFs = []
-
-    # std_dev = np.std(S)
-
-    count = 0
+    imfs = []
+    residual = S.copy()
+    k = 0
     dead_cycle = 0
+
     while True:
-        std_dev = np.std(Res)
+        if max_imf != -1 and k >= max_imf:
+            break
 
-        _IMFs = []
-        for n in range(N_whitenoise):
+        imf_candidates = []
+        std_dev = np.std(residual)
+
+        for i in range(N_whitenoise):
             white_noise = np.random.normal(0, std_dev * beta, N)
-            S_plus = Res + white_noise
-            S_minus = Res - white_noise
-            _IMFs_plus, _ = emd(S_plus, T, max_imf=1)
-            _IMFs_minus, _ = emd(S_minus, T, max_imf=1)
+            S_plus = residual + white_noise
+            S_minus = residual - white_noise
 
-            if not _IMFs_plus or not _IMFs_minus:
-                continue
+            imfs_plus, _, _ = emd(S_plus, T, max_imf=1)
+            imfs_minus, _, _ = emd(S_minus, T, max_imf=1)
 
-            _IMFs.append((_IMFs_plus[0] + _IMFs_minus[0]) / 2.0)
+            if len(imfs_plus) > 0 and len(imfs_minus) > 0:
+                imf_candidate = (imfs_plus[0] + imfs_minus[0]) / 2.0
+                imf_candidates.append(imf_candidate)
 
-        if not _IMFs:
+        if not imf_candidates:
             dead_cycle += 1
+            if dead_cycle >= dead_line:
+                raise RuntimeError("Trapped in a vicious cycle")
             continue
 
-        if dead_cycle >= dead_line:
-            raise RuntimeError("Trapped in a vicious cycle")
-        else:
-            dead_cycle = 0
+        imf = np.mean(imf_candidates, axis=0)
+        imfs.append(imf)
+        residual = residual - imf
+        k += 1
 
-        IMF = np.mean(_IMFs, axis=0)
+        from scipy.signal import argrelextrema
+        peaks = argrelextrema(residual, np.greater)[0]
+        valleys = argrelextrema(residual, np.less)[0]
 
-        IMFs.append(IMF)
+        if monotonic_increasing(residual) or monotonic_decreasing(residual) or len(peaks) + len(valleys) < 3:
+            break
 
-        Res -= IMF
-        count += 1
-
-        if verbose:
-            if count % 10 == 0:
-                print(f"has get {count} IMFs...")
-                sleep(1)
-
-        if max_imf != -1:
-            if count >= max_imf or monotonic_increasing(Res) or monotonic_decreasing(Res):
-                return np.array(IMFs), np.array(Res), None
-
-        else:
-            if monotonic_increasing(Res) or monotonic_decreasing(Res):
-                return np.array(IMFs), np.array(Res), None
+    return np.array(imfs), np.array(residual), None

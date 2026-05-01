@@ -24,7 +24,7 @@ Dependence:
     antropy
     colorama
     einops
-    EMD-signal
+    EMD-S
     ewtpy
     numba
     numpy
@@ -99,7 +99,7 @@ class Class:
                 cls.__cache["EEMD"] = Module
                 return Module(**kwargs)
             except ImportError:
-                raise ImportError("No PyEMD, Please use `pip install EMD-signal`")
+                raise ImportError("No PyEMD, Please use `pip install EMD-S`")
 
         else:
             return cls.__cache["EEMD"](**kwargs)

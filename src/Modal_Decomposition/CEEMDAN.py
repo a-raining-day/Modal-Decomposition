@@ -60,7 +60,6 @@ def ceemdan \
     :param total_power_thr:
     :return: IMFs (n_IMFs, N), Res (N,), None
     """
-
     from PyEMD import CEEMDAN
 
     S, T, N = Check_Time_and_Signal(S, T)

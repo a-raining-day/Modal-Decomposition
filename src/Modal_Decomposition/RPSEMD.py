@@ -67,7 +67,7 @@ def rpsemd \
             Am_t = np.sin(2 * np.pi * T * current_f + phi[m])
             Xm_t = Res + Am_t
 
-            _IMFs, _ = emd(Xm_t, T, spline_kind=spline_kind, nbsym=nbsym, max_imf=1)
+            _IMFs, _, _ = emd(Xm_t, T, spline_kind=spline_kind, nbsym=nbsym, max_imf=1)
 
             if len(_IMFs) > 0:
                 imf1 = _IMFs[0] if _IMFs.shape[0] > 0 else _IMFs

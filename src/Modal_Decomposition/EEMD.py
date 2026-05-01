@@ -29,6 +29,7 @@ def eemd(
     trials: int = 100,
     noise_width: float = 0.05,
     max_imf: int = -1,
+    parallel: bool = False,
     **kwargs
 ) -> Tuple[np.ndarray, np.ndarray, None]:
     """
@@ -38,8 +39,9 @@ def eemd(
     :param S: Signal (1-dim)
     :param T: Time axis (1-dim). Default uniform.
     :param trials: Number of white noise realizations (ensemble size).
-    :param noise_width: Standard deviation of added white noise relative to signal std.
+    :param noise_width: Standard deviation of added white noise relative to S std.
     :param max_imf: Max number of IMFs to extract. -1 for all.
+    :param parallel: Parallelize the EEMD.
     :param kwargs: Additional parameters passed to PyEMD.EEMD.
     :return: IMFs (n_IMFs, N), Res (N,)
     """
@@ -47,7 +49,7 @@ def eemd(
 
     S, T, N = Check_Time_and_Signal(S, T)
 
-    decomposer = EEMD(trials=trials, noise_width=noise_width, **kwargs)
+    decomposer = EEMD(trials=trials, noise_width=noise_width, parallel=parallel, **kwargs)
     result = decomposer.eemd(S, T, max_imf=max_imf)
 
     IMFs = result[:-1, :]   # shape [n_imfs, N]

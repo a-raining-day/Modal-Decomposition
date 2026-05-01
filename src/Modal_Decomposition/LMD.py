@@ -63,7 +63,7 @@ def lmd(
     n_samples = S.size
 
     if n_samples < 8:
-        raise ValueError("LMD requires signal length ≥ 8 (Smith 2005 standard)")
+        raise ValueError("LMD requires S length ≥ 8 (Smith 2005 standard)")
 
     t = np.arange(n_samples, dtype=np.float64)
     max_pf = int(np.log2(n_samples)) if max_pf is None else max_pf

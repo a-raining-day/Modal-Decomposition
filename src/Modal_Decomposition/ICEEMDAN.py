@@ -24,48 +24,48 @@ from .Utils import is_monotonic, Check_Time_and_Signal
 
 
 def iceemdan(
-        signal: Union[np.ndarray, list],
-        time_axis: Optional[Union[np.ndarray, list]] = None,
-        ensemble_size: int = 300,
-        epsilon_0: float = 0.2,
-        max_imfs: Optional[int] = None,
-        spline_kind: str = "cubic",
-        nbsym: int = 2,
-        rng_seed: Optional[int] = None,
-        verbose: bool = True
+    S: Union[np.ndarray, list],
+    T: Optional[Union[np.ndarray, list]] = None,
+    ensemble_size: int = 300,
+    epsilon_0: float = 0.2,
+    max_imfs: Optional[int] = None,
+    spline_kind: str = "cubic",
+    nbsym: int = 2,
+    rng_seed: Optional[int] = None,
+    verbose: bool = False
 ) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     ICEEMDAN: Improved Complete Ensemble EMD with Adaptive Noise
 
     Reference: Colominas, M. A., Schlotthauer, G., & Torres, M. E. (2014).
                Improved complete ensemble EMD: A suitable tool for
-               biomedical signal processing. Biomedical Signal Processing
+               biomedical S processing. Biomedical Signal Processing
                and Control, 14, 19-29.)
     """
 
     # ===================== 1. INPUT VALIDATION =====================
     # Signal validation
-    signal, _, _ = Check_Time_and_Signal(signal)
+    S, _, _ = Check_Time_and_Signal(S)
 
-    signal = np.asarray(signal, dtype=np.float64)
-    if signal.ndim != 1:
-        signal = signal.ravel()
+    S = np.asarray(S, dtype=np.float64)
+    if S.ndim != 1:
+        S = S.ravel()
 
-    n_samples = len(signal)
+    n_samples = len(S)
     if n_samples < 4:
         raise ValueError("Signal length must be at least 4")
 
     # Time axis validation
-    if time_axis is None:
-        time_axis = np.arange(n_samples, dtype=np.float64)
+    if T is None:
+        T = np.arange(n_samples, dtype=np.float64)
     else:
-        time_axis = np.asarray(time_axis, dtype=np.float64)
-        if len(time_axis) != n_samples:
-            raise ValueError(f"Time axis length mismatch: {len(time_axis)} != {n_samples}")
+        T = np.asarray(T, dtype=np.float64)
+        if len(T) != n_samples:
+            raise ValueError(f"Time axis length mismatch: {len(T)} != {n_samples}")
 
     # Check uniform sampling
     if n_samples > 1:
-        dt = np.diff(time_axis)
+        dt = np.diff(T)
         if not np.allclose(dt, dt[0], rtol=1e-10, atol=1e-14):
             raise ValueError("Time axis must be uniformly sampled")
 
@@ -102,9 +102,9 @@ def iceemdan(
 
     for i in range(ensemble_size):
         try:
-            imfs, _ = emd(
+            imfs, _, _ = emd(
                 white_noise[i],
-                time_axis,
+                T,
                 max_imf=max_imfs + 5,  # Decompose 5 more IMFs than needed
                 spline_kind=spline_kind,
                 nbsym=nbsym)
@@ -150,9 +150,9 @@ def iceemdan(
     if verbose:
         print("3. Performing ICEEMDAN decomposition...")
 
-    residual = signal.copy()
+    residual = S.copy()
     imfs_list = []
-    signal_energy = np.sum(signal ** 2)
+    signal_energy = np.sum(S ** 2)
     if signal_energy < 1e-12:
         signal_energy = 1e-12  # Prevent division by zero
 
@@ -171,20 +171,20 @@ def iceemdan(
         # Ensemble loop
         for i, noise_imfs in enumerate(noise_imfs_list):
             try:
-                # Noisy signal: r_{k-1} + β_k * E_k(ω^(i))
+                # Noisy S: r_{k-1} + β_k * E_k(ω^(i))
                 noisy_signal = residual + beta * noise_imfs[k]
 
-                # Apply E₁ operator: decompose and get first IMF
-                sig_imfs, _ = emd(
+                # Apply E operator: decompose and get first IMF
+                sig_imfs, _, _ = emd(
                     noisy_signal,
-                    time_axis,
+                    T,
                     max_imf=1,  # Only need the first IMF
                     spline_kind=spline_kind,
                     nbsym=nbsym
                 )
 
                 if sig_imfs.shape[0] > 0:
-                    # Local mean: M(·) = signal - E₁(·)
+                    # Local mean: M(·) = S - E₁(·)
                     local_means[valid_count] = noisy_signal - sig_imfs[0, :]
                     valid_count += 1
 
@@ -231,14 +231,14 @@ def iceemdan(
     if not imfs_list:
         if verbose:
             print("Warning: No IMFs were extracted")
-        return np.empty((0, n_samples), dtype=np.float64), residual
+        return np.empty((0, n_samples), dtype=np.float64), residual, None
 
     imfs_array = np.vstack(imfs_list)
 
     # Validate reconstruction
     reconstruction = np.sum(imfs_array, axis=0) + residual
-    reconstruction_error = np.max(np.abs(signal - reconstruction))
-    relative_error = reconstruction_error / (np.max(np.abs(signal)) + 1e-12)
+    reconstruction_error = np.max(np.abs(S - reconstruction))
+    relative_error = reconstruction_error / (np.max(np.abs(S)) + 1e-12)
 
     if verbose:
         print("Decomposition complete!")
@@ -263,7 +263,7 @@ def validate_iceemdan_decomposition(
     Parameters
     ----------
     signal : ndarray
-        Original signal
+        Original S
     imfs : ndarray
         Extracted IMFs
     residual : ndarray

@@ -22,7 +22,7 @@ from typing import Union, Tuple, Optional
 from time import sleep
 import numpy as np
 from .EMD import emd
-from .Utils import monotonic_increasing, monotonic_decreasing
+from .Utils import monotonic_increasing, monotonic_decreasing, Check_Time_and_Signal
 from warnings import warn
 
 
@@ -46,37 +46,13 @@ def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, N_whiteno
     if N_whitenoise <= 0 or not isinstance(N_whitenoise, int):
         raise TypeError("N_whitenoise must be int type or > 0")
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
+    S, T, N = Check_Time_and_Signal(S, T, verbose)
 
-    if S.ndim == 0:
-        raise ValueError("The dim of the S must be 1-dim, not 0")
+    if not np.all(np.diff(T) > 0):
+        raise ValueError("T should be monotonic increasing!")
 
-    elif S.ndim > 1:
-        if 1 in S.shape:
-            S = S.reshape(-1)
-
-        else:
-            raise ValueError(f"The dim of S must be 1-dim, not {S.ndim}")
-
-    N = len(S)
-
-    if T is None:  # if T is None, default generate uniform T-axis.
-        T = np.arange(N)  # default fs = 1
-        print(f"Warn: T is None，default T = [0, 1, 2, ..., {N - 1}]")
-
-    else:
-        if not isinstance(T, np.ndarray):
-            T = np.array(T)
-
-        if len(T) != len(S):
-            raise ValueError("The length of T must be equal to Signal.")
-
-        if not np.all(np.diff(T) > 0):
-            raise ValueError("T should be monotonic increasing!")
-
-        if np.any(np.allclose(np.diff(np.diff(T)))):
-            warn("The T is not uniform! Some error may happen.")
+    if np.any(np.allclose(np.diff(np.diff(T)), 2)):
+        warn("The T is not uniform! Some error may happen.")
 
     if max_imf is None:
         max_imf = int(np.log2(len(S))) + 2

@@ -24,7 +24,7 @@ Modify:
 """
 
 import numpy as np
-from .Utils import is_monotonic
+from .Utils import is_monotonic, Check_Time_and_Signal
 from typing import Union, Tuple
 
 
@@ -57,18 +57,9 @@ def lmd(
     """
     from scipy.signal import argrelextrema, savgol_filter
 
-    if S.ndim == 0:
-        raise ValueError("The dim of the S must be 1-dim, not 0")
+    S, _, _ = Check_Time_and_Signal(S)
 
-    elif S.ndim > 1:
-        if 1 in S.shape:
-            S = S.reshape(-1)
-
-        else:
-            raise ValueError(f"The dim of S must be 1-dim, not {S.ndim}")
-
-    if not isinstance(S, np.ndarray):
-        S = np.asarray(S, dtype=np.float64).ravel()
+    S = np.asarray(S, dtype=np.float64).ravel()
     n_samples = S.size
 
     if n_samples < 8:

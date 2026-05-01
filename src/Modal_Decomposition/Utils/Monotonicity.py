@@ -7,13 +7,13 @@ import numpy as np
 
 def monotonic_increasing(arr: np.ndarray, strict: bool = False, chunk_size: int = 1000000) -> bool:
     """
-    Judge the arr whether monotonic increasing.
+    Judge the S whether monotonic increasing.
 
-    Attention: If length of arr is 1, return True. If 0, Raise Error. Nan and Inf couldn't be in arr.
+    Attention: If length of S is 1, return True. If 0, Raise Error. Nan and Inf couldn't be in S.
 
     :param arr: the numpy.ndarray.
     :param strict: dose include equal? Default include. True -> '>'(strict monotonic) | False -> '>='(easy monotonic)
-    :param chunk_size: the size of the chunk. when the length of arr is too long, will use it.
+    :param chunk_size: the size of the chunk. when the length of S is too long, will use it.
     :return:
     """
 
@@ -22,17 +22,17 @@ def monotonic_increasing(arr: np.ndarray, strict: bool = False, chunk_size: int 
             arr = np.asarray(arr)
 
         except:
-            raise TypeError(f"The type of the arr must be np.ndarray, not {type(arr)}.")
+            raise TypeError(f"The type of the S must be np.ndarray, not {type(arr)}.")
 
     if not np.all(np.isfinite(arr)):
-        raise ValueError("Nan or Inf in arr")
+        raise ValueError("Nan or Inf in S")
 
     if arr.ndim == 0:
-        raise ValueError("The dim of arr at least 1-dim")
+        raise ValueError("The dim of S at least 1-dim")
 
     elif arr.ndim != 1:  # may be (n,) -> 1-dim or (1, n) -> 2-dim
         if 1 not in arr.shape:  # now it's should be (1, n), and it must be (1, n)
-            raise ValueError(f"The dim of the arr must be 1. not {arr.ndim}")
+            raise ValueError(f"The dim of the S must be 1. not {arr.ndim}")
 
         else:
             arr = arr.reshape(-1)
@@ -40,7 +40,7 @@ def monotonic_increasing(arr: np.ndarray, strict: bool = False, chunk_size: int 
     arr_length = arr.size
 
     if arr_length == 0:
-        raise ValueError("The length of arr shouldn't be 0")
+        raise ValueError("The length of S shouldn't be 0")
 
     if arr_length == 1:
         return True
@@ -91,13 +91,13 @@ def monotonic_increasing(arr: np.ndarray, strict: bool = False, chunk_size: int 
 
 def monotonic_decreasing(arr: np.ndarray, strict: bool = False, chunk_size: int = 1000000) -> bool:
     """
-    Judge the arr whether monotonic decreasing.
+    Judge the S whether monotonic decreasing.
 
-    Attention: If length of arr is 1, return True. If 0, Raise Error. Nan and Inf couldn't be in arr.
+    Attention: If length of S is 1, return True. If 0, Raise Error. Nan and Inf couldn't be in S.
 
     :param arr: the numpy.ndarray.
     :param strict: dose include equal? Default include. True -> '<'(strict monotonic) | False -> '<='(easy monotonic)
-    :param chunk_size: the size of the chunk. when the length of arr is too long, will use it.
+    :param chunk_size: the size of the chunk. when the length of S is too long, will use it.
     :return:
     """
 
@@ -106,17 +106,17 @@ def monotonic_decreasing(arr: np.ndarray, strict: bool = False, chunk_size: int 
             arr = np.asarray(arr)
 
         except:
-            raise TypeError(f"The type of the arr must be np.ndarray, not {type(arr)}.")
+            raise TypeError(f"The type of the S must be np.ndarray, not {type(arr)}.")
 
     if not np.all(np.isfinite(arr)):
-        raise ValueError("Nan or Inf in arr")
+        raise ValueError("Nan or Inf in S")
 
     if arr.ndim == 0:
-        raise ValueError("The dim of arr at least 1-dim")
+        raise ValueError("The dim of S at least 1-dim")
 
     elif arr.ndim != 1:  # may be (n,) -> 1-dim or (1, n) -> 2-dim
         if 1 not in arr.shape:  # now it's should be (1, n), and it must be (1, n)
-            raise ValueError(f"The dim of the arr must be 1. not {arr.ndim}")
+            raise ValueError(f"The dim of the S must be 1. not {arr.ndim}")
 
         else:
             arr = arr.reshape(-1)
@@ -124,7 +124,7 @@ def monotonic_decreasing(arr: np.ndarray, strict: bool = False, chunk_size: int 
     arr_length = arr.size
 
     if arr_length == 0:
-        raise ValueError("The length of arr shouldn't be 0")
+        raise ValueError("The length of S shouldn't be 0")
 
     if arr_length == 1:
         return True

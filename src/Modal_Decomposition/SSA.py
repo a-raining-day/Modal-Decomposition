@@ -20,8 +20,8 @@ Modify:  (must)
 
 import numpy as np
 from typing import Union, Tuple
-
 from numpy import ndarray
+from .Utils import Check_Time_and_Signal
 
 
 class SSA:
@@ -100,15 +100,14 @@ class SSA:
 
         return rc
 
-    def decompose(self, S: Union[list, np.ndarray],  groups=None) -> Tuple[np.ndarray, None, None]:
+    def decompose(self, S: Union[list, np.ndarray],  groups=None) -> Tuple[np.ndarray, np.ndarray, None]:
         """
         :param S: Signal (1-dim)
         :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
 
-        :return: IMFs (2-dim), None, None
+        :return: IMFs (2-dim), No Res(zeros), None
         """
-        if not isinstance(S, np.ndarray):
-            S = np.array(S)
+        S, _, _ = Check_Time_and_Signal(S)
 
         series = np.asarray(S).flatten()
         N = len(S)
@@ -158,9 +157,9 @@ class SSA:
         self.U_ = U
         self.V_ = VT
 
-        return self.components_, None, None
+        return self.components_, np.zeros(self.components_.shape[1]), None
 
-    def decompose_fast(self, S: Union[list, np.ndarray], groups=None, faster: bool=True) -> Tuple[np.ndarray, None, None]:
+    def decompose_fast(self, S: Union[list, np.ndarray], groups=None, faster: bool=True) -> Tuple[np.ndarray, np.ndarray, None]:
         """
         SSA: Singular Spectrum Analysis
 
@@ -168,13 +167,10 @@ class SSA:
         :param L:
         :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
         :param faster: if you choose True, function will be use_JIT with wasting memory.
-        :return: IMFs (2-dim), None, None
+        :return: IMFs (2-dim), No Res(zeros), None
         """
 
-        if not isinstance(S, np.ndarray):
-            S = np.array(S)
-
-        N = len(S)
+        S, _, N = Check_Time_and_Signal(S)
 
         if self.window_size is None:
             L = N // 3
@@ -210,16 +206,17 @@ class SSA:
 
             RCs.append(rc)
 
-        return np.array(RCs), None, None
+        IMFs: np.ndarray = np.array(RCs)
+        return IMFs, np.zeros(IMFs.shape[1]), None
 
 
-def ssa(S: Union[list, np.ndarray], window_size=None, groups=None, faster: bool=False) -> tuple[ndarray, None, None]:
+def ssa(S: Union[list, np.ndarray], window_size=None, groups=None, faster: bool=False) -> tuple[ndarray, np.ndarray, None]:
     """
     :param S: Signal (1-dim)
     :param window_size:
     :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
     :param faster:
-    :return: IMFs (2-dim), None, None
+    :return: IMFs (2-dim), zeros, None
     """
 
     Cls = SSA(window_size)

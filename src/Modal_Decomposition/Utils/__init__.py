@@ -21,7 +21,7 @@ Modify:  (must)
 from .EnvironmentMemory import EnvironmentMemory
 from .NumpyNdarray_MemoryCalculator import view_memory, root_memory
 from .Monotonicity import monotonic_increasing, monotonic_decreasing
-from .OneDimArray import OneDimCheck_and_Transform
+from .Check import Check_Time_and_Signal
 
 def is_monotonic(arr) -> bool:
     if monotonic_decreasing(arr) or monotonic_increasing(arr):

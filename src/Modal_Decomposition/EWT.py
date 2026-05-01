@@ -19,6 +19,7 @@ Modify:  (must)
 
 from typing import Any, Union
 import numpy as np
+from .Utils import Check_Time_and_Signal
 
 def ewt \
 (
@@ -46,18 +47,7 @@ def ewt \
     """
     from ewtpy import EWT1D
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
-
-    if S.ndim == 0:
-        raise ValueError("The dim of the S must be 1-dim, not 0")
-
-    elif S.ndim > 1:
-        if 1 in S.shape:
-            S = S.reshape(-1)
-
-        else:
-            raise ValueError(f"The dim of S must be 1-dim, not {S.ndim}")
+    S, _, _ = Check_Time_and_Signal(S)
 
     ewt, mfb, boundaries = EWT1D(S, N, log, detect, completion, reg, lengthFilter, sigmaFilter)
     ewt: np.ndarray = ewt.T

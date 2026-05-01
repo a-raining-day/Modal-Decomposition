@@ -14,13 +14,15 @@ Description: (if None write None)
 Modify:  (must)
     2026.3.25 - Create.
     2026.5.1  - Change the construction of return.
+    2026.5.2  - Fix the Res, From "None" -> "np.zeros".
 """
 
 from typing import Union, Tuple
 import numpy as np
+from .Utils import Check_Time_and_Signal
 
 
-def vmd(S: Union[list, np.ndarray], alpha = 2000, tau = 0.0, K = 2, DC = 0, init = 1, tol = 1e-7) -> Tuple[np.ndarray, None, dict[str, np.ndarray]]:
+def vmd(S: Union[list, np.ndarray], alpha = 2000, tau = 0.0, K = 2, DC = 0, init = 1, tol = 1e-7) -> Tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
     """
     VMD: Variational Mode Decomposition
 
@@ -31,12 +33,11 @@ def vmd(S: Union[list, np.ndarray], alpha = 2000, tau = 0.0, K = 2, DC = 0, init
     :param DC: is included directional component
     :param init: way of initial
     :param tol: convergence threshold
-    :return: IMFs (2-dim), None, Dict[u_hat (2-dim), omega (1-dim)]
+    :return: IMFs (2-dim), No Res(zeros), Dict[u_hat (2-dim), omega (1-dim)]
     """
     from vmdpy import VMD
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
+    S, _, _ = Check_Time_and_Signal(S)
 
     u, u_hat, omega = VMD(S, alpha, tau, K, DC, init, tol)
 
@@ -46,4 +47,4 @@ def vmd(S: Union[list, np.ndarray], alpha = 2000, tau = 0.0, K = 2, DC = 0, init
         "omega": omega
     }
 
-    return u, None, Info
+    return u, np.zeros(u.shape[1]), Info

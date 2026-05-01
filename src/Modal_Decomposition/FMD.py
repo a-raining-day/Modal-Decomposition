@@ -21,6 +21,7 @@ Modify:  (must)
 
 import numpy as np
 from typing import Union, Tuple, Optional
+from .Utils import Check_Time_and_Signal
 
 def fmd(
     S: Union[list, np.ndarray],
@@ -50,23 +51,14 @@ def fmd(
     from scipy.signal import argrelextrema
     from scipy.linalg import eigh, eig
 
+    S, T, N = Check_Time_and_Signal(S, T)
+
     S = np.asarray(S, dtype=np.float64).ravel()
     N = len(S)
     S_original = S.copy()
 
     if N < 10 or np.allclose(S, S[0], atol=1e-8):
-        return np.empty((0, N)), S_original
-
-    if T is not None:
-        T = np.asarray(T, dtype=np.float64)
-        if T.ndim != 1 or len(T) != N:
-            raise ValueError("The len of T must be equal to S. And the dim must be 1-dim!")
-        dt = np.diff(T)
-        if not np.allclose(dt, dt[0], rtol=1e-8):
-            raise ValueError("The T-axis must be uniform")
-        fs = 1.0 / dt[0]
-    else:
-        fs = 1.0
+        return np.empty((0, N)), S_original, None
 
     if seed is not None:
         np.random.seed(seed)
@@ -76,12 +68,12 @@ def fmd(
     S_norm = (S - mean_S) / std_S
 
     if M is None:
-        M = _robust_period_estimation(S_norm, fs)
+        M = _robust_period_estimation(S_norm, 1.0)
     M = int(np.clip(M, 2, N // 4))
     L = int(np.clip(L_factor * M, 10, N // 2))
 
     if num_hand is None or num_hand <= 0:
-        num_hand = _auto_estimate_num_candidates(S_norm, M, L, fs)
+        num_hand = _auto_estimate_num_candidates(S_norm, M, L, 1.0)
 
     residual = S_norm.copy()
     modes_list = []

@@ -20,6 +20,8 @@ Modify:  (must)
 
 import numpy as np
 from typing import Union, Tuple, Optional
+from .Utils import Check_Time_and_Signal
+
 
 def eemd(
     S: Union[list, np.ndarray],
@@ -43,17 +45,7 @@ def eemd(
     """
     from PyEMD import EEMD
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S, dtype=np.float64).ravel()
-    else:
-        S = S.ravel().astype(np.float64)
-
-    N = len(S)
-
-    if T is None:
-        T = np.arange(N, dtype=np.float64)
-    else:
-        T = np.asarray(T, dtype=np.float64)
+    S, T, N = Check_Time_and_Signal(S, T)
 
     decomposer = EEMD(trials=trials, noise_width=noise_width, **kwargs)
     result = decomposer.eemd(S, T, max_imf=max_imf)

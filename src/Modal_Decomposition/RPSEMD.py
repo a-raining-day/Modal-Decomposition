@@ -19,7 +19,7 @@ Modify:  (must)
 import numpy as np
 from .EMD import emd
 from typing import Union, Tuple
-from .Utils import is_monotonic
+from .Utils import is_monotonic, Check_Time_and_Signal
 
 
 def rpsemd \
@@ -36,11 +36,7 @@ def rpsemd \
 
     """
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
-
-    if T is None:
-        T = np.arange(len(S))
+    S, T, _ = Check_Time_and_Signal(S, T)
 
     IMFs = []
     Res = S

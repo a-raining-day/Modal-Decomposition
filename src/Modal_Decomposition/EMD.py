@@ -19,7 +19,7 @@ Modify:  (must)
 
 import numpy as np
 from typing import Tuple, Union
-
+from .Utils import Check_Time_and_Signal
 
 def emd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, spline_kind: str = "cubic", nbsym: int = 2, max_imf=-1, verbose: bool=False)\
         -> Tuple[np.ndarray, np.ndarray, None]:
@@ -36,29 +36,7 @@ def emd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, spline_kind
     """
     from PyEMD import EMD
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
-
-    if S.ndim == 0:
-        raise ValueError("The dim of the S must be 1-dim, not 0")
-
-    elif S.ndim > 1:
-        if 1 in S.shape:
-            S = S.reshape(-1)
-
-        else:
-            raise ValueError(f"The dim of S must be 1-dim, not {S.ndim}")
-
-    N = len(S)
-
-    if T is None:  # if T is None, default generate uniform T-axis.
-        T = np.arange(N)  # default fs = 1
-        if verbose:
-            print(f"Warn: T is None，default T = [0, 1, 2, ..., {N - 1}]")
-
-    else:
-        if not isinstance(T, np.ndarray):
-            T = np.array(T)
+    S, T, N = Check_Time_and_Signal(S, T, verbose)
 
     EMD_cls = EMD(spline_kind, nbsym)
 

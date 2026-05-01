@@ -20,7 +20,7 @@ Modify:  (must)
 import numpy as np
 from typing import Union, Tuple, Optional
 from .EMD import emd
-from .Utils import is_monotonic
+from .Utils import is_monotonic, Check_Time_and_Signal
 
 
 def iceemdan(
@@ -45,6 +45,8 @@ def iceemdan(
 
     # ===================== 1. INPUT VALIDATION =====================
     # Signal validation
+    signal, _, _ = Check_Time_and_Signal(signal)
+
     signal = np.asarray(signal, dtype=np.float64)
     if signal.ndim != 1:
         signal = signal.ravel()

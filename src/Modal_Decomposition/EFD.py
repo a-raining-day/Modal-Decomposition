@@ -22,6 +22,7 @@ Modify:  (must)
 
 import numpy as np
 from typing import Union, Tuple
+from .Utils import Check_Time_and_Signal
 
 
 def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: int=-1, verbose: bool=False) -> Tuple[np.ndarray, np.ndarray, None]:
@@ -44,32 +45,7 @@ def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: i
         if max_IMFs <= 0:
             raise ValueError("Invalid value! Do you want use -1?")
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
-
-    if S.ndim == 0:
-        raise ValueError("The dim of the S must be 1-dim, not 0")
-
-    elif S.ndim > 1:
-        if 1 in S.shape:
-            S = S.reshape(-1)
-
-        else:
-            raise ValueError(f"The dim of S must be 1-dim, not {S.ndim}")
-
-    N = len(S)
-
-    if T is None:  # if T is None, default generate uniform T-axis.
-        T = np.arange(N)  # default fs = 1
-        if verbose:
-            print(f"Warn: T is None，default T = [0, 1, 2, ..., {N - 1}]")
-
-    else:
-        if not isinstance(T, np.ndarray):
-            T = np.array(T)
-
-    if len(T) != N:
-        raise ValueError(f"len of T: ({len(T)}) doesn't match ({N})")
+    S, T, N = Check_Time_and_Signal(S, T, verbose)
 
     dt = np.diff(T)
     if not np.allclose(dt, dt[0], rtol=1e-10, atol=1e-14):
@@ -80,7 +56,7 @@ def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: i
     S: np.ndarray = S - np.mean(S)
 
     F = np.fft.fft(S)
-    # fs = np.fft.fftfreq(N // 2 + 1, d=T[1]-T[0])  # only positive freq arr
+    # fs = np.fft.fftfreq(N // 2 + 1, d=T[1]-T[0])  # only positive freq S
     magnitude = np.abs(F)
     phase = np.angle(F)
 

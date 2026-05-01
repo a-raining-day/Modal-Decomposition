@@ -69,9 +69,6 @@ def test_SSA(S):
 
 
 if __name__ == '__main__':
-    import numpy as np
-    from scipy.signal import firwin, hilbert, correlate, get_window
-    from scipy.linalg import inv
-    import matplotlib.pyplot as plt
+    from src.Modal_Decomposition import Function
 
-
+    Function.AAA

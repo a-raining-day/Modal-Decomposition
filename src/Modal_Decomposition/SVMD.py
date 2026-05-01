@@ -20,8 +20,8 @@ Modify:  (must)
 
 import numpy as np
 from typing import Tuple, List, Optional, Union
-
 from numpy import ndarray
+from .Utils import Check_Time_and_Signal
 
 
 class SVMD:
@@ -53,6 +53,8 @@ class SVMD:
 
     def decompose(self, signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray, None]:
         from scipy.fft import fft, ifft, fftfreq
+
+        signal, _, _ = Check_Time_and_Signal(signal)
 
         signal = np.asarray(signal, dtype=np.float64).ravel()
         N = signal.size
@@ -280,6 +282,7 @@ def svmd \
     :return: IMFs(num_modes, N), Res(N,)
     """
 
+    # TODO:
     # if not use_JIT:
     #     Cls = SVMD(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
     #     IMFs, Res = Cls(S)

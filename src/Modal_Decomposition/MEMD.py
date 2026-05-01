@@ -19,6 +19,7 @@ Modify:  (must)
 
 import numpy as np
 from typing import Union, Tuple
+from .Utils import Check_Time_and_Signal
 
 
 def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2, max_iter=10, spline_kind: str="linear") -> Tuple[np.ndarray, np.ndarray]:
@@ -35,20 +36,13 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
     :return: IMFs (IMFs_num, d, N), Res (2-dim), None
     """
 
-    if not isinstance(S, np.ndarray):
-        S = np.array(S)
-
-    if S.ndim != 2:
-        raise ValueError(f"dim of S must be 2-dim, not {S.ndim}!")
+    S, T, N = Check_Time_and_Signal(S)
 
     if d is None:
         d = S.shape[0]
 
     if S.shape[0] != d:
         raise ValueError(f"shape of S should be: ({d}, N)，but get -> {S.shape}")
-
-    N = S.shape[1]
-    T = np.arange(N)
 
     if k is None:
         k = d * 128

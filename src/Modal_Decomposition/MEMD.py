@@ -9,20 +9,21 @@ Lib and Version:  (if None write None)
 Only accessed by:  (must)
     Only __init__.py
 
-Modify:  (must)
-    2026.3.25
-
 Description: (if None write None)
     Realize the MEMD
+
+Modify:  (must)
+    2026.3.25 - Create.
+    2026.5.1  - Fix the problem when calculating projections.
 """
 
 import numpy as np
 from typing import Union, Tuple
 
 
-def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2, max_iter=10) -> Tuple[np.ndarray, np.ndarray]:
+def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2, max_iter=10, spline_kind: str="linear") -> Tuple[np.ndarray, np.ndarray]:
     """
-    MEMD: Multimodal Experience Modeling Decomposition
+    MEMD: Multimodal Empirical Mode Decomposition
 
     :param S: Signal (2-dim), (d, N) | d -> channels,N -> time points
     :param d: channels or dimensions
@@ -30,7 +31,8 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
     :param max_imf: max num of IMFs
     :param sd_thresh: therahold
     :param max_iter: max iterations of each IMF
-    :return: IMFs (d, N), Res (2-dim)
+    :param spline_kind: spline kind.
+    :return: IMFs (IMFs_num, d, N), Res (2-dim)
     """
 
     if not isinstance(S, np.ndarray):
@@ -56,7 +58,7 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
 
     vectors = generate_hammersley_points(k, d)  # dhape: (d, k)
 
-    projections = np.dot(S.T, vectors)  # shape: (N, k)
+    # projections = np.dot(S.T, vectors)  # shape: (N, k)
 
     imfs = []
     residue = S.copy()
@@ -66,7 +68,7 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
 
         for iter_num in range(max_iter):
             h_old = h
-            mean_envelope = compute_local_mean(h, vectors, projections, T)
+            mean_envelope = compute_local_mean(h, vectors, T, spline_kind=spline_kind)
 
             h_new = h - mean_envelope
             sd = np.sum((h_old - h_new) ** 2) / np.sum(h_old ** 2)
@@ -153,7 +155,7 @@ def generate_primes(n):
     return primes
 
 
-def compute_local_mean(signal, vectors, T):
+def compute_local_mean(signal, vectors, T, spline_kind: str="linear"):
     """
     S: now S (d, N)
     vectors: directional vector (d, k)
@@ -196,7 +198,7 @@ def compute_local_mean(signal, vectors, T):
             max_values = signal[ch, max_indices]
             if len(max_indices) >= 4:
                 try:
-                    max_spline = interp1d(max_indices, max_values, kind='cubic',fill_value='extrapolate')
+                    max_spline = interp1d(max_indices, max_values, kind=spline_kind,fill_value='extrapolate')
                     max_env = max_spline(T)
                 except:
                     max_env = np.interp(T, max_indices, max_values)
@@ -206,7 +208,7 @@ def compute_local_mean(signal, vectors, T):
             min_values = signal[ch, min_indices]
             if len(min_indices) >= 4:
                 try:
-                    min_spline = interp1d(min_indices, min_values, kind='cubic',fill_value='extrapolate')
+                    min_spline = interp1d(min_indices, min_values, kind=spline_kind,fill_value='extrapolate')
                     min_env = min_spline(T)
                 except:
                     min_env = np.interp(T, min_indices, min_values)

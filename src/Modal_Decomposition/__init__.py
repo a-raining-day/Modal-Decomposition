@@ -44,7 +44,7 @@ Modify:
     2026.4.4  - Add the parameter to describe lib.
     2026.4.6  - Change the position of the entrance of importing 'threading'. Try to reduce the cost of the import.
     2026.4.9  - Fix the import error of Class.VMD. From "vmdpy.EWT1D" to "vmdpy.VMD".
-    2026.5.1  - Delete the "help_function.py". Stop use decomposition with JIT in "SVMD.py". EEMD use PyEMD now.
+    2026.5.1  - Delete the "help_function.py". Stop use decomposition with JIT in "SVMD.py". EEMD use PyEMD now. Fix the MEMD.
 """
 
 
@@ -73,11 +73,6 @@ from .RPSEMD import rpsemd
 from .SSA import SSA, ssa
 from .SVMD import svmd
 from .VMD import vmd
-
-
-import warnings
-warnings.warn("The MEMD is rebuilding...")
-
 
 __all__ = \
     [
@@ -141,9 +136,8 @@ class Class:
             return cls.__cache["VMD"](**kwargs)
 
 class Function:
-    # function | default function for modal decomposition
-    # the IMFs (2-dim) means: (K, len(Signal)) (K is the num of IMFs)
-    # CEEFD = ceefd_real_cls.ceefd
+    """ function | default function for modal decomposition
+    the IMFs (2-dim) means: (K, len(Signal)) (K is the num of IMFs)"""
 
     CEEFD = Class.CEEFD(fs=1.0, min_peak_distance=10, envelop_iter=3)
     CEEMD = ceemd

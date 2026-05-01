@@ -1,3 +1,20 @@
+"""
+Python version:  (must)
+    3.10.11
+
+Lib and Version:  (if None write None)
+    numpy - 2.2.6
+
+Only accessed by:  (must)
+    Only __init__.py
+
+Description: (if None write None)
+    Realize the CEEMDAN.
+
+Modify:  (must)
+    2026.3.25 - Create.
+"""
+
 from typing import Union, Tuple
 import numpy as np
 
@@ -18,7 +35,7 @@ def ceemdan \
         noise_kind='normal',  # noise kind: 'normal', 'uniform'
         range_thr=0.01,  # Stop threshold
         total_power_thr=0.005
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, None]:
 
     """
     CEEMDAN: Complete Ensemble Empirical Mode Decomposition with Adaptive Noise
@@ -39,7 +56,7 @@ def ceemdan \
     :param noise_kind:
     :param range_thr:
     :param total_power_thr:
-    :return: IMFs (n_IMFs, N), Res (N,)
+    :return: IMFs (n_IMFs, N), Res (N,), None
     """
 
     from PyEMD import CEEMDAN
@@ -89,4 +106,4 @@ def ceemdan \
     IMFs = IMF_Residue[:-1, :]  # shape [n_imfs, len(S)]
     Res = IMF_Residue[-1, :]
 
-    return IMFs, Res
+    return IMFs, Res, None

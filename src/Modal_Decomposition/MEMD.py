@@ -32,7 +32,7 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
     :param sd_thresh: therahold
     :param max_iter: max iterations of each IMF
     :param spline_kind: spline kind.
-    :return: IMFs (IMFs_num, d, N), Res (2-dim)
+    :return: IMFs (IMFs_num, d, N), Res (2-dim), None
     """
 
     if not isinstance(S, np.ndarray):
@@ -86,7 +86,7 @@ def memd(S: Union[list, np.ndarray], d=None, k=None, max_imf=None, sd_thresh=0.2
 
     imfs_array = np.array(imfs)  # shape: (n_imfs, d, N)
 
-    return imfs_array, residue
+    return imfs_array, residue, None
 
 
 def generate_hammersley_points(k, d):

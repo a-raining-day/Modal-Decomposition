@@ -9,14 +9,15 @@ Lib and Version:  (if None write None)
 Only accessed by:  (must)
     Only __init__.py
 
-Modify:  (must)
-    2026.3.25
-
 Description: (if None write None)
     Realize the EWT
+
+Modify:  (must)
+    2026.3.25 - Create.
+    2026.5.1  - Use dict to store other informations.
 """
 
-from typing import Tuple, Union
+from typing import Any, Union
 import numpy as np
 
 def ewt \
@@ -29,8 +30,7 @@ def ewt \
     reg: str = 'average',
     lengthFilter: int = 10,
     sigmaFilter: int = 5,
-    need_mfd: bool = False,
-    need_boundaries: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+) -> Union[np.ndarray, np.ndarray, dict[str, Any]]:
     """
     EWT: Empirical Wavelet Transform
 
@@ -42,7 +42,7 @@ def ewt \
     :param reg:
     :param lengthFilter:
     :param sigmaFilter:
-    :return: IMFs(N, len(S)) (2-dim)
+    :return: IMFs(N, len(S)), Res(N,), Info(dict)
     """
     from ewtpy import EWT1D
 
@@ -60,17 +60,13 @@ def ewt \
             raise ValueError(f"The dim of S must be 1-dim, not {S.ndim}")
 
     ewt, mfb, boundaries = EWT1D(S, N, log, detect, completion, reg, lengthFilter, sigmaFilter)
-    ewt = ewt.T
+    ewt: np.ndarray = ewt.T
     mfb = mfb.T
 
-    if need_mfd and not need_boundaries:
-        return ewt[:-1, :], ewt[-1, :], mfb
+    Info = \
+    {
+        "MFB": mfb,
+        "Boundaries": boundaries
+    }
 
-    if need_boundaries and not need_mfd:
-        return ewt[:-1, :], ewt[-1, :], boundaries
-
-    if need_mfd and need_boundaries:
-        return ewt[:-1, :], ewt[-1, :], mfb, boundaries
-
-    if not need_mfd and not need_boundaries:
-        return ewt[:-1, :], ewt[-1, :]
+    return ewt[:-1, :], ewt[-1, :], Info

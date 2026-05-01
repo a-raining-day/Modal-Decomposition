@@ -21,11 +21,10 @@ Modify:  (must)
 """
 
 import numpy as np
-from .COLOR import printc
 from typing import Union, Tuple
 
 
-def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: int=-1, verbose: bool=False) -> Tuple[np.ndarray, np.ndarray]:
+def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: int=-1, verbose: bool=False) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     EFD: Empirical Fourier Decomposition
 
@@ -33,7 +32,7 @@ def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: i
     :param T: Time axis (1-dim)
     :param max_IMFs: the num of the IMFs. -1 means return all IMFs
     :param verbose: if print the info?
-    :return: IMFs (n_IMFs, N), Res: (N,)
+    :return: IMFs (n_IMFs, N), Res: (N,), None
     """
 
     from scipy.signal import argrelmax
@@ -142,4 +141,4 @@ def efd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, max_IMFs: i
         IMFs.append(np.fft.ifft(full_spectrum).real)
 
     IMFs = np.array(IMFs)
-    return IMFs, S - np.sum(IMFs, axis=0) + MEAN
+    return IMFs, S - np.sum(IMFs, axis=0) + MEAN, None

@@ -18,7 +18,6 @@ Modify:  (must)
 
 import numpy as np
 from .EMD import emd
-from .COLOR import printc
 from typing import Union, Tuple
 from .Utils import is_monotonic
 
@@ -31,7 +30,7 @@ def rpsemd \
         fs=1.0,
         spline_kind: str = "cubic",
         nbsym: int = 2,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     RPSEMD: Regenerated Phase-shifted Sinusoid-assisted EMD
 
@@ -94,4 +93,4 @@ def rpsemd \
         IMFs.append(Res)
         Res = np.zeros_like(Res)
 
-    return np.array(IMFs), np.array(Res)
+    return np.array(IMFs), np.array(Res), None

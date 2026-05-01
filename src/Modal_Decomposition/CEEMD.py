@@ -23,12 +23,11 @@ from time import sleep
 import numpy as np
 from .EMD import emd
 from .Utils import monotonic_increasing, monotonic_decreasing
-from tqdm import tqdm
 from warnings import warn
 
 
 def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, N_whitenoise=37, beta=0.3, max_imf: Optional[int]=None, dead_line: int=10, verbose: bool=False) \
-        -> Tuple[np.ndarray, np.ndarray]:
+        -> Tuple[np.ndarray, np.ndarray, None]:
     """
     CEEMD: Complementary Ensemble Empirical Mode Decomposition
 
@@ -39,7 +38,7 @@ def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, N_whiteno
     :param max_imf: -1, None or other int | -1 means decompose completely, None means give a int auto, other int means the num of the IMFs
     :param dead_line: Sometime it'll be in unuseful cycle, when the average of the N's sequence with added whitenoise is empty([]). It'll be forced exit when the time of the cycle above the deadline.
     :param verbose:
-    :return: IMFs (n_IMFs, N), Res (N,)
+    :return: IMFs (n_IMFs, N), Res (N,), None
     """
     if beta <= 0:
         raise ValueError("The beta should > 0")
@@ -128,8 +127,8 @@ def ceemd(S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None, N_whiteno
 
         if max_imf != -1:
             if count >= max_imf or monotonic_increasing(Res) or monotonic_decreasing(Res):
-                return np.array(IMFs), np.array(Res)
+                return np.array(IMFs), np.array(Res), None
 
         else:
             if monotonic_increasing(Res) or monotonic_decreasing(Res):
-                return np.array(IMFs), np.array(Res)
+                return np.array(IMFs), np.array(Res), None

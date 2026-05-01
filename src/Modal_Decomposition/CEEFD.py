@@ -60,13 +60,13 @@ class ceefd:
 
         return imf, mask
 
-    def decompose(self, S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray]:
+    def decompose(self, S: Union[list, np.ndarray], T: Union[list, np.ndarray]=None) -> Tuple[np.ndarray, np.ndarray, None]:
         """
         CEEFD: Cyclic Envelope Empirical Fourier Decomposition
 
         :param S: Signal
         :param T: Time-axis, accepted formation is Unix array. Default uniformly sample.
-        :return: IMFs (2-dim), Res (1-dim)
+        :return: IMFs (2-dim), Res (1-dim), None
         """
 
         from scipy.signal import find_peaks
@@ -132,4 +132,4 @@ class ceefd:
         if np.abs(residual).max() > 1e-10:
             imfs.append(residual)
 
-        return np.array(imfs), residual
+        return np.array(imfs), residual, None

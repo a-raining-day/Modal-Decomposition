@@ -38,7 +38,7 @@ def lmd(
     max_amp: float = 1e12,
     converge_mean: float = 1e-3,
     smooth_window: int = 5
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     LMD: Local mean decomposition
 
@@ -53,7 +53,7 @@ def lmd(
     :param smooth_window:
 
     Returns:
-        PFs: (n_pf, N), Res: (N,)
+        PFs: (n_pf, N), Res: (N,), None
     """
     from scipy.signal import argrelextrema, savgol_filter
 
@@ -184,13 +184,15 @@ def lmd(
             PFs.append(current_pf)
             residue -= current_pf
 
-            if (is_increasing(residue) or is_increasing(-residue) or
-                    np.sum(residue ** 2) < eps_stable or
-                    len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2):
+            if (
+                is_monotonic(residue) or
+                np.sum(residue ** 2) < eps_stable or
+                len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2
+            ):
                 break
 
     del h, a_total, t
-    return np.array(PFs, dtype=np.float64), residue
+    return np.array(PFs, dtype=np.float64), residue, None
 
 def _mirror_extend_real(signal: np.ndarray, ext_idx: np.ndarray, n_samples: int) -> Tuple[np.ndarray, np.ndarray]:
     ext = ext_idx.copy()

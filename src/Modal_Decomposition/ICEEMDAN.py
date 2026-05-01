@@ -33,7 +33,7 @@ def iceemdan(
         nbsym: int = 2,
         rng_seed: Optional[int] = None,
         verbose: bool = True
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     ICEEMDAN: Improved Complete Ensemble EMD with Adaptive Noise
 
@@ -105,8 +105,7 @@ def iceemdan(
                 time_axis,
                 max_imf=max_imfs + 5,  # Decompose 5 more IMFs than needed
                 spline_kind=spline_kind,
-                nbsym=nbsym
-            )
+                nbsym=nbsym)
 
             if imfs.shape[0] > 0:
                 noise_imfs_list.append(imfs)
@@ -240,7 +239,7 @@ def iceemdan(
     relative_error = reconstruction_error / (np.max(np.abs(signal)) + 1e-12)
 
     if verbose:
-        print("4. Decomposition complete!")
+        print("Decomposition complete!")
         print(f"   Extracted {len(imfs_list)} IMFs")
         print(f"   Maximum reconstruction error: {reconstruction_error:.2e}")
         print(f"   Relative reconstruction error: {relative_error:.2e}")
@@ -248,33 +247,7 @@ def iceemdan(
         if relative_error > 1e-8:
             print("   Warning: Reconstruction error is relatively high")
 
-    return imfs_array, residual
-
-
-# ===================== HELPER FUNCTIONS =====================
-def fast_iceemdan(
-        signal: Union[np.ndarray, list],
-        time_axis: Optional[Union[np.ndarray, list]] = None,
-        ensemble_size: int = 100,
-        epsilon_0: float = 0.2,
-        max_imfs: Optional[int] = None,
-        rng_seed: Optional[int] = None
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Fast version of ICEEMDAN with reduced ensemble size
-    """
-    return iceemdan(
-        signal=signal,
-        time_axis=time_axis,
-        ensemble_size=ensemble_size,
-        epsilon_0=epsilon_0,
-        max_imfs=max_imfs,
-        spline_kind="cubic",
-        nbsym=2,
-        rng_seed=rng_seed,
-        verbose=False
-    )
-
+    return imfs_array, residual, None
 
 def validate_iceemdan_decomposition(
         signal: np.ndarray,

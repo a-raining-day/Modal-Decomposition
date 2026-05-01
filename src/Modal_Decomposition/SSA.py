@@ -19,7 +19,9 @@ Modify:  (must)
 """
 
 import numpy as np
-from typing import Union
+from typing import Union, Tuple
+
+from numpy import ndarray
 
 
 class SSA:
@@ -98,12 +100,12 @@ class SSA:
 
         return rc
 
-    def decompose(self, S: Union[list, np.ndarray],  groups=None) -> np.ndarray:
+    def decompose(self, S: Union[list, np.ndarray],  groups=None) -> Tuple[np.ndarray, None, None]:
         """
         :param S: Signal (1-dim)
         :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
 
-        :return: IMFs (2-dim)
+        :return: IMFs (2-dim), None, None
         """
         if not isinstance(S, np.ndarray):
             S = np.array(S)
@@ -156,9 +158,9 @@ class SSA:
         self.U_ = U
         self.V_ = VT
 
-        return self.components_
+        return self.components_, None, None
 
-    def decompose_fast(self, S: Union[list, np.ndarray], groups=None, faster: bool=True) -> np.ndarray:
+    def decompose_fast(self, S: Union[list, np.ndarray], groups=None, faster: bool=True) -> Tuple[np.ndarray, None, None]:
         """
         SSA: Singular Spectrum Analysis
 
@@ -166,7 +168,7 @@ class SSA:
         :param L:
         :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
         :param faster: if you choose True, function will be use_JIT with wasting memory.
-        :return: IMFs (2-dim)
+        :return: IMFs (2-dim), None, None
         """
 
         if not isinstance(S, np.ndarray):
@@ -208,16 +210,16 @@ class SSA:
 
             RCs.append(rc)
 
-        return np.array(RCs)
+        return np.array(RCs), None, None
 
 
-def ssa(S: Union[list, np.ndarray], window_size=None, groups=None, faster: bool=False) -> np.ndarray:
+def ssa(S: Union[list, np.ndarray], window_size=None, groups=None, faster: bool=False) -> tuple[ndarray, None, None]:
     """
     :param S: Signal (1-dim)
     :param window_size:
     :param groups: group information, such as: [[0], [1,2], [3,4]] means which components will be merged. If None, return all
     :param faster:
-    :return: IMFs (2-dim)
+    :return: IMFs (2-dim), None, None
     """
 
     Cls = SSA(window_size)

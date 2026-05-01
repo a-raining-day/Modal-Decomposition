@@ -21,6 +21,8 @@ Modify:  (must)
 import numpy as np
 from typing import Tuple, List, Optional, Union
 
+from numpy import ndarray
+
 
 class SVMD:
     """
@@ -46,10 +48,10 @@ class SVMD:
         self._lambda_hat: Optional[np.ndarray] = None
         self._modes_hat: Optional[List[np.ndarray]] = None
 
-    def __call__(self, signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def __call__(self, signal: np.ndarray) -> tuple[ndarray, ndarray, None]:
         return self.decompose(signal)
 
-    def decompose(self, signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def decompose(self, signal: np.ndarray) -> Tuple[np.ndarray, np.ndarray, None]:
         from scipy.fft import fft, ifft, fftfreq
 
         signal = np.asarray(signal, dtype=np.float64).ravel()
@@ -132,7 +134,7 @@ class SVMD:
 
         residual = signal - np.sum(modes, axis=0)
 
-        return modes, residual
+        return modes, residual, None
 
 def give_svmd_JIT():
     from .Error.RealizationError import RealizationError
@@ -265,7 +267,7 @@ def svmd \
         tau: float = 0.0,
         tol: float = 1e-7,
         max_iter: int = 500
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[ndarray, ndarray, None]:
     """
 
     :param S: Signal (N,)
@@ -278,16 +280,19 @@ def svmd \
     :return: IMFs(num_modes, N), Res(N,)
     """
 
-    if not use_JIT:
-        Cls = SVMD(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
-        IMFs, Res = Cls(S)
+    # if not use_JIT:
+    #     Cls = SVMD(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
+    #     IMFs, Res = Cls(S)
 
-    else:
-        Module = give_svmd_JIT()
-        Cls = Module(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
-        IMFs, Res = Cls(S)
+    # else:
+    #     Module = give_svmd_JIT()
+    #     Cls = Module(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
+    #     IMFs, Res = Cls(S)
 
-    return IMFs, Res
+    Cls = SVMD(num_modes=num_modes, alpha=alpha, tau=tau, tol=tol, max_iter=max_iter)
+    IMFs, Res, Info = Cls(S)
+
+    return IMFs, Res, Info
 
 if __name__ == "__main__":
     import time

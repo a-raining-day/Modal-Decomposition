@@ -20,8 +20,6 @@ Modify:  (must)
 """
 
 import numpy as np
-from scipy.signal import find_peaks, hilbert, argrelextrema
-from scipy.linalg import eigh, svd, eig
 from typing import Union, Tuple, Optional
 
 def fmd(
@@ -34,7 +32,7 @@ def fmd(
     tol: float = 1e-6,
     num_hand: int=None,
     seed: Optional[int] = 42
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     FMD: Feature Mode Decomposition
 
@@ -47,8 +45,10 @@ def fmd(
     :param tol: the epsilon of the energy of the Ress.
     :param num_hand: the candidacy of the filter.
     :param seed: random seed
-    :return: IMFs(max_IMFs, N), Res(N,)
+    :return: IMFs(max_IMFs, N), Res(N,), None
     """
+    from scipy.signal import argrelextrema
+    from scipy.linalg import eigh, eig
 
     S = np.asarray(S, dtype=np.float64).ravel()
     N = len(S)
@@ -271,7 +271,7 @@ def fmd(
     modes_array = np.array(modes_list, dtype=np.float64) * std_S if modes_list else np.empty((0, N))
     residual_final = residual * std_S + mean_S
 
-    return modes_array, residual_final
+    return modes_array, residual_final, None
 
 def _auto_estimate_num_candidates(signal: np.ndarray, M: int, L: int, fs: float) -> int:
     N = len(signal)
@@ -303,6 +303,8 @@ def _auto_estimate_num_candidates(signal: np.ndarray, M: int, L: int, fs: float)
     return int(np.clip(base_num, 5, 70))
 
 def _estimate_snr(signal: np.ndarray) -> float:
+    from scipy.signal import hilbert
+
     analytic = hilbert(signal)
     envelope = np.abs(analytic)
 
@@ -356,6 +358,8 @@ def _estimate_signal_complexity(signal: np.ndarray) -> float:
     return np.clip(complexity, 0, 1)
 
 def _robust_period_estimation(x: np.ndarray, fs: float) -> int:
+    from scipy.signal import find_peaks, hilbert
+
     n = len(x)
     x = x - np.mean(x)
 
@@ -381,6 +385,8 @@ def _robust_period_estimation(x: np.ndarray, fs: float) -> int:
     return max(2, min(period, n // 4))
 
 def _advanced_filter_init(X_short: np.ndarray, X_shift: np.ndarray, num_hand: int=10) -> np.ndarray:
+    from scipy.linalg import svd
+
     L = X_short.shape[1]
 
     candidates = []

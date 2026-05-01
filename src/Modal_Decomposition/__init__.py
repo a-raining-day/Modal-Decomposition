@@ -1,6 +1,6 @@
 """
 Modal Decomposition:
-    LMD、CEEMDAN、EFD、CEEFD、VMD、EEMD、FMD、EWT、SSA、RPSEMD、CEEMD、MEMD、ICEEMDAN、EMD
+    LMD, CEEMDAN, EFD, CEEFD, VMD, EEMD, FMD, EWT, SSA, RPSEMD, CEEMD, MEMD, ICEEMDAN, EMD
 
 GitHub url: https://github.com/a-raining-day/Modal-Decomposition
 
@@ -16,9 +16,6 @@ Lib and Version:  (if None write None)
 
 Only accessed by:  (must)
     All
-
-Modify:  (must)
-    2026.3.25
 
 Description: (if None write None)
     As the entrance of the lib
@@ -45,12 +42,13 @@ Modify:
     2026.4.6  - Change the position of the entrance of importing 'threading'. Try to reduce the cost of the import.
     2026.4.9  - Fix the import error of Class.VMD. From "vmdpy.EWT1D" to "vmdpy.VMD".
     2026.5.1  - Delete the "help_function.py". Stop use decomposition with JIT in "SVMD.py". EEMD use PyEMD now. Fix the MEMD.
+    2026.5.2  - Unify the construction of All functions' return.
 """
 
 
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 __author__ = "a-raining-day(Mao)"
-__email__ = "None, Only QQ email."
+__email__ = "2215269365@qq.com"
 __license__ = "Apache 2.0"
 __url__ = "https://github.com/a-raining-day/Modal-Decomposition"
 __description__ = "A comprehensive modal decomposition library"

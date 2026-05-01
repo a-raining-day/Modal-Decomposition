@@ -3,7 +3,7 @@ Python version:  (must)
     3.10.11
 
 Lib and Version:  (if None write None)
-    EMD-S - 1.9.0
+    numpy - 2.2.6
 
 Only accessed by:  (must)
     Only __init__.py
@@ -28,7 +28,7 @@ def eemd(
     noise_width: float = 0.05,
     max_imf: int = -1,
     **kwargs
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, None]:
     """
     EEMD: Ensemble Empirical Mode Decomposition
     (Standard implementation via PyEMD)
@@ -61,4 +61,4 @@ def eemd(
     IMFs = result[:-1, :]   # shape [n_imfs, N]
     Res  = result[-1, :]    # shape [N,]
 
-    return IMFs, Res
+    return IMFs, Res, None

@@ -27,7 +27,7 @@ There two classification in `__init__.py`: `Class` and `Function`.
 ### Quick Start
 
 ```python
-import Modal_Decomposition.Function as f
+from Modal_Decomposition import Function as f
 import numpy as np
 
 S = np.random.random(10)
@@ -52,14 +52,14 @@ IMFs, Res, Info = f.EMD(S)
 | MEMD     | Multivariate Empirical Mode Decomposition                                   |   `Function.MEMD(signal)`   |                                                                                                                                                  [10.48550/arXiv.2206.00926](https://arxiv.org/abs/2206.00926)                                                                                                                                                  |
 | RPSEMD   | Random Phase Sinusoidal Assisted Empirical Mode Decomposition               |  `Function.RPSEMD(signal)`  |                                                                                                                                            [10.1109/LSP.2016.2537376](https://ieeexplore.ieee.org/document/7423702)                                                                                                                                             |
 | SSA      | Singular Spectrum Analysis                                                  |   `Function.SSA(signal)`    |                                                                                                                                [10.1016/j.mex.2020.101015](https://www.sciencedirect.com/science/article/pii/S2215016120302351)                                                                                                                                 |
-| SVMD     | Sequential Variational Mode Decomposition                                   |   `Function.SVMD(signal)`   |                                                                                                                             [10.1016/j.sigpro.2020.107610](https://www.sciencedirect.com/science/article/abs/pii/S0165168420301535)                                                                                                                             |
-| VMD      | Variational Mode Decomposition                                              |   `Function.VMD(signal)`    |                                                                                                                             [10.1016/j.sigpro.2020.107610](https://www.sciencedirect.com/science/article/abs/pii/S0165168420301535)                                                                                                                             |
+| SVMD     | Successive Variational Mode Decomposition                                   |   `Function.SVMD(signal)`   |                                                                                                                             [10.1016/j.sigpro.2020.107610](https://www.sciencedirect.com/science/article/abs/pii/S0165168420301535)                                                                                                                             |
+| VMD      | Variational Mode Decomposition                                              |   `Function.VMD(signal)`    |                                                                                                                                            [10.1109/TSP.2013.2288675](https://ieeexplore.ieee.org/document/6655981)                                                                                                                                             |
 
 ## Install
 
 You can install by:
 ```shell
-git clone https://github.com/a-raining-day/Motal-Decomposition.git
+git clone https://github.com/a-raining-day/Modal-Decomposition.git
 cd Motal-Decomposition
 pip install -r requirements.txt
 ```
@@ -81,6 +81,8 @@ This lib's dependence are:
 - [vmdpy](https://github.com/vrcarva/vmdpy)
 
 *Other dependence please read "requirements.txt"*
+
+*Please pip `EMD-signal`, not `PyEMD`*
 
 ## Url
 

@@ -43,6 +43,7 @@ Modify:
     2026.4.9  - Fix the import error of Class.VMD. From "vmdpy.EWT1D" to "vmdpy.VMD".
     2026.5.1  - Delete the "help_function.py". Stop use decomposition with JIT in "SVMD.py". EEMD use PyEMD now. Fix the MEMD.
     2026.5.2  - Unify the construction of All functions' return. Fix the value of VMD's Res. Use Check_Time_and_Signal to uniform the check.
+    2026.6.22 - Clear the dependent libs.
 """
 
 
@@ -85,8 +86,6 @@ __all__ = \
 
 
 class Class:
-    import threading
-
     __cache = {}
 
     CEEFD = ceefd

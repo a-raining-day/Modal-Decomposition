@@ -12,6 +12,29 @@ Hope my lib can help you.
 
 All entrance of functions or class are stored in `Modal_Decomposition/__init__.py`
 
+## API
+
+There two classification in `__init__.py`: `Class` and `Function`.
+
+- ### Function:
+
+    Use `Function.method` to choose the following mode decomposition method.
+
+- ### Class:
+
+    Use `Class.class` will give you a class. `Class.class.decompose` will decompose the signal.
+
+### Quick Start
+
+```python
+import Modal_Decomposition.Function as f
+import numpy as np
+
+S = np.random.random(10)
+
+IMFs, Res, Info = f.EMD(S)
+```
+
 ## Modal Decomposition
 
 | method   | description                                                                 |             use             |                                                                                                                                                                     resource(doi and link)                                                                                                                                                                      |

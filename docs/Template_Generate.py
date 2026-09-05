@@ -23,7 +23,6 @@ from datetime import datetime
 from typing import Dict
 import platform
 import subprocess
-from src.Modal_Decomposition.COLOR import printc
 
 Template = \
 {
@@ -214,7 +213,7 @@ def generate_template(template: Dict[str, str], verbose: bool = True, clip: bool
 
     if clip:
         Clip(template)
-        printc("\n\n(the generated template has been copied to clipboard)", color="magenta")
+        print("\n\n(the generated template has been copied to clipboard)")
 
     return template
 

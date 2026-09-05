@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Modal-Decomposition"
-version = "0.0.5"
-requires-python = ">=3.8"
+version = "0.1.6"
+requires-python = ">=3.10"
 
 authors = [
   {name = "Mao_HaoChuan", email = "2215269365@qq.com"},
@@ -20,17 +20,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "colorama",
     "numpy",
     "EMD-signal",
-    "numba",
     "ewtpy",
     "scipy",
-    "antropy",
     "tqdm",
     "vmdpy",
     "psutil"
 ]
+
 optional-dependencies = {"dev"=["pytest>=7.0", "black"], "plot"=["matplotlib"]}
 
 [project.urls]

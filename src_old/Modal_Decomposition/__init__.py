@@ -1,0 +1,153 @@
+"""
+Modal Decomposition:
+    LMD, CEEMDAN, EFD, CEEFD, VMD, EEMD, FMD, EWT, SSA, RPSEMD, CEEMD, MEMD, ICEEMDAN, EMD
+
+GitHub url: https://github.com/a-raining-day/Modal-Decomposition
+
+Python version:
+    3.10.11
+
+Role:  (if None write None)
+    As the entrance of the lib
+
+Lib and Version:  (if None write None)
+    numpy - 2.2.6
+	typing - 4.15.0
+
+Only accessed by:  (must)
+    All
+
+Description: (if None write None)
+    As the entrance of the lib
+
+Dependence:
+    antropy
+    colorama
+    einops
+    EMD-S
+    ewtpy
+    numba
+    numpy
+    scipy
+    vmdpy
+
+Modify:
+    2026.3.25 - Optimize the cost of import, from 5.001s to 0.747s. Put some heavy lib into internal of the function
+    2026.3.26 - Optimize the description of the type of input and output. now, the dim of input and output is more clear.
+    2026.3.29 - Optimize the SSA.decompose function, time changed from 40min averagely to 2s averagely.
+    2026.3.30 - Rebuilding All.
+    2026.3.30 - Optimize the function of judging monotonicity.
+    2026.4.3  - Finish the Optimization of the modal decomposition method. Except the MEMD method.
+    2026.4.4  - Add the parameter to describe lib.
+    2026.4.6  - Change the position of the entrance of importing 'threading'. Try to reduce the cost of the import.
+    2026.4.9  - Fix the import error of Class.VMD. From "vmdpy.EWT1D" to "vmdpy.VMD".
+    2026.5.1  - Delete the "help_function.py". Stop use decomposition with JIT in "SVMD.py". EEMD use PyEMD now. Fix the MEMD.
+    2026.5.2  - Unify the construction of All functions' return. Fix the value of VMD's Res. Use Check_Time_and_Signal to uniform the check.
+    2026.6.22 - Clear the dependent libs.
+    2026.8.15 - Complete the migration to "registration+abstract class".
+"""
+
+__all__ = \
+    [
+        "Function", "Class",
+        "__version__",
+        "__author__",
+        "__email__",
+        "__license__",
+        "__url__",
+        "__description__"
+    ]
+
+__version__ = "0.1.3"
+__author__ = "a-raining-day(Mao)"
+__email__ = "2215269365@qq.com"
+__license__ = "Apache 2.0"
+__url__ = "https://github.com/a-raining-day/Modal-Decomposition"
+__description__ = "A comprehensive modal decomposition library"
+
+
+from importlib import import_module
+
+from .CEEFD import ceefd
+from .CEEMD import ceemd
+from .CEEMDAN import ceemdan
+from .EEMD import eemd
+from .EFD import efd
+from .EMD import emd
+from .EWT import ewt
+from .FMD import fmd
+from .ICEEMDAN import iceemdan
+from .LMD import lmd
+from .MEMD import memd
+from .RPSEMD import rpsemd
+from .SSA import SSA, ssa
+from .SVMD import svmd
+from .VMD import vmd
+
+
+class Class:
+    __cache = {}
+
+    CEEFD = ceefd
+
+    @classmethod
+    def EEMD(cls, **kwargs):
+        if "EEMD" not in cls.__cache:
+            try:
+                Module = import_module("PyEMD").EEMD
+                cls.__cache["EEMD"] = Module
+                return Module(**kwargs)
+            except ImportError:
+                raise ImportError("No PyEMD, Please use `pip install EMD-S`")
+
+        else:
+            return cls.__cache["EEMD"](**kwargs)
+
+    @classmethod
+    def EWT1D(cls, **kwargs):
+        if "EWT1D" not in cls.__cache:
+            try:
+                Module = import_module("ewtpy").EWT1D
+                cls.__cache["EWT1D"] = Module
+                return Module(**kwargs)
+            except ImportError:
+                raise ImportError("No ewtpy, Please use `pip install ewtpy`")
+
+        else:
+            return cls.__cache["EWT1D"](**kwargs)
+
+    SSA = SSA
+    SVMD = SVMD
+
+    @classmethod
+    def VMD(cls, **kwargs):
+        if "EWT1D" not in cls.__cache:
+            try:
+                Module = import_module("vmdpy").VMD
+                cls.__cache["VMD"] = Module
+                return Module(**kwargs)
+            except ImportError:
+                raise ImportError("No vmdpy, Please use `pip install vmdpy`")
+
+        else:
+            return cls.__cache["VMD"](**kwargs)
+
+class Function:
+    """ function | default function for modal decomposition
+    the IMFs (2-dim) means: (K, len(Signal)) (K is the num of IMFs)"""
+
+    CEEFD = Class.CEEFD(fs=1.0, min_peak_distance=10, envelop_iter=3)
+    CEEMD = ceemd
+    CEEMDAN = ceemdan
+    EEMD = eemd
+    EFD = efd
+    EMD = emd
+    EWT = ewt
+    FMD = fmd
+    ICEEMDAN = iceemdan
+    LMD = lmd
+    MEMD = memd
+    RPSEMD = rpsemd
+    SSA = ssa
+    SVMD = svmd
+    VMD = vmd

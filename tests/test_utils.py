@@ -7,10 +7,16 @@ import pytest
 
 from Modal_Decomposition.Utils import (
     Check_Time_and_Signal,
+    detect_dtype,
+    get_available_memory,
+    get_memory_policy,
     is_monotonic,
     is_uniform,
     monotonic,
     require_ndim,
+    set_absolute_limit,
+    set_memmap_ratio,
+    should_use_memmap,
     to_signal,
 )
 
@@ -269,3 +275,188 @@ def test_monotonic_non_numeric_raises():
         monotonic(np.array([1 + 2j, 3 + 4j]))
     with pytest.raises(ValueError):
         monotonic(np.array([np.datetime64("2020-01-01"), np.datetime64("2020-01-02")]))
+
+
+# --- safe validation levels ---
+
+def test_monotonic_safe_levels_match_on_valid_data():
+    rng = np.random.default_rng(3)
+    arr = np.sort(rng.standard_normal(5000))
+    for safe in (0, 1, 2):
+        assert monotonic(arr, safe=safe)
+        assert monotonic(arr[::-1].copy(), safe=safe)
+        assert not monotonic(rng.standard_normal(5000), safe=safe)
+    arr2 = np.sort(rng.standard_normal(20_000))
+    for safe in (0, 1, 2):
+        assert monotonic(arr2, chunk_size=4096, safe=safe)
+
+
+def test_monotonic_safe1_skips_nan_check():
+    # safe=1: NaN is not detected; it silently fails the comparison.
+    assert not monotonic(np.array([1.0, np.nan, 3.0]), safe=1)
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        monotonic(np.array([1.0, np.nan, 3.0]), safe=0)
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        monotonic(np.array([1.0, np.nan, 3.0]), safe=2)
+
+
+def test_monotonic_safe2_raises_on_first_nan():
+    # NaN inside a chunk and at a seam, chunked path.
+    cs = 4
+    a = np.arange(12, dtype=np.float64)
+    a[5] = np.nan                       # inside the 2nd chunk
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        monotonic(a, chunk_size=cs, safe=2)
+    b = np.arange(12, dtype=np.float64)
+    b[4] = np.nan                       # seam value (index cs)
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        monotonic(b, chunk_size=cs, safe=2)
+    c = np.arange(13, dtype=np.float64)
+    c[-1] = np.inf                      # singleton tail chunk
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        monotonic(c, chunk_size=cs, safe=2)
+    # safe=2 single-shot: whole array is one chunk.
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        monotonic(np.array([1.0, np.nan]), safe=2)
+
+
+def test_monotonic_safe_invalid():
+    with pytest.raises(ValueError, match="safe"):
+        monotonic(np.array([1.0, 2.0]), safe=3)
+
+
+# --- dtype detection ---
+
+def test_detect_dtype():
+    assert detect_dtype(np.array([True, False])) == "bool"
+    assert detect_dtype(np.array([1, 2, 3])) == "int"
+    assert detect_dtype(np.array([1], dtype=np.uint8)) == "int"
+    assert detect_dtype(np.array([1.0])) == "float"
+    assert detect_dtype(np.array([1.0], dtype=np.float16)) == "float"
+    with pytest.raises(ValueError):
+        detect_dtype(np.array([1 + 2j]))
+    with pytest.raises(ValueError):
+        detect_dtype(np.array(["a"]))
+
+
+# --- memory policy ---
+
+@pytest.fixture(autouse=True)
+def _reset_memory_policy():
+    yield
+    set_memmap_ratio(0.6)
+
+
+def test_memory_policy_strategies_are_exclusive():
+    set_absolute_limit(1000)
+    policy = get_memory_policy()
+    assert policy["use_ratio_strategy"] is False
+    assert policy["absolute_memmap_limit_bytes"] == 1000
+    set_memmap_ratio(0.5)
+    policy = get_memory_policy()
+    assert policy["use_ratio_strategy"] is True
+    assert policy["memmap_ratio_limit"] == 0.5
+
+
+def test_memory_policy_validation():
+    with pytest.raises(ValueError):
+        set_memmap_ratio(0.0)
+    with pytest.raises(ValueError):
+        set_memmap_ratio(1.5)
+    with pytest.raises(ValueError):
+        set_absolute_limit(0)
+    with pytest.raises(ValueError):
+        set_absolute_limit(-1)
+
+
+def test_should_use_memmap():
+    set_absolute_limit(1000)
+    assert should_use_memmap(999) is False
+    assert should_use_memmap(1000) is True
+    assert should_use_memmap(500, extra=500) is True
+
+
+def test_get_available_memory():
+    assert get_available_memory(force=True) > 0
+    assert get_available_memory() > 0  # cached
+
+
+@pytest.fixture()
+def ws_tmp():
+    """Workspace-local temp dir (pytest's tmp_path is blocked by the sandbox)."""
+    import shutil
+    from pathlib import Path
+
+    d = Path(__file__).resolve().parent / ".pytest_tmp"
+    d.mkdir(exist_ok=True)
+    yield d
+    shutil.rmtree(d, ignore_errors=True)
+
+
+# --- input-layer size detection and memmap (Check_Time_and_Signal) ---
+
+def test_check_time_and_signal_npy_path(ws_tmp):
+    arr = np.sort(np.random.default_rng(2).standard_normal(3000))
+    path = ws_tmp / "sig.npy"
+    np.save(path, arr)
+    S, T, N = Check_Time_and_Signal(str(path))
+    assert S.shape == (3000,) and N == 3000 and S.dtype == np.float64
+    assert np.allclose(S, arr)
+    S2, _, _ = Check_Time_and_Signal(path)
+    assert np.allclose(S2, arr)
+    with pytest.raises(ValueError, match=".npy"):
+        Check_Time_and_Signal(str(ws_tmp / "sig.txt"))
+
+
+def test_check_time_and_signal_path_memmap_when_policy_triggers(ws_tmp):
+    arr = np.sort(np.random.default_rng(4).standard_normal(3000))
+    path = ws_tmp / "sig.npy"
+    np.save(path, arr)
+    set_absolute_limit(1)  # anything triggers memmap
+    S, _, _ = Check_Time_and_Signal(str(path))
+    assert isinstance(S, np.memmap)
+    assert np.allclose(S, arr)
+
+
+def test_check_time_and_signal_ndarray_memmap_when_policy_triggers(monkeypatch):
+    set_absolute_limit(1)
+    # Force the float64 normalization to stay disk-backed for this small case.
+    monkeypatch.setattr("Modal_Decomposition.Utils.Check._F64_DISK_BYTES", 1)
+    S, _, _ = Check_Time_and_Signal(np.arange(10))
+    assert isinstance(S, np.memmap)
+    assert S.dtype == np.float64
+    assert np.allclose(S, np.arange(10, dtype=np.float64))
+
+
+def test_check_time_and_signal_long_list_becomes_memmap(monkeypatch):
+    monkeypatch.setattr("Modal_Decomposition.Utils.Check._LIST_MEM_THRESHOLD", 5)
+    S, _, _ = Check_Time_and_Signal(list(range(10)))
+    assert isinstance(S, np.memmap)
+    assert S.dtype == np.float64
+    assert np.allclose(S, np.arange(10, dtype=np.float64))
+
+
+def test_check_time_and_signal_non_f64_large_goes_disk(monkeypatch):
+    monkeypatch.setattr("Modal_Decomposition.Utils.Check._F64_DISK_BYTES", 1)
+    S, _, _ = Check_Time_and_Signal(np.arange(10, dtype=np.float32))
+    assert isinstance(S, np.memmap)
+    assert S.dtype == np.float64
+    assert np.allclose(S, np.arange(10, dtype=np.float64))
+
+
+def test_monotonic_chunk_adaptation():
+    # Tiny ratio limit -> input alone exceeds it -> chunk_size unchanged,
+    # results stay correct.
+    arr = np.sort(np.random.default_rng(5).standard_normal(200_000))
+    set_memmap_ratio(1e-9)
+    assert monotonic(arr, chunk_size=1_000_000)          # no shrink, single-shot
+    assert monotonic(arr[::-1].copy(), chunk_size=1_000_000)
+    assert not monotonic(np.random.default_rng(6).standard_normal(200_000),
+                         chunk_size=1_000_000)
+    # Absolute limit just above the input size -> chunk_size is shrunk to the
+    # floor and the chunked path still gives correct results.
+    set_absolute_limit(arr.nbytes + 1)
+    assert monotonic(arr, chunk_size=1_000_000, strict=True)
+    assert monotonic(arr[::-1].copy(), chunk_size=1_000_000)
+    assert not monotonic(np.random.default_rng(7).standard_normal(200_000),
+                         chunk_size=1_000_000)

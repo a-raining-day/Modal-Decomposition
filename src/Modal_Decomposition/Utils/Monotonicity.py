@@ -15,16 +15,26 @@ Notes
   compared directly instead of materializing ``np.diff``, which keeps the
   temporary memory at one byte per element and avoids the slow float16 /
   float32 conversion copy.
+- ``safe`` controls how much validation is performed (see ``monotonic``).
+- Input-size detection and the memmap decision belong to the input layer
+  (``Utils.Check_Time_and_Signal``); ``monotonic`` only consults the global
+  memory policy to bound its own temporary masks (chunk-size adaptation).
 """
 
 from enum import Enum
-
-import numpy as np
 from typing import Iterable, Literal
 
-from .Check import require_ndim
+import numpy as np
+
+from .Check import detect_dtype, require_ndim
+from .Memory import get_available_memory, get_memory_policy
 
 __all__ = ["Monotony", "monotonic", "is_monotonic"]
+
+# Chunk-adaptation floor and the input size below which the memory policy is
+# not consulted at all.
+_MIN_CHUNK_ELEMS = 4096
+_ADAPT_MIN_BYTES = 64 * 1024 * 1024
 
 
 class Monotony(Enum):
@@ -37,6 +47,37 @@ class Monotony(Enum):
     StrictDecreasing = 4
 
     Equal = 5
+
+
+def _adapt_chunk_size(chunk_size: int, nbytes: int) -> int:
+    """
+    Shrink ``chunk_size`` so the working set fits the global memory policy.
+
+    The per-chunk temporaries are boolean masks (~3 bytes per element), so the
+    working set is ``nbytes + 3 * chunk_elements``. Inputs below 64 MB keep
+    the caller's chunk size untouched.
+    """
+    if nbytes < _ADAPT_MIN_BYTES:
+        return chunk_size
+
+    policy = get_memory_policy()
+
+    if policy["use_ratio_strategy"]:
+        available = get_available_memory()
+        if available is None:
+            return chunk_size  # psutil unavailable: cannot judge the ratio
+        limit = policy["memmap_ratio_limit"] * available
+    else:
+        limit = policy["absolute_memmap_limit_bytes"]
+
+    budget = int(limit) - int(nbytes)
+    if budget <= 0:
+        # The input alone already exceeds the policy limit; smaller chunks
+        # cannot reduce that, so keep the caller's chunk size.
+        return chunk_size
+
+    cap = max(_MIN_CHUNK_ELEMS, budget // 3)
+    return max(1, min(chunk_size, cap))
 
 
 def _classify_chunk(chunk: np.ndarray, strict: bool) -> Monotony | None:
@@ -141,12 +182,19 @@ def _single_shot_monotonic(arr: np.ndarray, strict: bool) -> bool:
     return True
 
 
-def _chunked_monotonic(arr: np.ndarray, strict: bool, chunk_size: int) -> bool:
+def _chunked_monotonic(arr: np.ndarray, strict: bool, chunk_size: int, check_finite: bool = False) -> bool:
     """Chunked check for ``mod == "monotonic"`` when ``arr.size > chunk_size``."""
     arr_length = arr.size
 
     # Pairs crossing every chunk seam, classified by sign pattern.
     seam_idx = np.arange(chunk_size, arr_length, chunk_size)
+
+    if check_finite:
+        # First-encountered semantics (safe=2): the seam values are the first
+        # elements this path touches.
+        if not (np.all(np.isfinite(arr[seam_idx])) and np.all(np.isfinite(arr[seam_idx - 1]))):
+            raise ValueError("NaN or Inf found")
+
     bound_state = _classify_seams(arr, seam_idx, strict)
     if bound_state is None:
         return False
@@ -158,6 +206,9 @@ def _chunked_monotonic(arr: np.ndarray, strict: bool, chunk_size: int) -> bool:
 
     if strict:
         for chunk in Chunk():
+            if check_finite and not np.all(np.isfinite(chunk)):
+                raise ValueError("NaN or Inf found")
+
             if chunk.size < 2:
                 continue  # single element: its seams were already checked
             if _classify_chunk(chunk, strict=True) is not bound_state:
@@ -168,6 +219,9 @@ def _chunked_monotonic(arr: np.ndarray, strict: bool, chunk_size: int) -> bool:
     # Non-strict: Equal seams defer the direction decision to the chunks.
     monotony = bound_state  # Equal, Increasing or Decreasing
     for chunk in Chunk():
+        if check_finite and not np.all(np.isfinite(chunk)):
+            raise ValueError("NaN or Inf found")
+
         if chunk.size < 2:
             continue
 
@@ -185,7 +239,7 @@ def _chunked_monotonic(arr: np.ndarray, strict: bool, chunk_size: int) -> bool:
     return True
 
 
-def monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 1048576, mod: Literal["increasing", "decreasing", "monotonic"] = "monotonic") -> bool:
+def monotonic(arr, strict: bool = False, chunk_size: int = 1048576, mod: Literal["increasing", "decreasing", "monotonic"] = "monotonic", safe: Literal[0, 1, 2] = 0) -> bool:
     """
     Check whether a 1-d array is monotonic.
 
@@ -196,9 +250,20 @@ def monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 1048576, 
     strict : bool
         True for strict monotonicity.
     chunk_size : int
-        Threshold above which the chunked path is used.
+        Threshold above which the chunked path is used. Under an active
+        memory policy it may be shrunk so the working set fits the policy.
     mod : Literal["increasing", "decreasing", "monotonic"]
         Direction of monotonicity.
+    safe : Literal[0, 1, 2]
+        Validation level. ``0``: validate everything upfront (default).
+        ``1``: skip all validation -- the caller guarantees a valid,
+        non-empty 1-d real numeric ndarray; anything else is undefined
+        behaviour (a NaN may silently yield ``False`` instead of raising).
+        ``2``: perform the finiteness check during the monotonic scan: the
+        first NaN/Inf encountered raises ``ValueError`` and the scan exits
+        early, so non-finite values located after an early ``False`` are not
+        detected. Integer/bool inputs never need a finiteness check, making
+        the three levels equivalent for them.
 
     Returns
     -------
@@ -208,8 +273,9 @@ def monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 1048576, 
     Raises
     ------
     ValueError
-        On non-finite values, wrong dimensionality, empty input, a
-        non-numeric dtype, or an invalid ``mod`` / ``chunk_size``.
+        On non-finite values (``safe=0`` / ``safe=2``), wrong dimensionality,
+        empty input, a non-numeric dtype, or an invalid ``mod`` /
+        ``chunk_size`` / ``safe``.
 
     Notes
     -----
@@ -218,54 +284,67 @@ def monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 1048576, 
     The input dtype is preserved: integers are compared exactly and floats
     (float16/32/64) are compared without an upcast copy.
     """
+    if safe not in (0, 1, 2):
+        raise ValueError(f"safe must be 0, 1 or 2, got {safe!r}")
+
     arr = np.asarray(arr)
 
-    if arr.dtype.kind not in "iufb":
-        raise ValueError(
-            f"monotonic: expected a real numeric array, got dtype {arr.dtype}"
-        )
+    if safe == 1:
+        # No validation at all: the caller guarantees a valid input.
+        needs_finite = arr.dtype.kind == "f"  # best effort, never checked here
+        arr_length = arr.size
 
-    if arr.ndim == 0:
-        raise ValueError("Signal must have at least 1 dimension, got 0-d array")
+    else:
+        kind = detect_dtype(arr)  # raises on non-numeric dtypes
+        needs_finite = kind == "float"
 
-    if arr.size == 1:
-        # A single value is trivially monotonic in every direction. Handle it
-        # before the squeeze turns a one-element array into 0-d.
-        if arr.dtype.kind == "f" and not np.all(np.isfinite(arr)):
+        if arr.ndim == 0:
+            raise ValueError("Signal must have at least 1 dimension, got 0-d array")
+
+        if arr.size == 1:
+            if needs_finite and not np.all(np.isfinite(arr)):
+                raise ValueError("NaN or Inf found")
+            return True
+
+        arr = arr.squeeze()
+        require_ndim(arr, {1}, "monotonic")
+
+        arr_length = arr.size
+
+        if arr_length == 0:
+            raise ValueError("The length of arr shouldn't be 0")
+
+        if chunk_size < 1:
+            raise ValueError(f"chunk_size must be a positive integer, got {chunk_size}")
+
+        if safe == 0 and needs_finite and not np.all(np.isfinite(arr)):
             raise ValueError("NaN or Inf found")
-        return True
 
-    arr = arr.squeeze()
-    require_ndim(arr, {1}, "monotonic")
+    # safe=2: the finiteness scan rides along with the monotonic scan.
+    check_finite = safe == 2 and needs_finite
 
-    if arr.dtype.kind == "f" and not np.all(np.isfinite(arr)):
-        raise ValueError("NaN or Inf found")
-
-    arr_length = arr.size
-
-    if arr_length == 0:
-        raise ValueError("The length of arr shouldn't be 0")
-
-    if chunk_size < 1:
-        raise ValueError(f"chunk_size must be a positive integer, got {chunk_size}")
+    if safe != 1:
+        chunk_size = _adapt_chunk_size(chunk_size, arr.nbytes)
 
     match mod:
         case "monotonic":
             if arr_length <= chunk_size:
+                if check_finite and not np.all(np.isfinite(arr)):
+                    raise ValueError("NaN or Inf found")
                 return _single_shot_monotonic(arr, strict)
-            return _chunked_monotonic(arr, strict, chunk_size)
+            return _chunked_monotonic(arr, strict, chunk_size, check_finite)
 
         case "decreasing":
-            return _monotonic(arr, strict, chunk_size, "decreasing")
+            return _monotonic(arr, strict, chunk_size, "decreasing", check_finite)
 
         case "increasing":
-            return _monotonic(arr, strict, chunk_size, "increasing")
+            return _monotonic(arr, strict, chunk_size, "increasing", check_finite)
 
         case _:
             raise ValueError(f"Invalid mod: {mod}")
 
 
-def is_monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 1048576) -> bool:
+def is_monotonic(arr, strict: bool = False, chunk_size: int = 1048576, safe: Literal[0, 1, 2] = 0) -> bool:
     """
     Check whether a 1-d array is monotonic in either direction.
 
@@ -277,6 +356,8 @@ def is_monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 104857
         True for strict monotonicity.
     chunk_size : int
         Threshold above which the chunked path is used.
+    safe : Literal[0, 1, 2]
+        Validation level; see :func:`monotonic`.
 
     Returns
     -------
@@ -284,13 +365,16 @@ def is_monotonic(arr: np.ndarray, strict: bool = False, chunk_size: int = 104857
         True if non-increasing or non-decreasing (a constant sequence
         qualifies as both in non-strict mode).
     """
-    return monotonic(arr, strict=strict, chunk_size=chunk_size, mod="monotonic")
+    return monotonic(arr, strict=strict, chunk_size=chunk_size, mod="monotonic", safe=safe)
 
 
-def _monotonic(arr: np.ndarray, strict: bool, chunk_size: int, mod: Literal["increasing", "decreasing"]) -> bool:
+def _monotonic(arr: np.ndarray, strict: bool, chunk_size: int, mod: Literal["increasing", "decreasing"], check_finite: bool = False) -> bool:
     arr_length = arr.size
 
     if arr_length <= chunk_size:  # below the safe line
+        if check_finite and not np.all(np.isfinite(arr)):
+            raise ValueError("NaN or Inf found")
+
         monotony = _classify_chunk(arr, strict)
         if monotony is None:
             return False
@@ -317,6 +401,9 @@ def _monotonic(arr: np.ndarray, strict: bool, chunk_size: int, mod: Literal["inc
 
         last = None
         for chunk in Chunk():
+            if check_finite and not np.all(np.isfinite(chunk)):
+                raise ValueError("NaN or Inf found")
+
             if chunk.size >= 2:
                 monotony = _classify_chunk(chunk, strict)
                 if monotony is None:

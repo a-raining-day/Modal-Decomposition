@@ -1,0 +1,1 @@
+{"method": "EMD", "size_bytes": 20971520, "pattern": "random", "dtype": "float16", "safes": [0, 1, 2], "chunk_size": 1048576, "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\test_memory\\result_for_each_decomposition"}

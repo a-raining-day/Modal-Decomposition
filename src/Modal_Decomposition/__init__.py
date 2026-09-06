@@ -40,13 +40,15 @@ from . import \
 
 from ._Registry import _ClassRegistry
 from .Base import Name, Reference
-from .Utils import get_seed, set_seed
+from .Utils import get_seed, set_seed, set_absolute_limit, set_memmap_ratio
 
 __all__ = [
     "Class",
     "Function",
     "set_seed",
     "get_seed",
+    "set_memmap_ratio",
+    "set_absolute_limit",
     "__version__",
     "__author__",
     "__email__",

@@ -190,7 +190,8 @@ def test_is_monotonic():
     5 MB      | F64       | random  | False  | 1MB        | monotonic  | False| 4.46e-4
     500 MB    | F64       | up      | False  | 10MB       | monotonic  | True | 8.46e-2
     1 GB      | F16       | up      | False  | 100MB      | monotonic  | True | 1.589e+0
-    2 GB      | F16       | up      | False  | 500MB      | monotonic  |
+    2 GB      | F16       | up      | False  | 500MB      | monotonic  | True | 3.23e+0
+    3 GB      | F32       | up      | False  | 500MB      | monotonic  |
 
     Notes
     -----
@@ -205,7 +206,7 @@ def test_is_monotonic():
     data_type = "F16"
     chunk_size = (BYTE_SIZE["1MB"] * 500) // np.dtype(dtype_map[data_type]).itemsize
 
-    result = time_analysis(func, size_in_bytes=BYTE_SIZE["1GB"] * 2, data_type=data_type, mod="up", rounds=10, strict=False, chunk_size=chunk_size)
+    result = time_analysis(func, size_in_bytes=BYTE_SIZE["1GB"] * 3, data_type=data_type, mod="up", rounds=10, strict=False, chunk_size=chunk_size)
     result = result[name]
 
     print(f"\nresult for -> {name}")

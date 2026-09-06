@@ -1,8 +1,10 @@
 """
-Utility subpackage: validation, monotonicity, and seed management.
+Utility subpackage: validation, monotonicity, memory policy, and seed
+management.
 """
 
-from .Check import Check_Time_and_Signal, is_uniform, require_ndim, to_signal
+from .Check import Check_Time_and_Signal, detect_dtype, is_uniform, require_ndim, to_signal
+from .Memory import get_available_memory, get_memory_policy, set_absolute_limit, set_memmap_ratio, should_use_memmap
 from .Monotonicity import Monotony, is_monotonic, monotonic
 from .Seed import get_seed, resolve_seed, set_seed
 
@@ -11,6 +13,12 @@ __all__ = [
     "is_uniform",
     "require_ndim",
     "to_signal",
+    "detect_dtype",
+    "get_available_memory",
+    "set_memmap_ratio",
+    "set_absolute_limit",
+    "get_memory_policy",
+    "should_use_memmap",
     "Monotony",
     "monotonic",
     "is_monotonic",

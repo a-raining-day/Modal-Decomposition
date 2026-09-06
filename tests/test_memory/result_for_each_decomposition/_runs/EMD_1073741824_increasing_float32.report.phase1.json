@@ -1,0 +1,17 @@
+{
+  "phase": "input",
+  "input": {
+    "pattern": "increasing",
+    "dtype": "float32",
+    "n_samples": 268435456,
+    "size_bytes": 1073741824,
+    "shape": [
+      268435456
+    ],
+    "nbytes": 1073741824,
+    "backing": "ndarray",
+    "build_wall_s": 5.685572,
+    "build_peak_delta_rss_bytes": 1145634816
+  },
+  "rss_after_input_bytes": 1106956288
+}

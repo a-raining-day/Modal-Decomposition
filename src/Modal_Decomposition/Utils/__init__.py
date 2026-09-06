@@ -26,3 +26,16 @@ __all__ = [
     "get_seed",
     "resolve_seed",
 ]
+
+
+"""
+method              | complexity    | precision | speed    | decision
+Fourth-order Wave   | O(n)          | high      | fastest  |
+FHT                 | O(n log n)    | mid       | fast     |
+SB-Hilbert          | < O(n log n)  | mid       | fast     |
+Kramers-Kronig      | high          | highest   | slowest  |
+FIR                 | O(L)          | high      | slow     |
+HST                 | O(n log n)    | high      | fast     |
+FFT                 | O(n log n)    | high      | fast     |
+Optional-Order FIR  | O(order)      | mid       | mid      |
+"""

@@ -25,5 +25,5 @@ def hilbert \
             ...
 
         case "FHT":
-            ...
+            return _fht._hilbert(S)
 

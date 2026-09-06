@@ -70,6 +70,14 @@ pip install -r requirements.txt
 pip install Modal-Decomposition
 ```
 
+> 发布版的平台 wheel (Windows / macOS / Linux) 已内置 Cython 编译的 FHT 加速
+> 内核 `_fht_native` (C 源码源自 Smithsonian *am* 项目, 见下方
+> "Acknowledgement" 章节), 安装后自动启用; 找不到编译内核时自动回退到纯
+> NumPy 实现, 因此任何环境都可以运行。若想在本地源码树手动编译加速内核:
+> ```shell
+> python setup.py build_ext --inplace   # 仓库根目录
+> ```
+
 ## Dependence
 
 This lib's dependence are:
@@ -87,3 +95,33 @@ This lib's dependence are:
 ## Url
 
 This lib's url is: https://github.com/a-raining-day/Modal-Decomposition
+
+## Acknowledgement
+
+The `FHT` Hilbert backend under
+`src/Modal_Decomposition/Utils/Hilbert/_C/_fht/` contains **third-party C code**:
+
+* Originally written by the **Smithsonian Astrophysical Observatory**,
+  Submillimeter Receiver Laboratory (Scott Paine), as part of the *am*
+  atmospheric model: <https://www.cfa.harvard.edu/~spaine/am/>
+* Acquired from
+  [waddafunk/Smithsonians_Discrete_Hilbert_Fourier_Hartley_Transforms](https://github.com/waddafunk/Smithsonians_Discrete_Hilbert_Fourier_Hartley_Transforms)
+  (Jacopo Piccirillo, 13/10/2020), where the transform routines were isolated
+  for standalone C/C++ use.
+
+Smithsonian *am* license notice:
+
+> This computer program containing an atmospheric propagation model for the
+> submillimeter band is a work of the United States and may be used freely,
+> with attribution and credit to the Smithsonian Astrophysical Observatory.
+> The program is intended for educational, scholarly or research purposes. In
+> connection with any commercial use of the program, the user should disclose
+> clearly and conspicuously all of the information contained in the first
+> sentence of this notice.
+
+**Hilbert-transform phase convention:** the SAO implementation shifts the
+phase by **+90°** — *not* **−90°** as in MATLAB/SciPy. To obtain the
+MATLAB-compatible result, multiply the component orthogonal to the input by
+`exp(j·π) = −1`, i.e. multiply the imaginary part of the analytic signal by
+−1 for a real input (`matlab_phase=True` in
+`Modal_Decomposition.Utils.Hilbert._fht`).

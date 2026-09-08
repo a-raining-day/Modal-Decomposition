@@ -44,7 +44,7 @@ class RPSEMD(Decomposer):
         M: int = 4,
         max_imf: int | None = None,
         fs: float = 1.0,
-        spline_kind: str = "cubic",
+        spline_kind: str = "CubicSpline",
         nbsym: int = 2,
     ):
         """
@@ -60,7 +60,9 @@ class RPSEMD(Decomposer):
         fs : float
             Sampling frequency used for frequency estimation.
         spline_kind : str
-            Interpolation kind for the internal EMD.
+            Envelope backend of the internal native EMD: one of
+            "CubicSpline" / "PCHIP" / "linear" (canonical ``Utils.Spline``
+            names; "linear" = np.interp).
         nbsym : int
             Number of mirrored extrema for the internal EMD.
         """

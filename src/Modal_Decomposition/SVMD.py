@@ -60,11 +60,11 @@ class SVMD(Decomposer):
         max_iter : int
             Maximum number of iterations.
         backend : Literal["numpy", "numba"]
-            Implementation backend. The numba backend is not yet
+            Implementation spline_kind. The numba spline_kind is not yet
             implemented and raises RealizationError.
         """
         if backend not in ("numpy", "numba"):
-            raise ValueError(f"backend must be 'numpy' or 'numba', got {backend!r}")
+            raise ValueError(f"spline_kind must be 'numpy' or 'numba', got {backend!r}")
 
         self.num_modes = max(1, int(num_modes))
         self.alpha = float(alpha)

@@ -71,7 +71,7 @@ OPS = {
 from src.Modal_Decomposition.Utils.Monotonicity import is_monotonic as _mono_direct  # noqa: E402
 from src.Modal_Decomposition.Utils.Check import Check_Time_and_Signal as _check_direct  # noqa: E402
 from src.Modal_Decomposition.Utils.Spline import spline as _spline_direct  # noqa: E402
-from src.Modal_Decomposition.Utils.Envelope import envelope as _env_direct  # noqa: E402
+from src.Modal_Decomposition.Utils.Hilbert import envelope as _env_direct  # noqa: E402
 
 _MONO_MOD = U.get_monotonicity()
 _CHECK_MOD = U.get_check()

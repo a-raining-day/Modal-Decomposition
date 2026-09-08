@@ -1,9 +1,12 @@
 """
 Hilbert / FHT backends — thin wrapper module.
 
-This module is a pure re-export wrapper over the private implementation
-package ``Utils/_Hilbert`` (its ``__init__.py`` holds the ``hilbert``
-dispatcher). It contains no logic and no cache code of its own.
+本模块只承载 **Hilbert 变换族**: ``hilbert(S, mod)`` 后端分发与 FHT 原语
+(``fht_forward`` / ``fht_inverse`` / ``hilbert_transform``)。
+
+注意: **包络 (envelope) 不在本模块** —— 幅度包络提取见
+``Utils.Envelope`` (工具, 含 Hilbert/检波/样条等策略), 模态分解迭代中的
+极值样条包络见 ``Utils.Spline``。三者为三个不同概念, 不要混用。
 
 Layered access (cache introduced at the *getter* layer only):
 
@@ -20,13 +23,6 @@ Public surface
     ``"FHT"`` (fast Hartley transform based; the compiled ``_fht_native``
     Cython kernel — third-party SAO C code — is used automatically when
     present, otherwise the pure-NumPy reference in ``_Hilbert._fht``).
-    Declared-but-unimplemented backends (``"Fourth-order Wave"``,
-    ``"SB-Hilbert"``, ``"Kramers-Kronig"``, ``"FIR"``, ``"HST"``, ``"FFT"``,
-    ``"Optional-order FIR"``) raise ``NotImplementedError``; unknown names
-    raise ``ValueError``.
-
-Also re-exported: ``fht_forward`` / ``fht_inverse`` / ``hilbert_transform``
-(pure/accelerated FHT primitives).
 """
 
 from ._Hilbert import hilbert  # noqa: F401  (thin re-export of the dispatcher)

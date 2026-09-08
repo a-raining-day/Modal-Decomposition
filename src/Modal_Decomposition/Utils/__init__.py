@@ -40,6 +40,7 @@ __all__ = [
     "get_envelope",
     "get_chunk",
     "get_peaks",
+    "get_mirror",
 ]
 
 # (cache 键, 描述) —— Utils 全部工具模块的惰性注册目录。
@@ -81,6 +82,10 @@ _UTILS_MODULES = {
     "Peaks": (
         "Modal_Decomposition.Utils.Peaks",
         "Utils.Peaks: 统一峰检测 (scipy/numpy/numba 三后端, 统一返回契约)",
+    ),
+    "Mirror": (
+        "Modal_Decomposition.Utils.Mirror",
+        "Utils.Mirror: 端点镜像外拓 (mirror_extrema: EMD nbsym / LMD 边界两用)",
     ),
 }
 
@@ -193,6 +198,18 @@ def get_peaks():
     """
     key, desc = _UTILS_MODULES["Peaks"]
     return _get_cached_module("Peaks", key, desc)
+
+
+def get_mirror():
+    """
+    Return the Mirror module (``Utils.Mirror``) via the import cache.
+
+    首次访问时惰性 import 并注册 (键
+    ``"Modal_Decomposition.Utils.Mirror"``); 之后任意组件可用
+    ``cache.get(...)`` 取得同一进程级实例。
+    """
+    key, desc = _UTILS_MODULES["Mirror"]
+    return _get_cached_module("Mirror", key, desc)
 
 
 

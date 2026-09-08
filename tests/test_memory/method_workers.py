@@ -4,7 +4,7 @@ Pluggable decomposition-method workers for the memory pipeline.
 Every method registered in ``Modal_Decomposition.Class`` gets a worker from
 :func:`make_worker` automatically, so the same matrix runner can be inserted
 for any decomposition method (EMD, CEEMDAN, VMD, EWT, ...) without further
-changes. Methods whose optional third-party backend (e.g. PyEMD) is missing
+changes. Methods whose optional third-party spline_kind (e.g. PyEMD) is missing
 report an ``error`` / ``skipped`` record instead of crashing the matrix.
 """
 
@@ -37,7 +37,7 @@ def make_worker(method: str) -> Callable:
     Build ``run(S, T=None, params=None)`` for a registered method.
 
     ``run`` instantiates ``Class.<method>(**params)`` and calls
-    ``decompose(S, T)``. Decompositions whose constructor/backend imports
+    ``decompose(S, T)``. Decompositions whose constructor/spline_kind imports
     fail raise (``ImportError`` and friends) and are recorded by the runner.
     """
     if method not in MD.Class.__dict__:

@@ -13,24 +13,13 @@ import numpy as np
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
-from .Utils import Check_Time_and_Signal
+from src.Modal_Decomposition.Base import Config, Decomposer, DecompositionResult, Cache
+from src.Modal_Decomposition._Registry import register_class
+from src.Modal_Decomposition.Utils import Check_Time_and_Signal, get_hilbert, get_monotonicity
 
-__all__ = ["EMD", "EMDConfig"]
+hilbert = get_hilbert()
+monotony = get_monotonicity()
 
-
-@dataclass(frozen=True, kw_only=True)
-class EMDConfig(Config):
-    """
-    Effective parameters of an EMD run.
-    """
-    nbsym: int
-    spline_kind: str
-    max_imf: int
-
-
-@register_class("EMD")
 class EMD(Decomposer):
     name: ClassVar[str] = "EMD"
 
@@ -62,28 +51,24 @@ class EMD(Decomposer):
 
         S, T, _N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
 
-        arr = np.asarray(
-            PyEMD_EMD(spline_kind=self.spline_kind, nbsym=self.nbsym).emd(
-                S, T, max_imf=self.max_imf
-            ),
-            dtype=np.float64,
-        )
 
-        Res = arr[-1, :]
-        IMFs = arr[:-1, :]
+if __name__ == "__main__":
+    import numpy as np
+    import matplotlib.pyplot as plt
+    # from scipy.signal import hilbert
 
-        if IMFs.ndim == 1:
-            IMFs = IMFs.reshape(1, -1)
-        elif IMFs.ndim == 0:
-            IMFs = np.zeros((1, Res.shape[0]))
+    fs = 500  # 采样率 500 Hz，足够高
+    T = 1.0  # 时长 1 秒
+    t = np.arange(0, T, 1 / fs)  # 时间轴
+    f = 5.0  # 信号频率 5 Hz，远小于 fs/2
+    S = np.sin(2.0 * np.pi * f * t) + t
 
-        return DecompositionResult(
-            IMFs,
-            Res,
-            {},
-            EMDConfig(
-                nbsym=self.nbsym,
-                spline_kind=self.spline_kind,
-                max_imf=self.max_imf,
-            ),
-        )
+    analytic = hilbert.hilbert(S, mod="FHT")
+    env = np.abs(analytic)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, S, label='Signal')
+    plt.plot(t, env, label='Upper envelope')
+    plt.plot(t, -env, label='Lower envelope')
+    plt.legend()
+    plt.show()

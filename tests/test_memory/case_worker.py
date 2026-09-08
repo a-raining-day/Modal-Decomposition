@@ -99,7 +99,7 @@ def main() -> int:
         result = dec.measure(lambda: worker(S))
     except MemoryError as exc:
         dec_error = f"MemoryError: {exc}"
-    except Exception as exc:  # missing optional backend, invalid params, ...
+    except Exception as exc:  # missing optional spline_kind, invalid params, ...
         dec_error = f"{type(exc).__name__}: {exc}"
 
     decompose_block = {

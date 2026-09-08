@@ -150,7 +150,7 @@ def main() -> int:
         "rss_after_input_bytes": int(process_rss()),
     })
 
-    # Warm up lazy backend imports outside the measured window.
+    # Warm up lazy spline_kind imports outside the measured window.
     try:
         run_stack(cfg["impl"], np.linspace(-1.0, 1.0, 256))
     except Exception:

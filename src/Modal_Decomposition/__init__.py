@@ -61,7 +61,7 @@ __all__ = [
 try:
     __version__ = _pkg_version("Modal-Decomposition")
 except PackageNotFoundError:
-    __version__ = "0.1.6+src"
+    __version__ = "0.2.0+src"
 
 __author__ = "a-raining-day(Mao)"
 __email__ = "2215269365@qq.com"

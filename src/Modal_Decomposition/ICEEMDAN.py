@@ -47,7 +47,7 @@ class ICEEMDAN(Decomposer):
         ensemble_size: int = 300,
         epsilon_0: float = 0.2,
         max_imfs: int | None = None,
-        spline_kind: str = "cubic",
+        spline_kind: str = "CubicSpline",
         nbsym: int = 2,
         seed: int | None = None,
     ):
@@ -61,7 +61,9 @@ class ICEEMDAN(Decomposer):
         max_imfs : int | None
             Maximum number of IMFs; None selects log2(N) + 5.
         spline_kind : str
-            Interpolation kind for the internal EMD.
+            Envelope backend of the internal native EMD: one of
+            "CubicSpline" / "PCHIP" / "linear" (canonical ``Utils.Spline``
+            names; "linear" = np.interp).
         nbsym : int
             Number of mirrored extrema for the internal EMD.
         seed : int | None

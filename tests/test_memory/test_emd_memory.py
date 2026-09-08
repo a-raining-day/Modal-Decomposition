@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 try:
-    import PyEMD  # noqa: F401  (backend of the EMD method)
+    import PyEMD  # noqa: F401  (spline_kind of the EMD method)
 except ImportError:  # pragma: no cover - exercised only in minimal envs
     pytest.skip("PyEMD is not installed; EMD representative test skipped",
                 allow_module_level=True)

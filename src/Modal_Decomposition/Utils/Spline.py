@@ -33,71 +33,18 @@ Cache 集成
 (``Base.Cache.cache``); 之后任意组件可 ``cache.get(...)`` 获得进程内唯一实例。
 """
 
-from typing import Any, Callable, Union
-
 import numpy as np
+from typing import Any, Union, Literal
+
+from ..Base.ConstDefine import SPLINE_KIND, DEFAULT_NUMPY_TYPE
+from ..Base.Cache import Cache
 
 __all__ = [
     "Spline",
     "spline",
-    "BACKEND_OPTIONS",
 ]
 
-#: 可用的后端名 (canonical 名称, 大小写/分隔符不敏感, 见 ``_normalize``)。
-BACKEND_OPTIONS: tuple[str, ...] = (
-    "UnivariateSpline",
-    "CubicSpline",
-    "PCHIP",
-    "Akima",
-)
-
-_DEFAULT_BACKEND: str = "UnivariateSpline"
-
-
-def _normalize(backend: str) -> str:
-    """
-    归一化后端名: 去空格/下划线/连字符并统一小写。
-    """
-    return (
-        backend.strip()
-        .lower()
-        .replace("-", "")
-        .replace("_", "")
-        .replace(" ", "")
-    )
-
-
-_ALIAS_TO_CANONICAL = {_normalize(b): b for b in BACKEND_OPTIONS}
-_ALIAS_TO_CANONICAL.update(
-    {
-        "pchipinterpolator": "PCHIP",
-        "akima1dinterpolator": "Akima",
-        "unispline": "UnivariateSpline",
-        "smoothing": "UnivariateSpline",
-        "cubic": "CubicSpline",
-    }
-)
-
-
-def _resolve_backend(backend: str) -> str:
-    """
-    把用户输入解析为 canonical 后端名。
-
-    Raises
-    ------
-    ValueError
-        未知后端名 (附可用列表)。
-    """
-    key = _ALIAS_TO_CANONICAL.get(_normalize(backend))
-    if key is None:
-        raise ValueError(
-            f"Unknown spline backend {backend!r}; expected one of "
-            f"{BACKEND_OPTIONS} (case/separator insensitive)"
-        )
-    return key
-
-
-def _validate(x, y) -> tuple[np.ndarray, np.ndarray]:
+def _validate(x, y, dtype=None) -> tuple[np.ndarray, np.ndarray]:
     """
     统一校验并规范化 ``(x, y)`` 节点对。
 
@@ -112,8 +59,11 @@ def _validate(x, y) -> tuple[np.ndarray, np.ndarray]:
     ValueError
         空/长度不一致/重复节点/非数值/含 NaN/Inf/维度错误/样本过少。
     """
-    xa = np.asarray(x)
-    ya = np.asarray(y)
+
+    _dtype = dtype if dtype is not None else DEFAULT_NUMPY_TYPE
+
+    xa = np.asarray(x, dtype=_dtype)
+    ya = np.asarray(y, dtype=_dtype)
 
     if xa.ndim != 1 or ya.ndim != 1:
         raise ValueError(
@@ -127,16 +77,16 @@ def _validate(x, y) -> tuple[np.ndarray, np.ndarray]:
         )
 
     try:
-        x64 = np.asarray(xa, dtype=np.float64)
-        y64 = np.asarray(ya, dtype=np.float64)
+        xdefault = np.asarray(xa, dtype=DEFAULT_NUMPY_TYPE)
+        ydefault = np.asarray(ya, dtype=DEFAULT_NUMPY_TYPE)
     except (TypeError, ValueError):
-        raise ValueError("Spline nodes must be numeric (convertible to float64)")
+        raise ValueError("Spline nodes must be numeric (convertible to default numpy type)")
 
-    if not np.all(np.isfinite(x64)) or not np.all(np.isfinite(y64)):
+    if not np.all(np.isfinite(xdefault)) or not np.all(np.isfinite(ydefault)):
         raise ValueError("Spline nodes must be finite (no NaN/Inf)")
 
-    order = np.argsort(x64, kind="stable")
-    if not np.array_equal(x64[order], x64):
+    order = np.argsort(xdefault, kind="stable")
+    if not np.array_equal(xdefault[order], xdefault):
         import warnings
 
         warnings.warn(
@@ -144,24 +94,13 @@ def _validate(x, y) -> tuple[np.ndarray, np.ndarray]:
             UserWarning,
             stacklevel=3,
         )
-        x64 = x64[order]
-        y64 = y64[order]
+        xdefault = xdefault[order]
+        ydefault = ydefault[order]
 
-    if np.any(np.diff(x64) == 0):
+    if np.any(np.diff(xdefault) == 0):
         raise ValueError("Spline requires strictly increasing x (duplicate nodes)")
 
-    return x64, y64
-
-
-def _lazy_import_interpolate():
-    """惰性取 scipy.interpolate (仅首次 import 一次)。"""
-    try:
-        from scipy import interpolate as _interpolate
-    except ImportError:
-        raise ImportError(
-            "Scipy is not installed; Spline requires scipy.interpolate"
-        )
-    return _interpolate
+    return xdefault, ydefault
 
 
 class Spline:
@@ -172,9 +111,14 @@ class Spline:
     ----------
     x, y : array-like
         1-D 节点 (``x`` 须严格递增; 乱序自动重排并告警; 重复节点报错)。
-    backend : str
+    spline_kind : str
         后端选择, 默认 ``"UnivariateSpline"`` (FITPACK)。可选
-        ``"CubicSpline"`` / ``"PCHIP"`` / ``"Akima"`` (大小写/分隔符不敏感)。
+        ``"CubicSpline"`` / ``"PCHIP"`` / ``"Akima"`` (见 ``SPLINE_KIND``)。
+    validate : bool
+        是否在构造时执行 ``_validate`` 的完整节点校验 (默认 True)。内部调用方
+        在已确认节点合法 (严格递增 / 有限 / 长度一致) 时可传 ``False`` 跳过
+        校验以节省开销; ``x``/``y`` 仅被转为默认数值类型, 不再排序/去重/检查
+        有限性, 非法输入将由 scipy 直接抛错。
     **kwargs
         透传给 scipy 构造器的额外参数。常用:
 
@@ -211,15 +155,25 @@ class Spline:
         self,
         x,
         y,
-        backend: str = _DEFAULT_BACKEND,
+        dtype=None,
+        spline_kind: Literal["UnivariateSpline", "CubicSpline", "PCHIP", "Akima"] = "UnivariateSpline",
+        validate: bool = True,
         **kwargs: Any,
     ) -> None:
-        canonical = _resolve_backend(backend)
-        x64, y64 = _validate(x, y)
-        n = x64.size
+        if spline_kind not in SPLINE_KIND:
+            raise ValueError(
+                f"Unknown spline_kind {spline_kind!r}; expected one of {SPLINE_KIND}"
+            )
 
-        interp = _lazy_import_interpolate()
-        if canonical == "UnivariateSpline":
+        if validate:
+            xdefault, ydefault = _validate(x, y, dtype)
+        else:
+            # 热路径: 调用方保证节点合法 (严格递增 / 有限 / 长度一致)。
+            xdefault = np.asarray(x, dtype=DEFAULT_NUMPY_TYPE)
+            ydefault = np.asarray(y, dtype=DEFAULT_NUMPY_TYPE)
+        n = xdefault.size
+
+        if spline_kind == "UnivariateSpline":
             k = int(kwargs.get("k", 3))
             if k < 1:
                 raise ValueError(f"UnivariateSpline order k must be >= 1, got {k}")
@@ -229,14 +183,23 @@ class Spline:
                     f"got {n} (use k=1 for two-point linear interpolation)"
                 )
             if "s" not in kwargs:
-                kwargs["s"] = 0  # 精确插值默认; 与其它插值型后端语义对齐
+                kwargs["s"] = 0
 
-        factory = _factory_for(canonical, interp)
-        fitted = factory(x64, y64, **kwargs)
+        interp = Cache.import_module(
+            "scipy.interpolate",
+            description="scipy.interpolate: 供 Utils.Spline 的样条构造使用",
+        )
+        constructor = {
+            "UnivariateSpline": interp.UnivariateSpline,
+            "CubicSpline": interp.CubicSpline,
+            "PCHIP": interp.PchipInterpolator,
+            "Akima": interp.Akima1DInterpolator,
+        }[spline_kind]
+        fitted = constructor(xdefault, ydefault, **kwargs)
 
-        self.backend: str = canonical
-        self.x_: np.ndarray = x64
-        self.y_: np.ndarray = y64
+        self.backend: str = spline_kind
+        self.x_: np.ndarray = xdefault
+        self.y_: np.ndarray = ydefault
         self.params: dict = dict(kwargs)
         self.fitted = fitted
 
@@ -258,50 +221,29 @@ class Spline:
 
     def __repr__(self) -> str:
         return (
-            f"<Spline backend={self.backend!r} n={self.x_.size} "
-            f"params={self.params!r}>"
+            f"<Spline spline_kind={self.backend!r} n={self.x_.size} params={self.params!r}>"
         )
 
     def __getattr__(self, item: str):
-        # 代理 scipy 插值对象的能力 (derivative/antiderivative/roots/integral/
-        # get_coeffs/get_knots/...): 只在对象真正具备时才透传。
+        # 代理 scipy 插值对象的能力 (derivative/antiderivative/roots/integral/get_coeffs/get_knots/...): 只在对象真正具备时才透传。
         fitted = object.__getattribute__(self, "fitted")
         if hasattr(fitted, item):
             return getattr(fitted, item)
         raise AttributeError(
-            f"{self.__class__.__name__!r} (backend={self.backend!r}) has no "
-            f"attribute {item!r}"
+            f"{self.__class__.__name__!r} (spline_kind={self.backend!r}) has no attribute {item!r}"
         )
-
-
-def _factory_for(canonical: str, interp) -> Callable:
-    """
-    返回 canonical 后端对应的 scipy.interpolate 构造器。
-
-    构造器在调用期解析, 避免模块 import 时绑定具体 scipy 符号 (保持惰性)。
-    """
-    if canonical == "UnivariateSpline":
-        return interp.UnivariateSpline
-    if canonical == "CubicSpline":
-        return interp.CubicSpline
-    if canonical == "PCHIP":
-        return interp.PchipInterpolator
-    if canonical == "Akima":
-        return interp.Akima1DInterpolator
-    raise ValueError(f"Unreachable: unknown canonical backend {canonical!r}")
-
 
 def spline(
     x,
     y,
-    backend: str = _DEFAULT_BACKEND,
+    spline_kind: Literal["UnivariateSpline", "CubicSpline", "PCHIP", "Akima"] = "UnivariateSpline",
     **kwargs: Any,
 ) -> Spline:
     """
     Build a unified spline over :mod:`scipy.interpolate`.
 
     默认后端为 :class:`scipy.interpolate.UnivariateSpline` (``s=0`` 精确插值,
-    k=3), 也可通过 ``backend`` 选择其它实现。缓存注册统一由
+    k=3), 也可通过 ``spline_kind`` 选择其它实现。缓存注册统一由
     ``Utils.get_spline()`` 完成 (首次访问时以键
     ``"Modal_Decomposition.Utils.Spline"`` 注册进 ``Base.Cache.cache``),
     之后全局可经 ``cache.get(...)`` 取用同一实例。
@@ -311,9 +253,9 @@ def spline(
     x, y : array-like
         1-D 节点对 (``x`` 严格递增; 乱序自动重排 + UserWarning; 重复节点 /
         NaN / Inf / 空 / 长度不一致均抛 ``ValueError``)。
-    backend : str
+    spline_kind : str
         ``"UnivariateSpline"`` (默认) | ``"CubicSpline"`` | ``"PCHIP"`` |
-        ``"Akima"`` (大小写与分隔符不敏感, 见 ``BACKEND_OPTIONS``)。
+        ``"Akima"`` (见 ``SPLINE_KIND``)。
     **kwargs
         透传 scipy 构造器参数 (见 :class:`Spline`)。
 
@@ -344,7 +286,7 @@ def spline(
     +---------------------------+-------------------------------------------+
     | UnivariateSpline 节点数<=k| ValueError (提示改用 k=1)                 |
     +---------------------------+-------------------------------------------+
-    | 未知 backend              | ValueError (附可用列表)                    |
+    | 未知 spline_kind              | ValueError (附可用列表)                    |
     +---------------------------+-------------------------------------------+
 
     Performance report (measured, tests/test_spline.py 一并覆盖)
@@ -354,7 +296,7 @@ def spline(
     求值点 1e6, 全部后端均精确穿过节点。
 
     +------------------+----------------+-----------------+--------------+
-    | backend          | fit @ 2k nodes | fit @ 20k nodes | eval (1e6 pt)|
+    | spline_kind          | fit @ 2k nodes | fit @ 20k nodes | eval (1e6 pt)|
     +==================+================+=================+==============+
     | UnivariateSpline | ~0.2 ms        | ~2.2 ms         | ~44.9 ms     |
     +------------------+----------------+-----------------+--------------+
@@ -369,7 +311,7 @@ def spline(
     CubicSpline/PCHIP/Akima 约比 UnivariateSpline 快 ~7×** (FITPACK
     splev 逐点开销更高)。默认取 UnivariateSpline 是设计取向 (接口/能力最全:
     平滑因子 s、权重 w、derivative/integral/roots), 追求纯插值性能时可显式选
-    ``backend="CubicSpline"`` (语义与默认 k=3/s=0 插值一致)。极端输入行为
+    ``spline_kind="CubicSpline"`` (语义与默认 k=3/s=0 插值一致)。极端输入行为
     汇总见上表; 完整用例与耗时明细见 ``tests/test_spline.py`` (42 项)。
 
     References
@@ -379,4 +321,4 @@ def spline(
     * PchipInterpolator: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.PchipInterpolator.html
     * Akima1DInterpolator: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.Akima1DInterpolator.html
     """
-    return Spline(x, y, backend=backend, **kwargs)
+    return Spline(x, y, spline_kind=spline_kind, **kwargs)

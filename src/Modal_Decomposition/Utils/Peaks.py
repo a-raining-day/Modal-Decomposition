@@ -66,7 +66,7 @@ def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
     unknown = set(kwargs) - set(_SUPPORTED_FILTERS)
     if unknown:
         raise NotImplementedError(
-            f"backend supports only {_SUPPORTED_FILTERS}, "
+            f"spline_kind supports only {_SUPPORTED_FILTERS}, "
             f"got unsupported: {sorted(unknown)}"
         )
 

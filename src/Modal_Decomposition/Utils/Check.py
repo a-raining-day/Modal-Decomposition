@@ -18,7 +18,7 @@ from typing import Optional
 
 import numpy as np
 
-from ..Base.ConstDefine import SIZE
+from ..Base.ConstDefine import SIZE, DEFAULT_NUMPY_TYPE
 from .Chunk import chunked_fill, default_chunk_size, iter_chunks
 from .Memory import should_use_memmap
 
@@ -64,14 +64,6 @@ def _load_signal_input(S, target_dtype=None):
     - Very long sequences (list/tuple) are filled into a temporary memmap
       instead of being converted to a RAM array in one shot.
     """
-    if isinstance(S, (str, os.PathLike)):
-        path = os.fspath(S)
-        if not path.endswith(".npy"):
-            raise ValueError(f"only .npy files are supported, got {path!r}")
-        if should_use_memmap(os.path.getsize(path)):
-            return np.load(path, mmap_mode="r")
-        return np.load(path)
-
     if isinstance(S, np.ndarray):
         if isinstance(S, np.memmap):
             return S  # already disk-backed
@@ -82,8 +74,16 @@ def _load_signal_input(S, target_dtype=None):
             return fp
         return S
 
+    if isinstance(S, (str, os.PathLike)):
+        path = os.fspath(S)
+        if not path.endswith(".npy"):
+            raise ValueError(f"only .npy files are supported, got {path!r}")
+        if should_use_memmap(os.path.getsize(path)):
+            return np.load(path, mmap_mode="r")
+        return np.load(path)
+
     if isinstance(S, (list, tuple)) and len(S) > _LIST_MEM_THRESHOLD:
-        out_dtype = target_dtype if target_dtype is not None else np.float64
+        out_dtype = target_dtype if target_dtype is not None else DEFAULT_NUMPY_TYPE
         fp = _temp_memmap(out_dtype, (len(S),))
         _fill_memmap(fp, S)
         return fp
@@ -91,14 +91,14 @@ def _load_signal_input(S, target_dtype=None):
     return S
 
 
-def _to_float64(S) -> np.ndarray:
+def _to_default_float(S) -> np.ndarray:
     """
     Normalize ``S`` to float64 with bounded peak memory: small inputs convert
     in RAM as before, while large or already disk-backed non-float64 inputs
     are converted chunk-wise into a temporary float64 memmap.
     """
     if not isinstance(S, np.ndarray):
-        return np.asarray(S, dtype=np.float64)
+        return np.asarray(S, dtype=DEFAULT_NUMPY_TYPE)
 
     if S.dtype == np.float64:
         return S  # no copy; memmaps stay disk-backed
@@ -242,7 +242,7 @@ def is_uniform(T: np.ndarray) -> bool:
 
 def Check_Time_and_Signal(
     S, T=None, ndim=None, method: str = "", default_T: bool = True,
-    dtype: Optional[str] = None,
+    dtype: np.dtype = None,
 ) -> tuple[np.ndarray, Optional[np.ndarray], int]:
     """
     Validate the signal and its time axis and return them in canonical form.
@@ -288,17 +288,7 @@ def Check_Time_and_Signal(
         On wrong dimensionality, length mismatch, duplicate time points, an
         unsupported file suffix, empty signal, or an invalid ``dtype`` value.
     """
-    if dtype not in (None, "float64"):
-        raise ValueError(f"dtype must be 'float64' or None, got {dtype!r}")
-
-    # 单趟: 内存策略落盘时直接按目标 dtype 写入 (见 _load_signal_input)。
     S = _load_signal_input(S, target_dtype=dtype)
-
-    if dtype == "float64":
-        S = _to_float64(S)
-        S = to_signal(S)
-    else:
-        S = _to_keep_dtype(S)
 
     if ndim is not None:
         require_ndim(S, ndim, method)

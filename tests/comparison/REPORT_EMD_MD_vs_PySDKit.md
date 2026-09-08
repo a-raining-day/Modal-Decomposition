@@ -7,13 +7,28 @@
 
 ---
 
+## ⚠️ 2026-09 之后更新: 库 EMD 已转正为原生实现
+
+本报告 `MD-EMD` 列及其结论写于 **PyEMD 包装版时代** (MD-EMD 内部即 PyEMD
+sifter, "同引擎、隔离封装开销"的对照设计)。此后库内 `EMD` 已由自研原生
+筛分实现转正 (原 `EMD_new`; 默认 linear 包络 + sd_thr=0.3, 参数扫描选定)。
+三者如今是**真正互相独立的引擎**。以"当前优化后的最佳配置 (默认)"展开的
+新三方对照 (PyEMD / PySDKit / 库 EMD 默认 + 同包络档) 见
+`docs/EMD_vs_EMD_new_Performance_Report.md` (及参数扫描
+`docs/EMD_new_Parameter_Sweep_Report.md`); 本报告历史结论仅适用于包装版时代。
+
+---
+
 ## 1. 被测对象
 
 | 列 | 是什么 | 引擎 |
 |---|---|---|
-| `MD-EMD` | 我的库 `Modal_Decomposition.Class.EMD.decompose` | 薄封装 PyEMD sifter + 输入校验/结果规范化 (`src/Modal_Decomposition/EMD.py`) |
-| `PyEMD` | `PyEMD.EMD.emd` 直用 | EMD-signal 1.9.0 随包提供的 `PyEMD` legacy 别名 —— **与 MD-EMD 内部同一引擎**, 作为隔离"封装开销"的基线 |
+| `MD-EMD` | 我的库 `Modal_Decomposition.Class.EMD.decompose` | **2026-09 前**: 薄封装 PyEMD sifter (`src/Modal_Decomposition/EMD.py`); **现**: 原生筛分实现 (原 `EMD_new`, 见上方更新块与 docs 报告) |
+| `PyEMD` | `PyEMD.EMD.emd` 直用 | EMD-signal 1.9.0 随包提供的 `PyEMD` legacy 别名 —— **包装版时代与 MD-EMD 内部同一引擎**, 作为隔离"封装开销"的基线 |
 | `PySDKit` | `pysdkit.EMD.fit_transform` (v0.5.0, `ref/pysdkit`) | 独立移植 PyEMD sifter: 极值查找/边界镜像/样条辅助全部自行重写 (`_find_extrema.py`、`_prepare_points.py`、`_splines.py`) |
+
+> *(历史实验设计 —— 描述包装版时代的运行口径, 现引擎关系见上方更新块与
+> `docs/EMD_vs_EMD_new_Performance_Report.md`)*
 
 三者均以**默认参数**运行 (spline=cubic, nbsym=2, 停判阈值一致:
 std=0.2, svar=1e-3, energy=0.2, range=1e-3, total_power=5e-3, 迭代上限 1000 ——

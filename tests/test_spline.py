@@ -4,7 +4,7 @@ tests for ``Modal_Decomposition.Utils.Spline``.
 覆盖:
 1. 正确性 —— 节点精确性 / 平滑函数逼近 / 导数与积分代理 / 多后端一致性;
 2. 极端输入 —— 空、单点、长度不一致、重复节点、乱序、NaN/Inf、常量、
-   二维、超大样本、未知/别名后端、两节点退化解;
+   二维、超大样本、未知后端、两节点退化解;
 3. 性能/耗时 —— 各后端拟合与求值的实测耗时 (宽松上限防回归, 明细打印);
 4. Cache 集成 —— 首次使用后模块以 ``CACHE_KEY`` 注册进全局 import 缓存。
 
@@ -18,8 +18,8 @@ import numpy as np
 import pytest
 
 from src.Modal_Decomposition.Base.Cache import cache
+from src.Modal_Decomposition.Base.ConstDefine import SPLINE_KIND
 from src.Modal_Decomposition.Utils.Spline import (
-    BACKEND_OPTIONS,
     Spline,
     spline,
 )
@@ -46,20 +46,20 @@ def _median_seconds(fn, repeats: int = 3) -> float:
 # --------------------------------------------------------------------------- #
 # 1. 正确性
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("backend", BACKEND_OPTIONS)
-def test_all_backends_interpolate_nodes_exactly(backend):
+@pytest.mark.parametrize("spline_kind", SPLINE_KIND)
+def test_all_backends_interpolate_nodes_exactly(spline_kind):
     """每个后端都必须精确穿过全部节点 (节点精确性)。"""
-    sp = spline(X, Y, backend)
-    assert sp.backend == backend
-    assert np.allclose(sp(X), Y, atol=1e-7), f"{backend} node exactness failed"
+    sp = spline(X, Y, spline_kind)
+    assert sp.backend == spline_kind
+    assert np.allclose(sp(X), Y, atol=1e-7), f"{spline_kind} node exactness failed"
 
 
-@pytest.mark.parametrize("backend", BACKEND_OPTIONS)
-def test_all_backends_approximate_smooth_function(backend):
+@pytest.mark.parametrize("spline_kind", SPLINE_KIND)
+def test_all_backends_approximate_smooth_function(spline_kind):
     """在平滑函数上, 所有后端逼近误差都应在合理范围内。"""
-    sp = spline(X, Y, backend)
+    sp = spline(X, Y, spline_kind)
     err = float(np.abs(sp(XI) - GT).max())
-    assert err < 0.2, f"{backend} max err {err:.3e} too large on sin(11 nodes)"
+    assert err < 0.2, f"{spline_kind} max err {err:.3e} too large on sin(11 nodes)"
 
 
 def test_default_backend_is_univariate_spline_exact_interp():
@@ -68,7 +68,7 @@ def test_default_backend_is_univariate_spline_exact_interp():
     assert sp.backend == "UnivariateSpline"
     assert sp.params.get("s") == 0
     # 默认配置与显式 UnivariateSpline(s=0) 一致
-    sp2 = spline(X, Y, backend="UnivariateSpline", s=0)
+    sp2 = spline(X, Y, spline_kind="UnivariateSpline", s=0)
     assert np.allclose(sp(XI), sp2(XI), atol=1e-12)
 
 
@@ -163,12 +163,12 @@ def test_constant_y_gives_constant_spline():
     assert np.allclose(sp(np.linspace(-5, 15, 201)), c, atol=1e-9)
 
 
-@pytest.mark.parametrize("backend", ["CubicSpline", "PCHIP", "Akima"])
-def test_two_point_degenerate(backend):
+@pytest.mark.parametrize("spline_kind", ["CubicSpline", "PCHIP", "Akima"])
+def test_two_point_degenerate(spline_kind):
     """两节点退化解: 默认 k=3 的 UnivariateSpline 明确报错, 其余后端可用。"""
     with pytest.raises(ValueError, match="at least"):
         spline(X[:2], Y[:2])  # UnivariateSpline 默认 k=3 需要 >= 4 节点
-    sp = spline(X[:2], Y[:2], backend)
+    sp = spline(X[:2], Y[:2], spline_kind)
     assert np.allclose(sp(np.array([X[0], X[1]])), Y[:2], atol=1e-12)
 
 
@@ -179,24 +179,18 @@ def test_two_point_univariate_with_k1():
 
 
 @pytest.mark.parametrize(
-    ("alias", "canonical"),
-    [
-        ("UnivariateSpline", "UnivariateSpline"),
-        ("UNIVARIATESPLINE", "UnivariateSpline"),
-        ("cubic_spline", "CubicSpline"),
-        ("cubic", "CubicSpline"),
-        ("PCHIP", "PCHIP"),
-        ("pchipinterpolator", "PCHIP"),
-        ("Akima1DInterpolator", "Akima"),
-    ],
+    "spline_kind",
+    ["UNIVARIATESPLINE", "cubic_spline", "cubic", "pchipinterpolator", "Akima1DInterpolator"],
 )
-def test_backend_alias_resolution(alias, canonical):
-    assert spline(X, Y, backend=alias).backend == canonical
+def test_non_canonical_kind_raises(spline_kind):
+    """非 canonical 后端名 (大小写/别名/分隔符变体) 一律拒绝。"""
+    with pytest.raises(ValueError, match="Unknown spline_kind"):
+        spline(X, Y, spline_kind=spline_kind)
 
 
 def test_unknown_backend_raises_with_options():
-    with pytest.raises(ValueError, match="Unknown spline backend") as ei:
-        spline(X, Y, backend="no-such")
+    with pytest.raises(ValueError, match="Unknown spline_kind") as ei:
+        spline(X, Y, spline_kind="no-such")
     assert "UnivariateSpline" in str(ei.value)
 
 
@@ -247,7 +241,7 @@ def test_performance_fit_and_eval():
     xi = np.linspace(0, 1, 1_000_000)
 
     report = {}
-    for backend in BACKEND_OPTIONS:
+    for backend in SPLINE_KIND:
         t_fit = _median_seconds(lambda: spline(x, y, backend), repeats=3)
 
         def _eval():

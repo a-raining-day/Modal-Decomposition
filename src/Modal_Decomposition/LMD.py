@@ -4,22 +4,20 @@ Local Mean Decomposition
 Extracts product functions by iteratively smoothing the local mean and
 envelope estimate from extrema interpolation.
 
-Two amplitude-estimate strategies are available (see ``envelope``):
-
-* ``"midpoint"`` (default): extrema-midpoint interpolation, the classical
-  Smith-style sift. The amplitude envelope uses shape-preserving Pchip
-  interpolation; the natural cubic spline used previously overshoots between
-  extrema (spikes up to ~1e12), which made the accumulated amplitude explode
-  to the clip bound and the reconstruction lose the O(1) signal in float
-  cancellation (~2.4e-4 = 2 ulp(1e12)). The final sift iteration's local
-  mean intentionally stays in the residue (classical LMD semantics).
-* ``"hilbert"``: single-shot demodulation per PF (``a(t) = |H[h(t)]|``).
-  Iterating this demodulation does NOT converge on multi-component signals
-  (the analytic envelope beats and the extrema count diverges), which is why
-  the historical Hilbert variant was shelved. The Hilbert backend is read
-  from ``**kwargs``: ``hilbert_mod="Scipy"`` (scipy.signal.hilbert, default)
-  or ``hilbert_mod="FHT"`` (compiled third-party C kernel, SAO Discrete
-  Hilbert/Fourier/Hartley Transforms, via ``Utils.Hilbert``).
+包络概念区分 (Hilbert vs Spline)
+--------------------------------
+- 模态分解筛分迭代里的"包络 / 局部均值"是对**极值**做插值得到 —— 本方法默认
+  ``envelope="midpoint"`` (Smith 经典筛分): 幅度包络用保形 Pchip 插值,
+  局部均值用自然三次样条 (均经 ``Utils.Spline`` 提供; 极值端点镜像经
+  ``Utils.Mirror``)。自然三次样条曾因极值间过冲导致幅度爆炸 (峰值 ~1e12,
+  重构损失 ~2.4e-4), 故幅度一律走 Pchip; 最后一次筛分的局部均值按经典
+  LMD 语义留在残差中。
+- 解析 Hilbert 包络 ``a(t) = |H[h(t)]|`` **不是**筛分迭代中的包络: 只有确实
+  需要解析幅度时才使用 (``envelope="hilbert"`` 显式选择, 单次解调 / 实验
+  对比)。迭代该解调在多分量信号上不收敛 (包络拍频、极值数发散), 故该变体
+  是搁置的历史选项。Hilbert 后端经 ``**kwargs`` 传入:
+  ``hilbert_mod="Scipy"`` (默认) 或 ``hilbert_mod="FHT"`` (第三方 C 内核,
+  见 ``Utils.Hilbert``)。
 
 References
 ----------
@@ -32,7 +30,12 @@ from typing import ClassVar, Literal
 
 from .Base import Config, Decomposer, DecompositionResult
 from ._Registry import register_class
-from .Utils import Check_Time_and_Signal, is_monotonic
+from .Utils import (
+    Check_Time_and_Signal,
+    get_mirror,
+    get_spline,
+    is_monotonic,
+)
 from .Utils.Hilbert import hilbert
 
 __all__ = ["LMD", "LMDConfig"]
@@ -69,7 +72,7 @@ class LMD(Decomposer):
         max_amp: float = 1e12,
         converge_mean: float = 1e-3,
         smooth_window: int = 5,
-        envelope: Literal["midpoint", "hilbert"] = "hilbert",
+        envelope: Literal["midpoint", "hilbert"] = "midpoint",
         **kwargs,
     ):
         """
@@ -94,14 +97,16 @@ class LMD(Decomposer):
         smooth_window : int
             Savitzky-Golay window length for the amplitude estimate.
         envelope : {"midpoint", "hilbert"}
-            Amplitude-estimate strategy: extrema-midpoint interpolation (the
-            shipped default) or the Hilbert transform (single-shot
-            demodulation per PF).
+            Amplitude-estimate strategy: ``"midpoint"`` (default) = classical
+            Smith sift with extrema (Pchip) interpolation, the modal-
+            decomposition envelope; ``"hilbert"`` = single-shot analytic
+            demodulation per PF (``|H[h(t)]|``), only for users who genuinely
+            need the analytic envelope — it is NOT the sift envelope and does
+            not converge when iterated.
         **kwargs
-            Hilbert backend when ``envelope="hilbert"``:
-            ``hilbert_mod="Scipy"`` (default, scipy.signal.hilbert) or
-            ``hilbert_mod="FHT"`` (compiled third-party C kernel). The alias
-            ``hilbert_backend`` is also accepted.
+            Hilbert backend when ``envelope="hilbert"``: ``hilbert_mod="Scipy"``
+            (default, scipy.signal.hilbert) or ``hilbert_mod="FHT"`` (compiled
+            third-party C kernel). The alias ``hilbert_backend`` is also accepted.
 
         Strategy comparison (measured, n=16384, tests/comparison):
 
@@ -241,8 +246,10 @@ class LMD(Decomposer):
                 if len(ext_idx) < 3:
                     break
 
-                ext_idx, ext_vals = _mirror_extend_real(h, ext_idx, n_samples)
-                ext_idx = np.sort(ext_idx)
+                ext_idx, ext_vals = get_mirror().mirror_extrema(
+                    ext_idx, h[ext_idx], nbsym=0,
+                    edges=(float(h[0]), float(h[-1]), n_samples),
+                )
 
                 t_mid = (ext_idx[:-1] + ext_idx[1:]) / 2.0
                 m_vals = (ext_vals[:-1] + ext_vals[1:]) / 2.0
@@ -311,8 +318,10 @@ class LMD(Decomposer):
             if len(ext_idx) < 3:
                 break
 
-            ext_idx, ext_vals = _mirror_extend_real(h, ext_idx, n_samples)
-            ext_idx = np.sort(ext_idx)
+            ext_idx, ext_vals = get_mirror().mirror_extrema(
+                ext_idx, h[ext_idx], nbsym=0,
+                edges=(float(h[0]), float(h[-1]), n_samples),
+            )
 
             t_mid = (ext_idx[:-1] + ext_idx[1:]) / 2.0
             m_vals = (ext_vals[:-1] + ext_vals[1:]) / 2.0
@@ -345,32 +354,13 @@ class LMD(Decomposer):
         return PFs, residue
 
 
-def _mirror_extend_real(signal: np.ndarray, ext_idx: np.ndarray, n_samples: int) -> tuple[np.ndarray, np.ndarray]:
-    ext = ext_idx.copy()
-    vals = signal[ext].copy()
-    last_idx = n_samples - 1
-
-    if ext[0] > 0:
-        mirror_pos = 0
-        mirror_val = 2 * signal[0] - vals[0]
-        ext = np.insert(ext, 0, mirror_pos)
-        vals = np.insert(vals, 0, mirror_val)
-
-    if ext[-1] < last_idx:
-        mirror_pos = last_idx
-        mirror_val = 2 * signal[-1] - vals[-1]
-        ext = np.append(ext, mirror_pos)
-        vals = np.append(vals, mirror_val)
-
-    return ext, vals
-
-
 def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
-    from scipy import interpolate
-
+    """自然三次样条插值 (经 Utils.Spline), 界外线性外延 + np.interp 兜底。"""
     try:
-        interp = interpolate.CubicSpline(x, y, bc_type="natural")
-        res = interp(x_new)
+        sp = get_spline().spline(
+            x, y, spline_kind="CubicSpline", bc_type="natural", extrapolate=True
+        )
+        res = sp(x_new)
     except Exception:
         res = np.interp(x_new, x, y)
 
@@ -388,17 +378,16 @@ def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.nda
 
 def _safe_interpolate_pchip(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
     """
-    Shape-preserving (Pchip) interpolation for the amplitude envelope.
+    Shape-preserving (Pchip) interpolation for the amplitude envelope
+    (经 Utils.Spline; extrapolate=False, 界外 NaN -> np.interp 兜底)。
 
     Unlike the natural cubic spline, Pchip cannot overshoot between the data
     points, which keeps ``a_t`` within the extrema amplitude range and stops
     the multiplicative ``a_total`` explosion of the old code.
     """
-    from scipy import interpolate
-
     try:
-        interp = interpolate.PchipInterpolator(x, y, extrapolate=False)
-        res = interp(x_new)
+        sp = get_spline().spline(x, y, spline_kind="PCHIP", extrapolate=False)
+        res = sp(x_new)
         res = np.where(np.isnan(res), np.interp(x_new, x, y), res)
     except Exception:
         res = np.interp(x_new, x, y)

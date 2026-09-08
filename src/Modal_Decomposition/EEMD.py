@@ -24,7 +24,7 @@ class EEMDConfig(Config):
     """
     Effective parameters of an EEMD run.
 
-    Note: a custom ``ext_EMD`` backend object is not snapshotted.
+    Note: a custom ``ext_EMD`` spline_kind object is not snapshotted.
     """
     trials: int
     noise_width: float
@@ -61,7 +61,7 @@ class EEMD(Decomposer):
         parallel : bool
             Enable multiprocessing.
         ext_EMD : object, optional
-            Custom EMD backend; must expose ``emd(S, T, max_imf)``.
+            Custom EMD spline_kind; must expose ``emd(S, T, max_imf)``.
         **ext_emd_kwargs
             Additional keyword arguments forwarded to the internal PyEMD EMD
             object when ``ext_EMD`` is None.

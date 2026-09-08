@@ -1,5 +1,5 @@
 """
-Numba backend for SVMD.
+Numba spline_kind for SVMD.
 
 Not yet implemented: raises RealizationError until the accelerated core is
 fixed and re-integrated.
@@ -14,4 +14,4 @@ def numba_svmd(S, num_modes, alpha, tau, tol, max_iter):
     """
     Numba-accelerated SVMD core (placeholder).
     """
-    raise RealizationError("SVMD numba backend is not implemented yet")
+    raise RealizationError("SVMD numba spline_kind is not implemented yet")

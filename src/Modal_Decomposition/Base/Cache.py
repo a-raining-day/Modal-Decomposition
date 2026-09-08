@@ -32,7 +32,7 @@ import threading
 import types
 from typing import Any, Dict, List, Optional, Tuple
 
-__all__ = ["cache", "Cache"]
+__all__ = ["Cache"]
 
 
 class cache:
@@ -47,7 +47,7 @@ class cache:
 
     Examples
     --------
-    >>> from Modal_Decomposition.Base.Cache import cache
+    >>> from Modal_Decomposition.Base.Cache import Cache
     >>> import scipy.signal as ss
     >>> cache.add("scipy.signal", ss, description="signal processing submodule")
     True

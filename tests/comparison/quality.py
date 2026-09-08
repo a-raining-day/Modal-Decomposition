@@ -2,7 +2,7 @@
 Quality metrics for one decomposition result.
 
 All metrics work on the component *stack* returned by the implementations
-(rows = components, residue appended as last row when the backend reports
+(rows = components, residue appended as last row when the spline_kind reports
 one), so the same code applies to all three workers.
 """
 

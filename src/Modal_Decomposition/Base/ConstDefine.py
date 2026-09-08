@@ -6,14 +6,33 @@ Size constants shared by the whole package.
 ``Utils.Monotonicity``), 避免各模块各自书写魔数。
 """
 
-__all__ = ["SIZE"]
+__all__ = ["SIZE", "SPLINE_KIND", "DEFAULT_NUMPY_TYPE", "CACHE_KEY"]
 
-#: 基本字节大小字典: 1KB / 1MB / 1GB 三类基本常量。
-#: 值为字节数 (int); 以"元素数"为单位的常量同样可用其倍数表达
-#: (如 8M 元素 = ``8 * SIZE["1MB"]``)。
+import numpy as np
+
+
 SIZE = \
 {
     "1KB": 1024,            # 2**10 bytes
     "1MB": 1024 ** 2,       # 2**20 bytes
     "1GB": 1024 ** 3,       # 2**30 bytes
+}
+
+SPLINE_KIND = \
+[
+    "UnivariateSpline",
+    "CubicSpline",
+    "PCHIP",
+    "Akima",
+]
+
+DEFAULT_NUMPY_TYPE = np.float64
+
+CACHE_KEY = \
+{
+    "scipy": \
+        {
+            "signal": "scipy.signal",
+            "interpolate": "scipy.interpolate",
+        }
 }

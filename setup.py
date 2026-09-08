@@ -8,7 +8,7 @@ Modal-Decomposition 项目根构建脚本 —— Cython 加速扩展(_fht_native
 
 说明:
 - 扩展链接的 C 内核来自 Smithsonian Astrophysical Observatory "am" 项目
-  (见 src/Modal_Decomposition/Utils/Hilbert/_C/_fht/ 各文件头部出处声明);
+  (见 src/Modal_Decomposition/Utils/_Hilbert/_C/_fht/ 各文件头部出处声明);
 - -O3 / -ffast-math 仅适用于 GCC/Clang(Linux/macOS), Windows MSVC 用 /O2;
 - NPY_TARGET_VERSION 让用 NumPy 2 头文件编译出的扩展在 NumPy>=1.19 运行时上
   依然可加载;
@@ -20,20 +20,20 @@ import sys
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
 
-_FHT_DIR = "src/Modal_Decomposition/Utils/Hilbert"
+_FHT_DIR = "src/Modal_Decomposition/Utils/_Hilbert"
 _FHT_C_DIR = _FHT_DIR + "/_C/_fht"
 
 
 def _native_extension() -> Extension:
     """_fht_native: Cython 包装 SAO 的 FHT / Hilbert C 实现。
 
-    纯 Python 版 src/Modal_Decomposition/Utils/Hilbert/_fht.py 会自动检测该
+    纯 Python 版 src/Modal_Decomposition/Utils/_Hilbert/_fht.py 会自动检测该
     编译模块并优先使用; 找不到时回退到自身实现, 因此本扩展对库的功能是
     可选加速而非必需依赖。
     """
     compile_args = ["/O2"] if sys.platform == "win32" else ["-O3", "-ffast-math"]
     return Extension(
-        "Modal_Decomposition.Utils.Hilbert._fht_native",
+        "Modal_Decomposition.Utils._Hilbert._fht_native",
         sources=[
             _FHT_DIR + "/_fht_native.pyx",
             _FHT_C_DIR + "/transforms.c",

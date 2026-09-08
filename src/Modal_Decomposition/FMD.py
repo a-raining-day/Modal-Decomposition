@@ -129,8 +129,15 @@ class FMD(Decomposer):
         residual = S_norm.copy()
         modes_list = []
 
+        # K == -1 (decompose completely) used to loop forever on noisy
+        # signals: the "window too small" test below uses the constant N
+        # (never shrinks), the 1e-10 energy threshold is unreachable, and a
+        # noisy residual always has >= 3 extrema. Bound the auto mode count
+        # by log2(N) + 2 (the same convention as LMD/ICEEMDAN auto limits).
+        k_limit = int(np.log2(N)) + 2 if self.K == -1 else self.K
+
         k = 0
-        while self.K == -1 or k < self.K:
+        while k < k_limit:
             x = residual.copy()
             Nx = len(x)
 

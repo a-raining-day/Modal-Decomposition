@@ -14,17 +14,21 @@ one shot.
 import os
 import tempfile
 import warnings
+from typing import Optional
 
 import numpy as np
 
+from ..Base.ConstDefine import SIZE
+from .Chunk import chunked_fill, default_chunk_size, iter_chunks
 from .Memory import should_use_memmap
 
 __all__ = ["to_signal", "require_ndim", "is_uniform", "Check_Time_and_Signal", "detect_dtype"]
 
-# Input-size arbitration constants (module-level so tests can patch them).
-_LIST_MEM_THRESHOLD = 10_000_000  # elements: lists above this become memmaps
-_F64_DISK_BYTES = 256 * 1024 * 1024  # float64 working copy above this goes to disk
-_FILL_CHUNK_ELEMS = 8_388_608  # chunk size for streaming fills (8M elements)
+# Input-size arbitration constants (module-level so tests can patch them;
+# 大小统一取自 Base.ConstDefine.SIZE)。
+_LIST_MEM_THRESHOLD = 10 * SIZE["1MB"]  # elements: lists above this become memmaps
+_F64_DISK_BYTES = 256 * SIZE["1MB"]     # float64 working copy above this goes to disk
+_FILL_CHUNK_ELEMS = 8 * SIZE["1MB"]     # chunk size for streaming fills (8M elements)
 
 
 def _temp_memmap(dtype, shape) -> np.memmap:
@@ -37,15 +41,15 @@ def _temp_memmap(dtype, shape) -> np.memmap:
 
 def _fill_memmap(fp: np.memmap, source) -> None:
     """Stream ``source`` into ``fp`` chunk-wise so the peak memory stays at
-    one chunk."""
-    n = fp.shape[0]
-    for start in range(0, n, _FILL_CHUNK_ELEMS):
-        end = min(start + _FILL_CHUNK_ELEMS, n)
-        fp[start:end] = source[start:end]
-    fp.flush()
+    one chunk (delegates to ``Utils.Chunk.chunked_fill``; chunk granularity
+    comes from ``Chunk.default_chunk_size`` under the global memory policy)."""
+    src_nbytes = getattr(source, "nbytes", None)
+    nbytes = max(fp.nbytes, src_nbytes if src_nbytes is not None else fp.nbytes)
+    chunk_size = default_chunk_size(nbytes, base=_FILL_CHUNK_ELEMS)
+    chunked_fill(fp, source, chunk_size)
 
 
-def _load_signal_input(S):
+def _load_signal_input(S, target_dtype=None):
     """
     Resolve the raw signal input under the global memory policy.
 
@@ -54,7 +58,9 @@ def _load_signal_input(S):
     - Large in-RAM arrays are copied chunk-wise into a temporary
       disk-backed array when the policy triggers (note: the caller's original
       array remains in RAM; the copy is what keeps the pipeline's working
-      memory bounded).
+      memory bounded). When ``target_dtype`` is given, the conversion happens
+      **during** that fill — a single pass, a single temp file (instead of
+      copy + second conversion pass).
     - Very long sequences (list/tuple) are filled into a temporary memmap
       instead of being converted to a RAM array in one shot.
     """
@@ -70,13 +76,15 @@ def _load_signal_input(S):
         if isinstance(S, np.memmap):
             return S  # already disk-backed
         if S.ndim >= 1 and S.size > 0 and should_use_memmap(S.nbytes):
-            fp = _temp_memmap(S.dtype, S.shape)
-            _fill_memmap(fp, S)
+            out_dtype = target_dtype if target_dtype is not None else S.dtype
+            fp = _temp_memmap(out_dtype, S.shape)
+            _fill_memmap(fp, S)  # dtype 转换在填充时一并完成 (单趟)
             return fp
         return S
 
     if isinstance(S, (list, tuple)) and len(S) > _LIST_MEM_THRESHOLD:
-        fp = _temp_memmap(np.float64, (len(S),))
+        out_dtype = target_dtype if target_dtype is not None else np.float64
+        fp = _temp_memmap(out_dtype, (len(S),))
         _fill_memmap(fp, S)
         return fp
 
@@ -102,6 +110,23 @@ def _to_float64(S) -> np.ndarray:
         return fp
 
     return np.asarray(S, dtype=np.float64)
+
+
+def _to_keep_dtype(S) -> np.ndarray:
+    """
+    Normalize ``S`` **without** dtype conversion: array-ify, reject
+    non-numeric / 0-d, squeeze singleton dims, keep the original dtype.
+    """
+    if not isinstance(S, np.ndarray):
+        S = np.asarray(S)
+    if S.dtype.kind not in "biuf":
+        raise ValueError(f"unsupported non-numeric dtype {S.dtype}")
+    if S.ndim == 0:
+        raise ValueError("Signal must have at least 1 dimension, got 0-d array")
+    S = S.squeeze()
+    if S.ndim == 0:
+        raise ValueError("Signal must have at least 1 dimension after squeeze")
+    return S
 
 
 def detect_dtype(S) -> str:
@@ -215,7 +240,10 @@ def is_uniform(T: np.ndarray) -> bool:
     return bool(np.allclose(diff, diff[0], rtol=1e-10, atol=1e-14))
 
 
-def Check_Time_and_Signal(S, T=None, ndim=None, method: str = "") -> tuple[np.ndarray, np.ndarray, int]:
+def Check_Time_and_Signal(
+    S, T=None, ndim=None, method: str = "", default_T: bool = True,
+    dtype: Optional[str] = None,
+) -> tuple[np.ndarray, Optional[np.ndarray], int]:
     """
     Validate the signal and its time axis and return them in canonical form.
 
@@ -227,27 +255,51 @@ def Check_Time_and_Signal(S, T=None, ndim=None, method: str = "") -> tuple[np.nd
         from a ``np.memmap`` instead of being copied into RAM. Singleton
         dimensions are squeezed.
     T : array-like, optional
-        Time axis. If None, defaults to ``arange(N)``.
+        Time axis. If None, defaults to ``arange(N)`` unless ``default_T``
+        is False.
     ndim : set[int], optional
         Allowed dimensionality of S. No check when None.
     method : str
         Method name used in error messages.
+    default_T : bool
+        When True (default) and ``T`` is None, build ``arange(N, float64)``.
+        When False, leave ``T`` as None: backends that rebuild their own
+        timeline (e.g. the PyEMD sifters, which ignore a passed time axis
+        under the default extrema detection) then avoid a one-signal-sized
+        transient allocation. Callers must only set this when their algorithm
+        does not use the returned ``T``.
+    dtype : {"float64", None}, optional
+        Target dtype of the returned signal. Default ``None``: **keep the
+        input's dtype** (bool/int/float 按原样, 校验为实数数值即可) —— 不再
+        默认转 float64 以避免 f16/f32 输入的内存翻倍。传 ``"float64"`` 时
+        才做统一 float64 转换 (大输入按内存策略走分块磁盘转换)。``T`` 遵循
+        同一策略 (缺省生成的 ``arange(N)`` 保持 int64)。
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray, int]
-        (S, T, N). S and T are float64 arrays (possibly memmap-backed);
-        N is the last-axis length.
+    tuple[np.ndarray, Optional[np.ndarray], int]
+        (S, T, N). S 默认保留输入 dtype (可能 memmap 支撑); 显式
+        ``dtype="float64"`` 时为 float64; T 同理 (或 None 当 ``T`` 未给且
+        ``default_T`` 为 False); N 为末轴长度。
 
     Raises
     ------
     ValueError
         On wrong dimensionality, length mismatch, duplicate time points, an
-        unsupported file suffix, or empty signal.
+        unsupported file suffix, empty signal, or an invalid ``dtype`` value.
     """
-    S = _load_signal_input(S)
-    S = _to_float64(S)
-    S = to_signal(S)
+    if dtype not in (None, "float64"):
+        raise ValueError(f"dtype must be 'float64' or None, got {dtype!r}")
+
+    # 单趟: 内存策略落盘时直接按目标 dtype 写入 (见 _load_signal_input)。
+    S = _load_signal_input(S, target_dtype=dtype)
+
+    if dtype == "float64":
+        S = _to_float64(S)
+        S = to_signal(S)
+    else:
+        S = _to_keep_dtype(S)
+
     if ndim is not None:
         require_ndim(S, ndim, method)
 
@@ -256,18 +308,32 @@ def Check_Time_and_Signal(S, T=None, ndim=None, method: str = "") -> tuple[np.nd
         raise ValueError("Signal must not be empty")
 
     if T is None:
-        T = np.arange(N, dtype=np.float64)
+        if default_T:
+            T = np.arange(N)
+        # else: keep T as None (see default_T above).
     else:
-        T = to_signal(T)
+        T = to_signal(T) if dtype == "float64" else _to_keep_dtype(T)
         if T.ndim != 1:
             raise ValueError("Time axis T must be 1-dimensional")
         if len(T) != N:
             raise ValueError(f"Length mismatch between T ({len(T)}) and S ({N})")
 
-        diff = np.diff(T)
-        if np.any(diff == 0):
-            raise ValueError("Time axis T contains duplicate values")
-        if np.any(diff < 0):
+        # 分块检查重复与降序 (粒度经 Chunk.default_chunk_size 自适应;
+        # 避免整条 np.diff 的一次性内存占用)。
+        needs_sort = False
+        prev_last = None
+        t_chunk_size = default_chunk_size(T.nbytes, base=_FILL_CHUNK_ELEMS)
+        for chunk in iter_chunks(T, t_chunk_size):
+            d = np.diff(chunk)
+            if np.any(d == 0):
+                raise ValueError("Time axis T contains duplicate values")
+            if not needs_sort and np.any(d < 0):
+                needs_sort = True
+            if prev_last is not None and chunk[0] == prev_last:
+                raise ValueError("Time axis T contains duplicate values")
+            prev_last = chunk[-1]
+
+        if needs_sort:
             warnings.warn(
                 "T is not monotonically increasing; S and T are reordered by ascending T.",
                 UserWarning,

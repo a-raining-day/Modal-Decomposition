@@ -61,7 +61,12 @@ class EMD(Decomposer):
         """
         from PyEMD import EMD as PyEMD_EMD
 
-        S, T, _N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
+        # default_T=False: the PyEMD sifter rebuilds its own timeline and
+        # ignores a caller-provided T under the default extrema detection, so
+        # never allocate the N-length default time axis (see tests/comparison).
+        S, T, _N = Check_Time_and_Signal(
+            S, T, ndim={1}, method=self.name, default_T=False
+        )
 
         arr = np.asarray(
             PyEMD_EMD(spline_kind=self.spline_kind, nbsym=self.nbsym).emd(
@@ -70,13 +75,20 @@ class EMD(Decomposer):
             dtype=np.float64,
         )
 
-        Res = arr[-1, :]
-        IMFs = arr[:-1, :]
+        # Normalize the PyEMD output to (IMFs, Res); handle the degenerate
+        # 1-D/0-D cases before slicing so they cannot raise.
+        if arr.ndim >= 2:
+            Res = arr[-1, :]
+            IMFs = arr[:-1, :]
+        elif arr.ndim == 1:
+            IMFs = arr.reshape(1, -1)
+            Res = np.zeros(arr.shape[0], dtype=np.float64)
+        else:  # 0-d: no usable components
+            IMFs = np.zeros((1, _N), dtype=np.float64)
+            Res = np.zeros(_N, dtype=np.float64)
 
         if IMFs.ndim == 1:
             IMFs = IMFs.reshape(1, -1)
-        elif IMFs.ndim == 0:
-            IMFs = np.zeros((1, Res.shape[0]))
 
         return DecompositionResult(
             IMFs,

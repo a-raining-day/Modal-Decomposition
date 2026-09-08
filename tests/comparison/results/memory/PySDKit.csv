@@ -1,0 +1,11 @@
+impl,size_bytes,n_samples,pattern,dtype,status,dec_wall_s,dec_baseline_rss_bytes,dec_peak_rss_bytes,dec_delta_rss_bytes,hb_n,input_backing,input_build_wall_s,input_build_delta_rss_bytes,n_rows,recon_max_abs_err,error
+PySDKit,524288000,65536000,increasing,float64,ok,3.844,647827456,4255342592,3607515136,126,memmap,1.023403,560742400,1,,
+PySDKit,524288000,65536000,random,float64,timeout,,,,,461,memmap,1.94113,533782528,,,killed after decompose budget
+PySDKit,1073741824,134217728,increasing,float64,ok,9.812,1197084672,8556863488,7359778816,319,memmap,2.319455,1121435648,1,,
+PySDKit,1073741824,,random,float64,deferred,,,,,,,,,,,random noise at >= 512MB is postponed on this 16GB machine - see POSTPONED_3GB.md (pass --no-defer on a larger machine)
+PySDKit,1048576,131072,increasing,float64,ok,0.0,124727296,124792832,65536,1,ndarray,0.000963,1175552,1,0.0,
+PySDKit,1048576,131072,random,float64,ok,11.422,124788736,166617088,41828352,434,ndarray,0.009162,3948544,17,8.673617379884035e-19,
+PySDKit,20971520,2621440,increasing,float64,ok,0.109,143994880,262864896,118870016,4,ndarray,0.007654,21118976,1,,
+PySDKit,20971520,2621440,random,float64,timeout,,,,,603,ndarray,0.027819,23781376,,,killed after decompose budget
+PySDKit,104857600,13107200,increasing,float64,ok,0.593,228405248,857915392,629510144,19,ndarray,0.057613,204505088,1,,
+PySDKit,104857600,13107200,random,float64,timeout,,,,,548,ndarray,0.113525,107855872,,,killed after decompose budget

@@ -8,7 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from .ConfigDefine import Config
-from .ConstDefine import Name, Reference
+from .TextDefine import Name, Reference
+from .PathDefine import TEMP_DIR
 
 __all__ = ["DecompositionResult", "Decomposer"]
 
@@ -95,6 +96,17 @@ class Decomposer(ABC):
         Alias for ``decompose``.
         """
         return self.decompose(S, T)
+
+    def chunk(self, S: np.ndarray, chunk_size: int) -> np.ndarray:
+        _dtype = S.dtype
+
+        L = S.shape[0]
+        chunk_num = L // chunk_size
+        if L % chunk_size != 0:
+            last = True
+            last_len = L - chunk_num * chunk_size
+
+
 
     @property
     def full_name(self) -> str:

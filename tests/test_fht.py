@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from src.Modal_Decomposition.Utils.Hilbert._fht import fht_forward, fht_inverse
+from src.Modal_Decomposition.Utils.Hilbert import fht_forward, fht_inverse
 
 def test_fht_forward():
     # 1. 自逆性: FHT(FHT(x))/N ≈ x

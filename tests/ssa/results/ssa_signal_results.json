@@ -1,0 +1,95 @@
+[
+  {
+    "case": "multitone",
+    "stride": 1,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 682,
+    "recon_max_abs": 1.3100631690576847e-14,
+    "first_rc_corr": 0.996482431342529,
+    "wall_s": 4.669643
+  },
+  {
+    "case": "multitone",
+    "stride": 4,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 343,
+    "recon_max_abs": 6.38378239159465e-15,
+    "first_rc_corr": 0.9957217667638775,
+    "wall_s": 0.581481
+  },
+  {
+    "case": "multitone",
+    "stride": 16,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 87,
+    "recon_max_abs": 3.552713678800501e-15,
+    "first_rc_corr": 0.9834485353828054,
+    "wall_s": 0.034168
+  },
+  {
+    "case": "wideband",
+    "stride": 1,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 682,
+    "recon_max_abs": 5.773159728050814e-15,
+    "first_rc_corr": null,
+    "wall_s": 4.361703,
+    "first_rc_energy_share": 0.0027778435274252306
+  },
+  {
+    "case": "wideband",
+    "stride": 4,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 343,
+    "recon_max_abs": 4.961309141293668e-15,
+    "first_rc_corr": null,
+    "wall_s": 0.600672,
+    "first_rc_energy_share": 0.0038393871651662696
+  },
+  {
+    "case": "wideband",
+    "stride": 16,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 87,
+    "recon_max_abs": 5.773159728050814e-15,
+    "first_rc_corr": null,
+    "wall_s": 0.034532,
+    "first_rc_energy_share": 0.005902991632666688
+  },
+  {
+    "case": "nonstationary",
+    "stride": 1,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 682,
+    "recon_max_abs": 5.773159728050814e-15,
+    "first_rc_corr": 0.9516698581453794,
+    "wall_s": 4.323863
+  },
+  {
+    "case": "nonstationary",
+    "stride": 4,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 343,
+    "recon_max_abs": 8.548717289613705e-15,
+    "first_rc_corr": 0.9525144643696926,
+    "wall_s": 0.583213
+  },
+  {
+    "case": "nonstationary",
+    "stride": 16,
+    "n": 2048,
+    "window_size": 682,
+    "n_components": 87,
+    "recon_max_abs": 7.549516567451064e-15,
+    "first_rc_corr": 0.9338927837040478,
+    "wall_s": 0.032678
+  }
+]

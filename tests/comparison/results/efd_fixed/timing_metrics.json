@@ -1,0 +1,386 @@
+[
+  {
+    "impl": "MD-EFD",
+    "case": "A",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.007512041344374316,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8877176563688007,
+        "best_nrmse": 0.4622271385581482
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.4464761807011133,
+        "best_nrmse": 0.8947959446975692
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "A",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.3877787807814457e-17,
+    "orthogonality_index": -0.001091201856858867,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9844292182357365,
+        "best_nrmse": 0.1817209186773111
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.965215749102343,
+        "best_nrmse": 0.26146086208989683
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -4.742579444265411e-06,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8885364631329927,
+        "best_nrmse": 0.45880895403259514
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.4437065291453963,
+        "best_nrmse": 0.8961731192361196
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.3877787807814457e-17,
+    "orthogonality_index": -3.0516257799657263e-05,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9970932277149464,
+        "best_nrmse": 0.07621242608490988
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9733252725362663,
+        "best_nrmse": 0.22944785108203145
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -2.6094845644067945e-07,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8917522247007772,
+        "best_nrmse": 0.4525315659622895
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.44410695549244145,
+        "best_nrmse": 0.8959737912290525
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.3877787807814457e-17,
+    "orthogonality_index": -6.901789160551595e-06,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9939489931328793,
+        "best_nrmse": 0.10988132311220765
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9871400420303037,
+        "best_nrmse": 0.15985821313082485
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "A",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -8.23875498986859e-09,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8881998365244428,
+        "best_nrmse": 0.45945738942462494
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.4431386790240925,
+        "best_nrmse": 0.8964530760237963
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "A",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.3877787807814457e-17,
+    "orthogonality_index": -8.34035549054672e-05,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.99846829649994,
+        "best_nrmse": 0.055327337990242434
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9935923914561953,
+        "best_nrmse": 0.11302296752834334
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "B",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.00580790994535307,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9964679730546085,
+        "best_nrmse": 0.08406053643308281
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9981817145807601,
+        "best_nrmse": 0.06114583959580953
+      },
+      "trend": {
+        "best_abs_corr": 0.9194973070468719,
+        "best_nrmse": 0.789505031892278
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "B",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": -0.017639251929571373,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9888123359144128,
+        "best_nrmse": 0.14921400233220786
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9833131924026366,
+        "best_nrmse": 0.18219226760543586
+      },
+      "trend": {
+        "best_abs_corr": 0.5224056906651512,
+        "best_nrmse": 0.6130633191518958
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -3.083900296985116e-05,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9790287367027068,
+        "best_nrmse": 0.2037377725847073
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.999535285455935,
+        "best_nrmse": 0.030484524573540114
+      },
+      "trend": {
+        "best_abs_corr": 0.18316403263027733,
+        "best_nrmse": 0.9925120707388911
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": -0.16109075875910692,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.7832162621274801,
+        "best_nrmse": 0.6217522601527602
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9975752398347684,
+        "best_nrmse": 0.0695969388442143
+      },
+      "trend": {
+        "best_abs_corr": 0.43222408261451045,
+        "best_nrmse": 0.790762234147503
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -5.212608500097673e-07,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.8625579667962645,
+        "best_nrmse": 0.5059585947715786
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.5059690288462021,
+        "best_nrmse": 0.8625518692740654
+      },
+      "trend": {
+        "best_abs_corr": 0.9925520052226467,
+        "best_nrmse": 0.7497229763914255
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.00034546520818194823,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.7469445925533676,
+        "best_nrmse": 0.6648864861624848
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9992624917631244,
+        "best_nrmse": 0.03841842011721225
+      },
+      "trend": {
+        "best_abs_corr": 0.9490997898871437,
+        "best_nrmse": 0.2125073675809469
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "B",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -1.034814565252126e-07,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9794318965282465,
+        "best_nrmse": 0.20177583876947638
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9999688634388244,
+        "best_nrmse": 0.007891395238918257
+      },
+      "trend": {
+        "best_abs_corr": 0.2014355434495489,
+        "best_nrmse": 0.9909416787493928
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "B",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.0008297062061930197,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.8722476883294834,
+        "best_nrmse": 0.4890646485194429
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.999866278158953,
+        "best_nrmse": 0.016353218823646848
+      },
+      "trend": {
+        "best_abs_corr": 0.988575541546714,
+        "best_nrmse": 0.10086775524460213
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "C",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -0.00012069607779370263
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "C",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.00389320753886042
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.7755575615628914e-17,
+    "orthogonality_index": -3.289615414797627e-05
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.0005223066136232884
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -2.2040114038455117e-05
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.00032560310109289707
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "C",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -1.0666255643449072e-07
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "C",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.00031058566989010085
+  }
+]

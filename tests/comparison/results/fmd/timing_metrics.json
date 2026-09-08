@@ -1,0 +1,330 @@
+[
+  {
+    "impl": "MD-FMD",
+    "case": "A",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.4424906541753444e-15,
+    "orthogonality_index": -0.9889207812940046,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.3315700707894925,
+        "best_nrmse": 0.9442685082108739
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.06859028226603898,
+        "best_nrmse": 0.9976629839533003
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "A",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.016091035374462426,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8808292937321857,
+        "best_nrmse": 0.4729356486662007
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.45200368248041345,
+        "best_nrmse": 0.8922420603896952
+      }
+    }
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 7.771561172376096e-16,
+    "orthogonality_index": -0.5605384698567998,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.7163621365654261,
+        "best_nrmse": 0.6977365061567242
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.33500949791434226,
+        "best_nrmse": 0.9422106857132999
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.10247956464642945,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8685240494011931,
+        "best_nrmse": 0.4956973383890999
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.39451341070783497,
+        "best_nrmse": 0.9188867717242025
+      }
+    }
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.6645352591003757e-15,
+    "orthogonality_index": -0.8707974180496799,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.4137546720481772,
+        "best_nrmse": 0.9103936047412342
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.20973654808430653,
+        "best_nrmse": 0.9777631620224391
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.08197084390439678,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8684374675010826,
+        "best_nrmse": 0.495796660686302
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.437283407441755,
+        "best_nrmse": 0.89932425929852
+      }
+    }
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "B",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.6367796834847468e-15,
+    "orthogonality_index": -0.9861702842710773,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.5318595264550017,
+        "best_nrmse": 0.8472749728058733
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.07734003380597333,
+        "best_nrmse": 0.9970481581631453
+      },
+      "trend": {
+        "best_abs_corr": 0.18613400968002422,
+        "best_nrmse": 0.9837955108845535
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "B",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -0.005505679563708087,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.879798809293577,
+        "best_nrmse": 0.500360386364033
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.4448943247092642,
+        "best_nrmse": 0.8983289396652988
+      },
+      "trend": {
+        "best_abs_corr": 0.08061354364520135,
+        "best_nrmse": 0.9821048721132456
+      }
+    }
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-15,
+    "orthogonality_index": -0.7605490380558563,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.5020797120179704,
+        "best_nrmse": 0.870294325552662
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.3408690001288561,
+        "best_nrmse": 0.9425373245957046
+      },
+      "trend": {
+        "best_abs_corr": 0.13011195025850042,
+        "best_nrmse": 0.9723708802252987
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": 0.006559105363081441,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.8492345735814141,
+        "best_nrmse": 0.5524730576839518
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.5006382706864202,
+        "best_nrmse": 0.8710769060833511
+      },
+      "trend": {
+        "best_abs_corr": 0.39438997676836135,
+        "best_nrmse": 0.8333644073423427
+      }
+    }
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.3322676295501878e-15,
+    "orthogonality_index": -0.2946554287534946,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.7911535126008221,
+        "best_nrmse": 0.6287270384004999
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.45629929893675747,
+        "best_nrmse": 0.8936352346203388
+      },
+      "trend": {
+        "best_abs_corr": 0.16199294649058466,
+        "best_nrmse": 0.9700817858396115
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.07561587447735496,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.8636355267925294,
+        "best_nrmse": 0.5081760704097045
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.49933534065285184,
+        "best_nrmse": 0.8672711448242263
+      },
+      "trend": {
+        "best_abs_corr": 0.995762452588338,
+        "best_nrmse": 0.06153265056396365
+      }
+    }
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "C",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-15,
+    "orthogonality_index": -0.9662634966419155
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "C",
+    "n": 256,
+    "n_rows": 4,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -0.6097626806720703
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 3.552713678800501e-15,
+    "orthogonality_index": -0.9737703309957235
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 4,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -0.7326548183664859
+  },
+  {
+    "impl": "MD-FMD",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.509903313490213e-14,
+    "orthogonality_index": -0.9983101670768967
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 4,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -0.8247369720068646
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "A",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.56631669616603,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.6909934844360571,
+        "best_nrmse": 0.7228617817635531
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.3449573617240675,
+        "best_nrmse": 0.93861846256734
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-FMD",
+    "case": "B",
+    "n": 16384,
+    "n_rows": 4,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": 0.019721978641881657,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.8616372732973794,
+        "best_nrmse": 0.5081992551211547
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.5068101180889334,
+        "best_nrmse": 0.8622006428481661
+      },
+      "trend": {
+        "best_abs_corr": 0.998810661267938,
+        "best_nrmse": 0.03255821284352761
+      }
+    }
+  }
+]

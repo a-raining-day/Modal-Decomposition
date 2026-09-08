@@ -1,4 +1,4 @@
-# src/Modal_Decomposition/Utils/Hilbert/_fht.py
+# src/Modal_Decomposition/Utils/_Hilbert/_fht.py
 """快速 Hartley 变换 (FHT) 与 Hilbert 变换 —— 对外统一入口。
 
 本模块是 ``Modal-Decomposition`` 对外提供 FHT / Hilbert 变换的统一入口

@@ -86,11 +86,12 @@ class CEEFD(Decomposer):
                 ),
             )
 
-        boundaries = [0]
-        for i in range(len(peaks) - 1):
-            boundary = (peaks[i] + peaks[i + 1]) // 2
-            boundaries.append(boundary)
-        boundaries.append(N // 2)
+        if len(peaks) == 0:
+            boundaries = np.array([0, N // 2])
+        else:
+            boundaries = np.zeros(len(peaks) + 1)
+            boundaries[1:-1] = (peaks[1:] + peaks[:-1]) // 2
+            boundaries[-1] = N // 2
 
         imfs = []
         freq_masks = []

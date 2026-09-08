@@ -420,12 +420,12 @@ def test_check_time_and_signal_path_memmap_when_policy_triggers(ws_tmp):
 
 def test_check_time_and_signal_ndarray_memmap_when_policy_triggers(monkeypatch):
     set_absolute_limit(1)
-    # Force the float64 normalization to stay disk-backed for this small case.
+    # 默认保留输入 dtype: int64 输入按 int64 落盘 (不再强制转 float64)。
     monkeypatch.setattr("Modal_Decomposition.Utils.Check._F64_DISK_BYTES", 1)
     S, _, _ = Check_Time_and_Signal(np.arange(10))
     assert isinstance(S, np.memmap)
-    assert S.dtype == np.float64
-    assert np.allclose(S, np.arange(10, dtype=np.float64))
+    assert S.dtype == np.int64
+    assert np.array_equal(S, np.arange(10))
 
 
 def test_check_time_and_signal_long_list_becomes_memmap(monkeypatch):
@@ -437,8 +437,9 @@ def test_check_time_and_signal_long_list_becomes_memmap(monkeypatch):
 
 
 def test_check_time_and_signal_non_f64_large_goes_disk(monkeypatch):
+    """显式 dtype='float64' 时: f32 输入单趟直写 f64 memmap。"""
     monkeypatch.setattr("Modal_Decomposition.Utils.Check._F64_DISK_BYTES", 1)
-    S, _, _ = Check_Time_and_Signal(np.arange(10, dtype=np.float32))
+    S, _, _ = Check_Time_and_Signal(np.arange(10, dtype=np.float32), dtype="float64")
     assert isinstance(S, np.memmap)
     assert S.dtype == np.float64
     assert np.allclose(S, np.arange(10, dtype=np.float64))
@@ -460,3 +461,104 @@ def test_monotonic_chunk_adaptation():
     assert monotonic(arr[::-1].copy(), chunk_size=1_000_000)
     assert not monotonic(np.random.default_rng(7).standard_normal(200_000),
                          chunk_size=1_000_000)
+
+
+# ------------------------------------------------------------------ #
+# Check_Time_and_Signal 优化: dtype 保留 / 单趟转换 / 分块时间轴校验
+# ------------------------------------------------------------------ #
+def test_check_dtype_keep_preserves_input_dtype():
+    for arr in (
+        np.arange(8, dtype=np.float32),
+        np.arange(8, dtype=np.int64),
+        np.array([True, False, True]),
+    ):
+        S, _, N = Check_Time_and_Signal(arr, dtype=None)
+        assert S.dtype == arr.dtype
+        assert N == arr.size
+        assert np.array_equal(S, arr)
+
+
+def test_check_default_keeps_input_dtype():
+    """默认 dtype=None: 不转 float64, 保留输入 dtype (省内存)。"""
+    S, _, _ = Check_Time_and_Signal(np.arange(8, dtype=np.float32))
+    assert S.dtype == np.float32
+    S2, _, _ = Check_Time_and_Signal(np.arange(8, dtype=np.int16))
+    assert S2.dtype == np.int16
+
+
+def test_check_explicit_float64_converts():
+    S, _, _ = Check_Time_and_Signal(np.arange(8, dtype=np.float32), dtype="float64")
+    assert S.dtype == np.float64
+
+
+def test_check_dtype_invalid_raises():
+    with pytest.raises(ValueError, match="dtype"):
+        Check_Time_and_Signal(np.arange(8.0), dtype="float32")
+
+
+def test_check_dtype_keep_squeezes_and_keeps_dtype():
+    S, _, N = Check_Time_and_Signal(
+        np.arange(8, dtype=np.float32).reshape(1, -1), dtype=None
+    )
+    assert S.ndim == 1 and S.dtype == np.float32 and N == 8
+
+
+def test_check_dtype_keep_rejects_non_numeric():
+    for bad in (np.array(["a", "b"]), np.arange(4, dtype=np.complex128)):
+        with pytest.raises(ValueError):
+            Check_Time_and_Signal(bad, dtype=None)
+
+
+def test_check_time_duplicates_chunked(monkeypatch):
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    monkeypatch.setattr(check_mod, "_FILL_CHUNK_ELEMS", 5)
+    T = np.arange(10.0)
+    T[5] = 4.0  # 块宽 5 时的跨块接缝重复 (chunk0 末=4, chunk1 首=4)
+    with pytest.raises(ValueError, match="duplicate"):
+        Check_Time_and_Signal(np.arange(10.0), T)
+
+
+def test_check_time_unsorted_chunked_warns_and_sorts(monkeypatch):
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    monkeypatch.setattr(check_mod, "_FILL_CHUNK_ELEMS", 5)
+    T = np.arange(10.0)[::-1].copy()
+    with pytest.warns(UserWarning, match="reordered"):
+        S, T2, _ = Check_Time_and_Signal(np.arange(10.0), T)
+    assert np.array_equal(T2, np.arange(10.0))
+    assert np.array_equal(S, np.arange(10.0)[::-1])
+
+
+def test_check_single_pass_convert_f32_to_f64_memmap(monkeypatch):
+    """显式 dtype='float64' + 内存策略触发时: f32 单趟直写 f64 memmap。"""
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    monkeypatch.setattr(check_mod, "should_use_memmap", lambda nbytes, extra=0: True)
+    S, _, _ = Check_Time_and_Signal(
+        np.arange(20, dtype=np.float32), dtype="float64"
+    )
+    assert isinstance(S, np.memmap)
+    assert S.dtype == np.float64
+    assert np.allclose(S, np.arange(20.0))
+
+
+def test_check_keep_dtype_with_memmap_policy(monkeypatch):
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    monkeypatch.setattr(check_mod, "should_use_memmap", lambda nbytes, extra=0: True)
+    S, _, _ = Check_Time_and_Signal(np.arange(20, dtype=np.float32), dtype=None)
+    assert isinstance(S, np.memmap)
+    assert S.dtype == np.float32
+    assert np.allclose(S, np.arange(20.0))
+
+
+def test_check_long_list_keep_dtype(monkeypatch):
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    monkeypatch.setattr(check_mod, "_LIST_MEM_THRESHOLD", 5)
+    S, _, _ = Check_Time_and_Signal([0.5, 1.5, 2.5, 3.5, 4.5, 5.5], dtype=None)
+    assert isinstance(S, np.memmap)
+    # Python list 本身无 dtype, keep 模式下退化为 float64
+    assert S.dtype == np.float64
+    assert np.allclose(S, np.arange(6) + 0.5)

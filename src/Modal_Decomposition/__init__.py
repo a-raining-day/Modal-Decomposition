@@ -39,7 +39,7 @@ from . import \
 )  # noqa: F401  (registration side effects)
 
 from ._Registry import _ClassRegistry
-from .Base import Name, Reference
+from .Base import Name, Reference, SIZE
 from .Utils import get_seed, set_seed, set_absolute_limit, set_memmap_ratio
 
 __all__ = [
@@ -49,6 +49,7 @@ __all__ = [
     "get_seed",
     "set_memmap_ratio",
     "set_absolute_limit",
+    "SIZE",
     "__version__",
     "__author__",
     "__email__",

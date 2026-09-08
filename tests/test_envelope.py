@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from src.Modal_Decomposition.Utils.Envelope import envelope
+from src.Modal_Decomposition.Base.Cache import cache
 
 @pytest.fixture
 def am_signal():
@@ -63,3 +64,46 @@ def test_output_shape_show(am_signal):
 
     plt.savefig("fig/tests/envelope.png", dpi=300)
     plt.show()
+
+
+# ------------------------------------------------------------------ #
+# cache integration: the two scipy submodules are registered once
+# ------------------------------------------------------------------ #
+def test_envelope_registers_scipy_signal_in_cache(am_signal):
+    S, _, fs, fc, cf = am_signal
+    cache.clear()
+    envelope(S, method="Hilbert", fs=fs, fc=fc, cf=cf)
+    assert cache.check("scipy.signal")
+    assert cache.get("scipy.signal").__name__ == "scipy.signal"
+    desc = cache.describe("scipy.signal")
+    assert "hilbert" in desc
+
+
+def test_envelope_registers_scipy_interpolate_in_cache(am_signal):
+    S, _, fs, fc, cf = am_signal
+    cache.clear()
+    envelope(S, method="PeakInterpolation", fs=fs, fc=fc, cf=cf)
+    assert cache.check("scipy.interpolate")
+    assert cache.get("scipy.interpolate").__name__ == "scipy.interpolate"
+    desc = cache.describe("scipy.interpolate")
+    assert "CubicSpline" in desc
+
+
+def test_envelope_imports_submodules_lazily(am_signal):
+    """Hilbert mode only needs scipy.signal; interpolate stays unregistered."""
+    S, _, fs, fc, cf = am_signal
+    cache.clear()
+    envelope(S, method="Hilbert", fs=fs, fc=fc, cf=cf)
+    assert not cache.check("scipy.interpolate")
+
+
+def test_envelope_registers_each_submodule_exactly_once(am_signal):
+    """重复调用 envelope 不会重复注册: 4 种模式后仍只有 2 条缓存记录
+    (模块级注册统一由 Utils.get_envelope 完成; envelope() 自身只注册
+    scipy 子模块)。"""
+    S, _, fs, fc, cf = am_signal
+    cache.clear()
+    for method in ["Hilbert", "Lowpass", "IQ", "PeakInterpolation"]:
+        envelope(S, method=method, fs=fs, fc=fc, cf=cf)
+    assert len(cache()) == 2
+    assert sorted(cache.names()) == ["scipy.interpolate", "scipy.signal"]

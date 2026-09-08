@@ -74,24 +74,31 @@ class EFD(Decomposer):
         if self.max_IMFs != -1:
             local_maximum_zip = [(point, value) for point, value in zip(local_maximum_points, local_maximum)]
             local_maximum_zip = sorted(local_maximum_zip, reverse=True, key=lambda x: x[1])
-            local_maximum_points = list(map(lambda x: x[0], local_maximum_zip[:self.max_IMFs]))
+            # The segmentation below yields (internal maxima + 2) bands, so
+            # m IMFs need (m - 2) internal maxima. The old code kept
+            # max_IMFs maxima and produced up to max_IMFs + 2 modes,
+            # violating the documented "maximum number of IMFs" contract.
+            internal = local_maximum_zip[: max(0, self.max_IMFs - 2)]
+            local_maximum_points = sorted(p for p, _ in internal)
 
-        local_maximum_points = np.concatenate(([0], local_maximum_points, [freq_N - 1]))
+        bounds = np.concatenate(([0], local_maximum_points, [freq_N - 1])).astype(np.int64)
+        bounds = np.unique(bounds)
+        bounds = np.sort(bounds)
 
-        local_maximum_points = np.unique(local_maximum_points)
-        local_maximum_points = np.sort(local_maximum_points)
+        if self.max_IMFs == 1:
+            # exactly one mode: a single band over the whole spectrum
+            wn = np.array([0, freq_N - 1])
+        else:
+            wn = []  # the zero phase filter edges
+            for p in range(len(bounds) - 1):
+                next_point = bounds[p + 1]
+                current_point = bounds[p]
 
-        wn = []  # the zero phase filter
-        for p in range(len(local_maximum_points) - 1):
-            next_point = local_maximum_points[p + 1]
-            current_point = local_maximum_points[p]
-
-            if edge_magnitude[current_point] == edge_magnitude[next_point]:
-                wn.append(current_point)
-
-            else:
-                wn.append(current_point + np.argmin(edge_magnitude[current_point:next_point + 1]))
-        wn = np.concatenate(([0], wn, [freq_N - 1]))
+                if edge_magnitude[current_point] == edge_magnitude[next_point]:
+                    wn.append(current_point)
+                else:
+                    wn.append(current_point + np.argmin(edge_magnitude[current_point:next_point + 1]))
+            wn = np.concatenate(([0], wn, [freq_N - 1]))
 
         filters_arr = []
         for edge in range(1, len(wn)):

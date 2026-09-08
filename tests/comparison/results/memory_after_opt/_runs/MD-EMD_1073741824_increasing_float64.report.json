@@ -1,0 +1,40 @@
+{
+  "impl": "MD-EMD",
+  "input": {
+    "pattern": "increasing",
+    "dtype": "float64",
+    "n_samples": 134217728,
+    "size_bytes": 1073741824,
+    "shape": [
+      134217728
+    ],
+    "nbytes": 1073741824,
+    "backing": "memmap",
+    "backing_file": "C:\\Users\\kongtin\\AppData\\Local\\Temp\\dsh-e4gJKw\\md_signal_b1ntqwu_.dat",
+    "build_wall_s": 2.091668,
+    "build_peak_delta_rss_bytes": 1132384256
+  },
+  "decompose": {
+    "status": "ok",
+    "wall_s": 13.641,
+    "baseline_rss_bytes": 1191931904,
+    "peak_rss_bytes": 6949519360,
+    "delta_rss_bytes": 5757587456,
+    "hb_n_samples": 429
+  },
+  "result": {
+    "n_rows": 1,
+    "rows": {
+      "shape": [
+        1,
+        134217728
+      ],
+      "dtype": "float64",
+      "nbytes": 1073741824,
+      "backing": "ndarray"
+    },
+    "recon_max_abs_err": null,
+    "orthogonality_index": null,
+    "note": "metrics skipped above 2000000 samples"
+  }
+}

@@ -89,7 +89,7 @@ This lib's url is: https://github.com/a-raining-day/Modal-Decomposition
 ## Acknowledgement
 
 The `FHT` Hilbert backend under
-`src/Modal_Decomposition/Utils/Hilbert/_C/_fht/` contains **third-party C code**:
+`src/Modal_Decomposition/Utils/_Hilbert/_C/_fht/` contains **third-party C code**:
 
 * Originally written by the **Smithsonian Astrophysical Observatory**,
   Submillimeter Receiver Laboratory (Scott Paine), as part of the *am*
@@ -114,4 +114,4 @@ phase by **+90°** — *not* **−90°** as in MATLAB/SciPy. To obtain the
 MATLAB-compatible result, multiply the component orthogonal to the input by
 `exp(j·π) = −1`, i.e. multiply the imaginary part of the analytic signal by
 −1 for a real input (`matlab_phase=True` in
-`Modal_Decomposition.Utils.Hilbert._fht`).
+`Modal_Decomposition.Utils._Hilbert._fht`).

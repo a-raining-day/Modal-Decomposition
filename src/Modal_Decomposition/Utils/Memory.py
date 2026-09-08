@@ -26,6 +26,8 @@ try:
 except ImportError:  # psutil is a declared dependency; degrade gracefully
     psutil = None
 
+from ..Base.ConstDefine import SIZE
+
 __all__ = [
     "USE_RATIO_STRATEGY",
     "MEMMAP_RATIO_LIMIT",
@@ -40,7 +42,8 @@ __all__ = [
 # Process-wide policy state. Exactly one strategy is active at any time.
 USE_RATIO_STRATEGY: bool = True
 MEMMAP_RATIO_LIMIT: float = 0.6
-ABSOLUTE_MEMMAP_LIMIT_BYTES: int = 2 * 1024 ** 3
+#: 默认绝对阈值 = 2GB (大小统一取自 Base.ConstDefine.SIZE)。
+ABSOLUTE_MEMMAP_LIMIT_BYTES: int = 2 * SIZE["1GB"]
 
 # One-second cache for the available-memory reading so per-call overhead
 # stays negligible for small-array callers.

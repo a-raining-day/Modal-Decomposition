@@ -20,15 +20,17 @@ Layering (与 Utils 其余工具一致): 本模块自身不接触缓存;
 """
 
 import numpy as np
+from ..Base.ConstDefine import DEFAULT_NUMPY_TYPE
 
 __all__ = ["mirror_extrema"]
 
 
 def mirror_extrema(
-    idx,
-    vals,
-    nbsym: int = 0,
-    edges=None,
+    idx: np.ndarray,
+    vals: np.ndarray,
+    nbsym: int = 3,
+    edges = None,
+    _dtype: np.dtype = None
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     端点镜像外延 (EMD nbsym / LMD 边界两用, 全库共享)。
@@ -59,8 +61,24 @@ def mirror_extrema(
     >>> pos.tolist()   # 1 个左镜像 + 原极值 + 1 个右镜像
     [1.0, 5.0, 9.0, 13.0]
     """
-    idx = np.asarray(idx)
-    vals = np.asarray(vals)
+    if not isinstance(idx, np.ndarray):
+        if _dtype is not None:
+            idx = np.asarray(idx, dtype=_dtype)
+        else:
+            idx = np.asarray(idx, dtype=DEFAULT_NUMPY_TYPE)
+    if not isinstance(vals, np.ndarray):
+        if _dtype is not None:
+            vals = np.asarray(vals, dtype=_dtype)
+        else:
+            vals = np.asarray(vals, dtype=DEFAULT_NUMPY_TYPE)
+
+    if isinstance(idx, np.ndarray) and _dtype is not None and _dtype != idx.dtype:
+        idx = np.asarray(idx, dtype=_dtype)
+    if isinstance(vals, np.ndarray) and _dtype is not None and _dtype != vals.dtype:
+        vals = np.asarray(vals, dtype=_dtype)
+
+    _dtype = vals.dtype if _dtype is None else _dtype
+
     if idx.ndim != 1 or vals.ndim != 1 or idx.size != vals.size:
         raise ValueError(
             "mirror_extrema requires 1-D idx/vals of equal length"
@@ -74,33 +92,53 @@ def mirror_extrema(
     # --- EMD nbsym 语义: 每端镜像 nbsym 个极值 ---------------------------- #
     if nbsym > 0 and len(positions) >= 2:
         n = min(nbsym, len(positions) - 1)
-        left_pos = [positions[0] - (positions[i] - positions[0])
-                    for i in range(1, n + 1)]
-        right_pos = [positions[-1] + (positions[-1] - positions[-1 - i])
-                     for i in range(1, n + 1)]
-        positions = np.concatenate([
-            np.asarray(left_pos[::-1], dtype=np.float64),
-            positions,
-            np.asarray(right_pos, dtype=np.float64),
-        ])
-        values = np.concatenate(
-            [values[1:n + 1][::-1], values, values[-1 - n:-1][::-1]]
-        )
+        p = len(positions)
+        L = p + 2* n
+
+        new_positions = np.empty(L, dtype=positions.dtype)
+        new_values = np.empty(L, dtype=values.dtype)
+
+        # 左侧扩展
+        new_positions[:n] = 2 * positions[0] - positions[1:n + 1][::-1]
+        new_values[:n] = values[1:n + 1][::-1]
+
+        # 中间原始数据
+        new_positions[n:n + p] = positions
+        new_values[n:n + p] = values
+
+        # 右侧扩展
+        new_positions[n + p:] = 2 * positions[-1] - positions[-2:-(n + 2):-1]
+        new_values[n + p:] = values[-1 - n:-1][::-1]
+
+        positions = new_positions
+        values = new_values
 
     # --- LMD 边界语义: 未覆盖边界处奇反射补点 ----------------------------- #
     if edges is not None:
         lo, hi, n_samples = float(edges[0]), float(edges[1]), int(edges[2])
-        if positions[0] > 0:
-            left_val = np.asarray([2.0 * lo - float(values[0])])
-            positions = np.concatenate(([0.0], positions))
-            values = np.concatenate(
-                (left_val.astype(values.dtype, copy=False), values)
-            )
-        if positions[-1] < n_samples - 1:
-            right_val = np.asarray([2.0 * hi - float(values[-1])])
-            positions = np.concatenate((positions, [float(n_samples - 1)]))
-            values = np.concatenate(
-                (values, right_val.astype(values.dtype, copy=False))
-            )
+
+        left_pad = positions[0] > 0
+        right_pad = positions[-1] < n_samples - 1
+
+        total_len = len(positions) + int(left_pad) + int(right_pad)
+        new_positions = np.empty(total_len, dtype=positions.dtype)
+        new_values = np.empty(total_len, dtype=values.dtype)
+
+        idx = 0
+        if left_pad:
+            new_positions[0] = 0.0
+            new_values[0] = 2.0 * lo - float(values[0])
+            idx = 1
+
+        new_positions[idx:idx + len(positions)] = positions
+        new_values[idx:idx + len(values)] = values
+        idx += len(positions)
+
+        if right_pad:
+            new_positions[idx] = float(n_samples - 1)
+            new_values[idx] = 2.0 * hi - float(values[-1])
+
+        positions = new_positions
+        values = new_values
 
     return positions, values

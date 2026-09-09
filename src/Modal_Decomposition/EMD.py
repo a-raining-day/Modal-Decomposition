@@ -109,11 +109,11 @@ class EMD(Decomposer):
       the input to machine precision;
     * float32/float64 inputs keep their precision, float16 / integer / bool
       inputs are promoted to float64;
-    * the shipped defaults (linear envelope, sd_thr=0.3, nbsym=2) keep ~99%
-      of the cubic-envelope mode quality at ~1/4 of its runtime on separable
-      signals and run ~5-17x faster than the former PyEMD-backed wrapper
-      (benchmark: ``tests/comparison/bench_emd_new.py``,
-      ``docs/EMD_vs_EMD_new_Performance_Report.md``).
+    * the shipped defaults (CubicSpline envelope, sd_thr=0.01, nbsym=2) are
+      validated by mode-level IMF checks (zero-crossing/extrema balance) and
+      run ~4-60x faster than PyEMD/PySDKit at equal mode quality on the
+      three-way benchmark (``tests/comparison/bench_emd_new.py`` /
+      ``bench_emd_validation.py``; reports under ``docs/``).
 
     Use as ``Class.EMD(**params).decompose(S, T)`` or ``Function.EMD(S, T,
     **params)``; a frozen ``EMDConfig`` snapshot of the effective parameters
@@ -128,7 +128,7 @@ class EMD(Decomposer):
         spline_kind: Literal["CubicSpline", "PCHIP", "linear"] = "CubicSpline",
         max_imf: int = -1,
         max_iter: int = 100,
-        sd_thr: float = 0.3,
+        sd_thr: float = 0.01,
         dtype: np.dtype = None,
         compile: bool = False,
         find_peaks_mod: Literal["scipy", "numpy", "numba"] = "numpy",
@@ -164,11 +164,15 @@ class EMD(Decomposer):
 
         Notes
         -----
-        Defaults are the sweep-chosen configuration from
-        ``tests/comparison/bench_emd_new.py`` (see
-        ``docs/EMD_new_Parameter_Sweep_Report.md``): linear envelopes +
-        sd_thr=0.3 keep ~99% of the cubic-envelope quality at ~1/4 of the
-        runtime on separable signals.
+        Defaults: CubicSpline envelope + ``sd_thr=0.01``. The envelope choice
+        keeps the same spline semantics as the external references
+        (PyEMD/PySDKit); the SD threshold is set by the mode-level validation
+        in ``docs/EMD_Validation_and_Comparison_Report.md``: the loose sweep
+        optimum (0.3) stops sifting before IMFs satisfy the classic
+        zero-crossing/extrema balance and splits tones across adjacent rows
+        (single-row tone capture ~0.65-0.87), while ``sd_thr=0.01`` restores
+        single-row capture (~0.94) at a still-small cost (CubicSpline
+        ~14 ms, linear ~4 ms at n=4096 vs ~56 ms for PyEMD).
         """
         self.config = config
 

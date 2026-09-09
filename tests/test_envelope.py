@@ -1,5 +1,7 @@
 import pytest
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")  # 无头环境: 禁用交互后端, 防止 plt.show() 阻塞
 from matplotlib import pyplot as plt
 
 from src.Modal_Decomposition.Utils.Envelope import envelope
@@ -63,7 +65,7 @@ def test_output_shape_show(am_signal):
     ax4.set_title("Peak Interpolation")
 
     plt.savefig("fig/tests/envelope.png", dpi=300)
-    plt.show()
+    plt.close(fig)
 
 
 # ------------------------------------------------------------------ #

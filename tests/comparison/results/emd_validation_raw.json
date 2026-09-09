@@ -1,0 +1,419 @@
+{
+  "env": {
+    "numpy": "2.2.6"
+  },
+  "cells": [
+    {
+      "case": "A",
+      "n": 1024,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 13.96,
+        "k": 7,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.0331,
+        "corr_tone_37hz": 0.8751,
+        "corr_tone_113hz": 0.5625
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 17.15,
+        "k": 7,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.0331,
+        "corr_tone_37hz": 0.8751,
+        "corr_tone_113hz": 0.5625
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 7,
+        "valid": "6/7",
+        "finite": true,
+        "recon": "4.44e-16",
+        "t_ms": 233.77,
+        "corr_tone_37hz": 0.8841,
+        "corr_tone_113hz": 0.6043
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 8,
+        "valid": "6/8",
+        "finite": true,
+        "recon": "4.44e-16",
+        "t_ms": 2.02,
+        "corr_tone_37hz": 0.944,
+        "corr_tone_113hz": 0.6896
+      }
+    },
+    {
+      "case": "A",
+      "n": 4096,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 56.52,
+        "k": 9,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.031,
+        "corr_tone_37hz": 0.9605,
+        "corr_tone_113hz": 0.7594
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 62.44,
+        "k": 9,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.031,
+        "corr_tone_37hz": 0.9605,
+        "corr_tone_113hz": 0.7594
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 9,
+        "valid": "6/9",
+        "finite": true,
+        "recon": "6.66e-16",
+        "t_ms": 14.37,
+        "corr_tone_37hz": 0.8748,
+        "corr_tone_113hz": 0.6185
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 10,
+        "valid": "7/10",
+        "finite": true,
+        "recon": "6.66e-16",
+        "t_ms": 3.7,
+        "corr_tone_37hz": 0.9366,
+        "corr_tone_113hz": 0.6649
+      }
+    },
+    {
+      "case": "A",
+      "n": 16384,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 1859.07,
+        "k": 11,
+        "finite": true,
+        "recon": "4.34e-19",
+        "io": 0.0389,
+        "corr_tone_37hz": 0.974,
+        "corr_tone_113hz": 0.8772
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 2432.0,
+        "k": 11,
+        "finite": true,
+        "recon": "4.34e-19",
+        "io": 0.0389,
+        "corr_tone_37hz": 0.974,
+        "corr_tone_113hz": 0.8772
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 10,
+        "valid": "5/10",
+        "finite": true,
+        "recon": "6.66e-16",
+        "t_ms": 52.5,
+        "corr_tone_37hz": 0.8712,
+        "corr_tone_113hz": 0.6309
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 12,
+        "valid": "5/12",
+        "finite": true,
+        "recon": "8.88e-16",
+        "t_ms": 28.78,
+        "corr_tone_37hz": 0.9251,
+        "corr_tone_113hz": 0.6507
+      }
+    },
+    {
+      "case": "A",
+      "n": 65536,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 26377.71,
+        "k": 14,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0441,
+        "corr_tone_37hz": 0.9759,
+        "corr_tone_113hz": 0.919
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 58143.16,
+        "k": 13,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0441,
+        "corr_tone_37hz": 0.9759,
+        "corr_tone_113hz": 0.919
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 12,
+        "valid": "7/12",
+        "finite": true,
+        "recon": "8.88e-16",
+        "t_ms": 136.25,
+        "corr_tone_37hz": 0.9016,
+        "corr_tone_113hz": 0.6236
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 15,
+        "valid": "8/15",
+        "finite": true,
+        "recon": "8.88e-16",
+        "t_ms": 112.48,
+        "corr_tone_37hz": 0.9427,
+        "corr_tone_113hz": 0.7673
+      }
+    },
+    {
+      "case": "B",
+      "n": 1024,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 71.56,
+        "k": 4,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0014,
+        "corr_amfm": 0.9993,
+        "corr_tone_89hz": 0.9986,
+        "corr_trend": 0.5661,
+        "corr_Res_trend": 0.9777
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 46.97,
+        "k": 4,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0014,
+        "corr_amfm": 0.9993,
+        "corr_tone_89hz": 0.9986,
+        "corr_trend": 0.5661,
+        "corr_Res_trend": 0.9777
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 4,
+        "valid": "4/4",
+        "finite": true,
+        "recon": "8.88e-16",
+        "t_ms": 3.44,
+        "corr_amfm": 0.9985,
+        "corr_tone_89hz": 0.9973,
+        "corr_trend": 0.978,
+        "corr_Res_trend": 0.961
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 5,
+        "valid": "5/5",
+        "finite": true,
+        "recon": "4.44e-16",
+        "t_ms": 0.92,
+        "corr_amfm": 0.9972,
+        "corr_tone_89hz": 0.9907,
+        "corr_trend": 0.3017,
+        "corr_Res_trend": 0.9989
+      }
+    },
+    {
+      "case": "B",
+      "n": 4096,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 73.2,
+        "k": 5,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0082,
+        "corr_amfm": 0.9982,
+        "corr_tone_89hz": 0.9988,
+        "corr_trend": 0.433,
+        "corr_Res_trend": 0.996
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 146.63,
+        "k": 5,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0082,
+        "corr_amfm": 0.9982,
+        "corr_tone_89hz": 0.9988,
+        "corr_trend": 0.433,
+        "corr_Res_trend": 0.996
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 4,
+        "valid": "4/4",
+        "finite": true,
+        "recon": "1.89e-15",
+        "t_ms": 2.88,
+        "corr_amfm": 0.9996,
+        "corr_tone_89hz": 0.999,
+        "corr_trend": 0.9022,
+        "corr_Res_trend": 0.909
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 8,
+        "valid": "8/8",
+        "finite": true,
+        "recon": "5.55e-16",
+        "t_ms": 2.47,
+        "corr_amfm": 0.9966,
+        "corr_tone_89hz": 0.9929,
+        "corr_trend": 0.2138,
+        "corr_Res_trend": 0.9825
+      }
+    },
+    {
+      "case": "B",
+      "n": 16384,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 399.99,
+        "k": 6,
+        "finite": true,
+        "recon": "1.11e-16",
+        "io": 0.0012,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.1034,
+        "corr_Res_trend": 0.9999
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 295.67,
+        "k": 6,
+        "finite": true,
+        "recon": "1.11e-16",
+        "io": 0.0012,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.1034,
+        "corr_Res_trend": 0.9999
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 5,
+        "valid": "5/5",
+        "finite": true,
+        "recon": "4.44e-16",
+        "t_ms": 12.7,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.091,
+        "corr_Res_trend": 1.0
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 9,
+        "valid": "7/9",
+        "finite": true,
+        "recon": "6.66e-16",
+        "t_ms": 20.29,
+        "corr_amfm": 0.9984,
+        "corr_tone_89hz": 0.9936,
+        "corr_trend": 0.288,
+        "corr_Res_trend": 0.9988
+      }
+    },
+    {
+      "case": "C",
+      "n": 4096,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 552.82,
+        "k": 10,
+        "finite": true,
+        "recon": "1.73e-18",
+        "io": 0.0376,
+        "share1": 0.6283
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 508.18,
+        "k": 10,
+        "finite": true,
+        "recon": "1.73e-18",
+        "io": 0.0376,
+        "share1": 0.6283
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 9,
+        "valid": "6/9",
+        "finite": true,
+        "recon": "8.88e-16",
+        "t_ms": 11.85,
+        "share1": 0.6591
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 12,
+        "valid": "6/12",
+        "finite": true,
+        "recon": "1.33e-15",
+        "t_ms": 4.23,
+        "share1": 0.6081
+      }
+    },
+    {
+      "case": "C",
+      "n": 16384,
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 2539.62,
+        "k": 12,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0503,
+        "share1": 0.5926
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 2750.37,
+        "k": 12,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0503,
+        "share1": 0.5926
+      },
+      "MD-def(CubicSpline/sd0.01)": {
+        "impl": "MD-def(CubicSpline/sd0.01)",
+        "k": 11,
+        "valid": "7/11",
+        "finite": true,
+        "recon": "1.33e-15",
+        "t_ms": 40.72,
+        "share1": 0.6704
+      },
+      "MD-linear/sd0.01": {
+        "impl": "MD-linear/sd0.01",
+        "k": 13,
+        "valid": "7/13",
+        "finite": true,
+        "recon": "1.78e-15",
+        "t_ms": 28.83,
+        "share1": 0.6095
+      }
+    }
+  ]
+}

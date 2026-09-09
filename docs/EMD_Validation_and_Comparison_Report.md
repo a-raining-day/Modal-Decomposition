@@ -6,6 +6,8 @@
 > `tests/comparison/results/emd_validation_raw.json`, MD 档由
 > `tests/comparison/refresh_emd_validation_md.py` 以最终默认重测）;
 > `python tests/comparison/bench_emd_new.py`（干净双音调速查 + 参数扫描报告）。
+> 逐点机制对照（幅值标定/端点/病态/平台/3 点样条/linear/白噪声检验/行级窄带/
+> 泄漏/极值计数 + 「194×」口径与质量等价点）: `docs/EMD_vs_PyEMD_Detailed_Comparison.md`。
 
 ---
 

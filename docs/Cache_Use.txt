@@ -1,0 +1,8 @@
+注册：
+对象	| 推荐做法
+----|---------
+模块	| cache.import_module(...) 或直接使用 Utils 包的 getter
+函数	| 普通函数用 cache.add(...)  零参数加载函数用 @cache.lazy(...)
+
+获取：
+cache.get(name)

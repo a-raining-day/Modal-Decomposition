@@ -1,0 +1,153 @@
+{
+  "E_A_scale": {
+    "1.0": {
+      "py_t_ms": 60.33,
+      "md_t_ms": 13.81,
+      "py_k": 9,
+      "md_k": 9,
+      "py_res_range": 0.0018791852455849398,
+      "md_res_range": 0.01847850845062393,
+      "py_sumabs": 12.296944337653905,
+      "md_sumabs": 24.100435295435304,
+      "py_relres": 0.0038456648255155725,
+      "md_relres": 0.010188187105857206
+    },
+    "1000.0": {
+      "py_t_ms": 58.55,
+      "md_t_ms": 11.55,
+      "py_k": 9,
+      "md_k": 9,
+      "py_res_range": 1.8791852455850844,
+      "md_res_range": 18.478508450623952,
+      "py_sumabs": 12296.944337653986,
+      "md_sumabs": 24100.43529543531,
+      "py_relres": 0.003845664825515605,
+      "md_relres": 0.01018818710585721
+    }
+  },
+  "E_B_endpoint": {
+    "py_head50": 0.0019367490363550043,
+    "py_tail50": 0.0019046471877813087,
+    "md_head50": 0.002780611996791324,
+    "md_tail50": 0.0025181155019612335,
+    "py_k": 3,
+    "md_k": 4
+  },
+  "E_C_pathological": {
+    "monotonic": {
+      "py_k": 0,
+      "md_k": 0,
+      "py_t_ms": 0.09,
+      "md_t_ms": 0.04
+    },
+    "constant": {
+      "py_k": 0,
+      "md_k": 0,
+      "py_t_ms": 0.1,
+      "md_t_ms": 0.03
+    },
+    "zeros": {
+      "py_k": 0,
+      "md_k": 0,
+      "py_t_ms": 0.1,
+      "md_t_ms": 0.02
+    },
+    "plateau5": {
+      "py_k": 0,
+      "md_k": 3,
+      "py_t_ms": 0.48,
+      "md_t_ms": 1.97
+    },
+    "plateau5_parabol": {
+      "py_k": 3,
+      "py_t_ms": 5.66
+    }
+  },
+  "E_D_spline3": {
+    "py_len": 501,
+    "grid_len": 1001,
+    "max_abs_diff_overlap": 0.22222222222222232,
+    "max_abs_diff_full": 11.999999999999996
+  },
+  "E_E_linear": {
+    "pyemd": {
+      "ok": true,
+      "rows": 11,
+      "t_ms": 10.37
+    },
+    "md_default_rows": 7,
+    "md_linear_ok": true,
+    "md_linear_rows": 8,
+    "md_linear_t_ms": 1.33
+  },
+  "E_F_noise_check": {
+    "py_k": 11,
+    "md_k": 10,
+    "sig_py": {
+      "1": 0,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1,
+      "9": 1,
+      "10": 0,
+      "11": 0
+    },
+    "sig_md": {
+      "1": 0,
+      "2": 1,
+      "3": 1,
+      "4": 1,
+      "5": 1,
+      "6": 1,
+      "7": 1,
+      "8": 1,
+      "9": 1,
+      "10": 0
+    },
+    "py_zcext": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1
+    ],
+    "md_zcext": [
+      21,
+      24,
+      9,
+      0,
+      2,
+      0,
+      1,
+      0,
+      1,
+      1
+    ]
+  },
+  "E_G_leak": {
+    "py_r2_all": 0.9449,
+    "md_r2_all": 0.9079
+  },
+  "E_H_extrema": {
+    "plateau_py_max": 3,
+    "plateau_py_min": 3,
+    "plateau_py_zer": 7,
+    "plateau_md_max": 6,
+    "plateau_md_min": 6,
+    "plain_py_max": 159,
+    "plain_py_min": 158,
+    "plain_py_zer": 101,
+    "plain_md_max": 159,
+    "plain_md_min": 158
+  }
+}

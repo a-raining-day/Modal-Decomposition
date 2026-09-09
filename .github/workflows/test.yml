@@ -1,0 +1,49 @@
+name: test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      # 可编辑安装会执行 PEP 517 构建: 现场编译 _fht_native 扩展
+      # (Windows: MSVC / Linux: gcc / macOS: clang), 顺带安装全部运行依赖
+      - name: Install package (editable, compiles native ext)
+        run: pip install -e .
+        shell: bash
+
+      - name: Install pytest
+        run: pip install pytest
+        shell: bash
+
+      - name: Unit test (public pure-Python entry)
+        run: python -m pytest tests/test_fht.py -q
+        shell: bash
+
+      # 确认编译产物真的被加载, 且原生内核与纯 NumPy 参考实现数值一致
+      - name: Verify compiled _fht_native matches pure fallback
+        run: >-
+          python -c "import numpy as np;
+          from Modal_Decomposition.Utils._Hilbert import _fht_native as n;
+          from Modal_Decomposition.Utils._Hilbert._fht import fht_forward as f, fht_inverse as g;
+          x = np.random.default_rng(0).standard_normal(1000);
+          assert np.allclose(g(f(x))[:1000], x, atol=1e-9);
+          assert np.allclose(n.fht_forward(x), f(x), atol=1e-9);
+          print('native-vs-pure OK')"
+        shell: bash

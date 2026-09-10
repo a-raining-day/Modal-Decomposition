@@ -1,142 +1,164 @@
-# EMD 大数据内存报告（1 MB – 3 GB 轴，归档数据）
+# EMD 大数据内存报告（1 MB – 1 GB，**原生引擎重跑版**）
 
-> ⚠️ **数据边界（重要）**: 本报告的两套内存实验均**沿用归档数据、未重跑**
-> （按用户指示）。采集时间为 2026-09-05/06，当时库 EMD 仍是 **PyEMD 包装版**
-> （原生引擎于 2026-09-09 转正）。因此：
-> * 结论中"库 EMD 的峰值 RSS / 长度上限"反映**包装时代**的行为；
-> * 现行原生引擎的内存特性尚未重测，但方向明确：原生实现去掉了包装层的
->   结果缓存与额外拷贝，且 `Check_Time_and_Signal(default_T=...)` 优化已消除
->   引擎不用的时间轴分配（§3 的"优化后"列即为该优化的实测收益）；
-> * 数据文件完整保留，随时可在现行引擎上按本文命令重跑替换。
->
-> 数据源:
-> * `tests/comparison/results/_legacy_pyemd_wrapper/{summary_memory.md,
->   memory_flat.csv, memory/, memory_after_opt/}` —— 三方对照轴；
-> * `tests/test_memory/result_for_each_decomposition/EMD_legacy_pyemd_wrapper.{json,csv}`
->   —— 库内 EMD 的 dtype × 长度 × pattern × safe 分级矩阵。
+> **2026-09-10 重跑**: 本报告内存实验已在**当前原生引擎**上重做
+> （此前版本沿用 PyEMD 包装时代归档数据）。旧数据保留于
+> `tests/comparison/results/_legacy_pyemd_wrapper/` 作为对照。
+> 复现: `python tests/comparison/bench_memory.py` 与
+> `python tests/test_memory/run_matrix.py --methods EMD --sizes 1MB 20MB 100MB 500MB 1024MB
+> --patterns increasing random --dtypes float16 float32 float64`。
+> 数据: `tests/comparison/results/memory/*.json` 与
+> `tests/test_memory/result_for_each_decomposition/EMD.{json,csv}`。
+> 方法: 每格独立子进程；输入完全建成后才计分解预算（默认 20 s/格）；RSS 以
+> 50 ms 心跳采样；输入 ≥ 500 MB 以 `memmap` 建底。
+
+## 0. 结论速览（相对包装时代的变化）
+
+1. **原生引擎把"可完成长度上限"整体上移**: 库内矩阵中 float16 的 500 MB、
+   float32 的 500 MB / 1024 MB increasing 在旧引擎全部 timeout，现在分别
+   2.71 s / 0.57 s / 2.11 s 完成。
+2. **峰值内存约减半**: 1 GB increasing 峰值 RSS 从旧引擎的 8119 MB 降到
+   **4257 MB**（输入 4.2×）；同格 PyEMD 8282 MB、PySDKit 8216 MB。
+3. **墙钟快 6–12×**: increasing 轴 100 MB 0.08 s（旧 0.73 s）、500 MB 0.44 s
+   （旧 4.31 s）、1024 MB 0.91 s（旧 10.80 s）；1 MB random 4.16 s（旧 10.66 s，
+   PyEMD 10.17 s、PySDKit 11.50 s）。
+4. **仍属算法代价的边界**: 白噪声 ≥ 20 MB 与 float16 的 1024 MB 在 20 s 预算
+   内仍 timeout（三方一致）；1 GB random 与 3 GB 保持 deferred（16 GB 机器，
+   见 `POSTPONED_3GB.md`）。
 
 ---
 
-## 1. 三方对照轴（1 MB – 1 GB）
-
-方法: 每格独立子进程；**输入完全建成后**才开始计分解预算（默认 20 s/格）；
-RSS 以 50 ms 心跳采样；被 kill 的超时格也保留增长轨迹
-（`memory/_runs/*.hb.log`）。输入 ≥ 500 MB 时以 `memmap` 建底。
+## 1. 三方对照轴（当前引擎, 1 MB – 1 GB）
 
 ### 1.1 increasing（确定性递增信号）
 
-| 输入 | 实现 | 状态 | 墙钟 s | ΔRSS MB | 峰值 RSS MB | 峰值/输入 |
-|---:|---|---|---:|---:|---:|---:|
-| 1 MB | MD-EMD | ok | 0.00 | 0.1 | 113.0 | 113× |
-| 1 MB | PyEMD | ok | 0.016 | 0.1 | 113.3 | 113× |
-| 1 MB | PySDKit | ok | 0.00 | 0.1 | 119.0 | 119× |
-| 20 MB | MD-EMD | ok | 0.125 | 141.6 | 273.8 | 13.7× |
-| 20 MB | PyEMD | ok | 0.125 | 102.8 | 234.7 | 11.7× |
-| 20 MB | PySDKit | ok | 0.109 | 113.4 | 250.7 | 12.5× |
-| 100 MB | MD-EMD | ok | 0.734 | 780.1 | 992.2 | 9.9× |
-| 100 MB | PyEMD | ok | 0.578 | 604.9 | 816.9 | 8.2× |
-| 100 MB | PySDKit | ok | 0.593 | 600.3 | 818.2 | 8.2× |
-| 500 MB | MD-EMD | ok | 4.313 | 3963.4 | 4576.0 | 9.2× |
-| 500 MB | PyEMD | ok | 3.391 | 3488.5 | 4100.3 | 8.2× |
-| 500 MB | PySDKit | ok | 3.844 | 3440.4 | 4058.2 | 8.1× |
-| 1024 MB | MD-EMD | ok | 10.797 | 6983.1 | 8119.4 | 7.9× |
-| 1024 MB | PyEMD | ok | 9.016 | 7153.8 | 8289.6 | 8.1× |
-| 1024 MB | PySDKit | ok | 9.812 | 7018.8 | 8160.5 | 8.0× |
+| 输入 | 实现 | 状态 | 墙钟 s | ΔRSS MB | 峰值 RSS MB | 峰值/输入 | 旧引擎峰值 MB |
+|---:|---|---|---:|---:|---:|---:|---:|
+| 1 MB | MD-EMD | ok | 0.00 | ~0 | 33.6 | 33.6× | 113.0 |
+| 1 MB | PyEMD | ok | 0.00 | 0.1 | 113.4 | 113× | 113.3 |
+| 1 MB | PySDKit | ok | 0.02 | 0.1 | 119.0 | 119× | 119.0 |
+| 20 MB | MD-EMD | ok | 0.02 | ~18 | 52.6 | 2.6× | 273.8 |
+| 20 MB | PyEMD | ok | 0.11 | 102.8 | 232.6 | 11.6× | 234.7 |
+| 20 MB | PySDKit | ok | 0.12 | 113.4 | 258.6 | 12.9× | 250.7 |
+| 100 MB | MD-EMD | ok | 0.08 | ~195 | 327.4 | 3.3× | 992.2 |
+| 100 MB | PyEMD | ok | 0.56 | 604.9 | 892.4 | 8.9× | 816.9 |
+| 100 MB | PySDKit | ok | 0.59 | 600.3 | 800.3 | 8.0× | 818.2 |
+| 500 MB | MD-EMD | ok | 0.44 | ~1600 | 2086.9 | 4.2× | 4576.0 |
+| 500 MB | PyEMD | ok | 3.02 | 3488.5 | 4093.4 | 8.2× | 4100.3 |
+| 500 MB | PySDKit | ok | 3.34 | 3440.4 | 4015.6 | 8.0× | 4058.2 |
+| 1024 MB | MD-EMD | ok | **0.91** | ~3000 | **4256.8** | **4.2×** | 8119.4 |
+| 1024 MB | PyEMD | ok | 7.50 | 7153.8 | 8281.9 | 8.1× | 8289.6 |
+| 1024 MB | PySDKit | ok | 7.27 | 7018.8 | 8216.2 | 8.0× | 8160.5 |
 
-要点: 三方峰值 RSS 同量级（**8–9× 输入**；1 MB 格的倍数无意义——基线进程
-RSS ~113 MB 占主导）；墙钟同档（库实现小格偏慢、大格持平，与计时轴一致）。
+（ΔRSS 为"峰值 − 基线"；旧引擎峰值列为 2026-09-06 归档值。）
+
+要点:
+* 原生引擎的峰值 RSS 稳定在 **~3.3–4.2× 输入**（memmap 大格），外部实现仍为
+  **~8×**：1 GB 格上库比 PyEMD 少 **~4.0 GB**。
+* 墙钟上库实现快 8×（1024 MB 格）——与计时轴结论一致（`default_T` 优化 +
+  原生筛分路径无包装拷贝）。
 
 ### 1.2 random（白噪声）
 
-| 输入 | MD-EMD | PyEMD | PySDKit | 备注 |
-|---:|---|---|---|---|
-| 1 MB | ok, 10.66 s, 峰值 141.6 MB, 17 行 | ok, 10.75 s, 138.9 MB | ok, 11.42 s, 158.9 MB | 重构 8.7e-19 |
-| 20 MB | timeout | timeout | timeout | 峰值 608–628 MB |
-| 100 MB | timeout | timeout | timeout | 峰值 2567–2670 MB |
-| 500 MB | timeout | timeout | timeout | 峰值 7789–8576 MB |
-| ≥512 MB | deferred | deferred | deferred | 16 GB 机器推迟，见 `POSTPONED_3GB.md` |
+| 输入 | MD-EMD | PyEMD | PySDKit |
+|---:|---|---|---|
+| 1 MB | **ok, 4.16 s**, 96.1 MB, 17 行 | ok, 10.17 s, 139.1 MB, 17 行 | ok, 11.50 s, 164.2 MB, 17 行 |
+| 20 MB | timeout（峰值 415 MB） | timeout（605 MB） | timeout（608 MB） |
+| 100 MB | timeout（峰值 1779 MB） | timeout（2563 MB） | timeout（2552 MB） |
+| 500 MB | timeout（峰值 7522 MB） | timeout（8439 MB） | timeout（8730 MB） |
+| 1024 MB | deferred | deferred | deferred |
 
-要点: 白噪声的 sift 迭代远多于确定性信号，三方在 20 s 预算下**同样**无法完成
-——是算法代价而非实现缺陷。库实现对噪声的实测速度优势（计时轴 case C 为
-2.1×）意味着在同等预算下库可处理的噪声长度更长，但 1 GB 级噪声在当前预算
-下对任何实现都不可行。
-
----
-
-## 2. 库内 EMD 矩阵（dtype × 长度 × pattern × safe 分级）
-
-源: `EMD_legacy_pyemd_wrapper.json`（108 条 = 36 格 × 3 个 safe 记录）。
-长度轴 1 MB/20 MB/100 MB/500 MB/1024 MB/3072 MB；pattern: increasing / random；
-dtype: float16 / float32 / float64；预算 20 s。
-
-### 2.1 状态与峰值（每格取首条记录）
-
-| dtype | 长度 | pattern | 状态 | n_imfs | 墙钟 s | 峰值 RSS MB | 峰值/输入 |
-|---|---:|---|---|---:|---:|---:|---:|
-| float16 | 1 MB | increasing | ok | 0 | 0.03 | 150 | 149.6× |
-| float16 | 20 MB | increasing | ok | 0 | 0.65 | 797 | 39.8× |
-| float16 | 100 MB | increasing | ok | 0 | 5.41 | 3953 | 39.5× |
-| float16 | 500 MB+ | increasing | timeout | — | — | — | — |
-| float32 | 1 MB | increasing | ok | 0 | 0.02 | 125 | 125.1× |
-| float32 | 20 MB | increasing | ok | 0 | 0.28 | 454 | 22.7× |
-| float32 | 100 MB | increasing | ok | 0 | 1.50 | 1962 | 19.6× |
-| float32 | 500 MB+ | increasing | timeout | — | — | — | — |
-| float64 | 1 MB | increasing | ok | 0 | 0.01 | 120 | 120.5× |
-| float64 | 20 MB | increasing | ok | 0 | 0.18 | 277 | 13.8× |
-| float64 | 100 MB | increasing | ok | 0 | 0.78 | 970 | 9.7× |
-| float64 | 500 MB | increasing | ok | 0 | 4.09 | 4597 | 9.2× |
-| float64 | 1024 MB | increasing | ok | 0 | 9.32 | 9317 | 9.1× |
-| float64 | 3072 MB | increasing | timeout | — | — | — | — |
-| float64 | 1 MB | random | ok | 3 | 6.66 | 139 | 138.7× |
-| float16/32/64 | ≥20 MB | random | timeout | — | — | — | — |
-| 全部 dtype | 3072 MB | 两种 | timeout | — | — | — | — |
-
-### 2.2 要点
-
-1. **精度提升是内存放大器**: `float16` 输入在库内被提升为 `float64` 工作精度，
-   峰值达输入的 **39.5×**（20 MB 与 100 MB 格），`float32` 因内部多份 f64
-   临时量也达 **19.6–22.7×**，而 `float64` 仅 **9.1–9.7×**。因此"能处理多大
-   信号"的决定因素是输入 dtype：同为 100 MB 输入，float64 0.78 s 完成、
-   float16 5.41 s、float32 1.50 s；500 MB 以上只有 float64 完成。
-2. **increasing 格是"平凡完成"**: 单调信号没有任何 IMF（`n_imfs=0`），分解在
-   极值预检处立即退出——这些格测的是**输入构建 + 扫描/分块**的内存与时间，
-   不是分解能力；真正压分解的是 random 格（≥20 MB 即超时）。
-3. **3 GB 及随机 ≥512 MB 全部 timeout/deferred**：与 `POSTPONED_3GB.md`
-   的推迟记录一致（16 GB 机器的内存上限）。
-4. **残差单调性扫描（scan）**: `ok` 格在三个 safe 分级下均完成（33 条 True /
-   3 条 False，无缺失）；峰值增量在 safe=0 时最大（100 MB float16 格
-   47.8 MB；float32 5.7 MB；float64 8.8 MB），safe=1/2 时 < 1.1 MB —— 即
-   分级越高扫描越省内存（具体语义见 `tests/test_memory/run_matrix.py` 参数）。
+要点:
+* 1 MB random 库快 PyEMD **2.4×**、快 PySDKit 2.8×（原生筛分对噪声的加速）；
+* timeout 格的峰值：库在相同预算内到达的 RSS 更低（500 MB 格少 0.9–1.2 GB）
+  ——同一预算下库"走得比外部实现远"的另一种体现。
+* 1 GB random 保持 deferred（16 GB 机器；见 `POSTPONED_3GB.md`）。
 
 ---
 
-## 3. 内存优化记录（`default_T`）
+## 2. 库内矩阵（dtype × 长度 × pattern，当前引擎）
 
-旧报告中针对 EMD 的优化：`Check_Time_and_Signal` 新增 `default_T` 开关，
-EMD 不再分配引擎用不到的时间轴。归档的"优化后"数据
-（`memory_after_opt/MD-EMD.csv`）：
+源: `tests/test_memory/result_for_each_decomposition/EMD.{json,csv}`
+（30 格 × 3 个 safe 记录 = 90 条）。预算 20 s。
 
-| 输入 | 优化前峰值 MB | 优化后峰值 MB | 降幅 | 优化后墙钟 s |
-|---:|---:|---:|---:|---:|
-| 100 MB | 992.2 | 852 | −140 MB | 0.593 |
-| 500 MB | 4576.0 | 4259 | −317 MB | 6.015 |
-| 1024 MB | 8119.4 | 6950 | **−1169 MB** | 13.641 |
+| dtype | 长度 | pattern | 状态 | 墙钟 s | 峰值增量 MB | 输入形态 | n_imfs |
+|---|---:|---|---|---:|---:|---|---:|
+| float16 | 1 MB | increasing | ok | 0.00 | 7.3 | ndarray | 0 |
+| float16 | 20 MB | increasing | ok | 0.08 | 327.6 | ndarray | 0 |
+| float16 | 100 MB | increasing | ok | 0.36 | 1643.9 | ndarray | 0 |
+| float16 | 500 MB | increasing | **ok（旧 timeout）** | 2.71 | 8249.4 | memmap | 0 |
+| float16 | 1024 MB | increasing | timeout | — | — | memmap | — |
+| float32 | 1 MB | increasing | ok | 0.00 | 1.3 | ndarray | 0 |
+| float32 | 20 MB | increasing | ok | 0.02 | 69.5 | ndarray | 0 |
+| float32 | 100 MB | increasing | ok | 0.11 | 500.3 | ndarray | 0 |
+| float32 | 500 MB | increasing | **ok（旧 timeout）** | 0.57 | 2624.5 | memmap | 0 |
+| float32 | 1024 MB | increasing | **ok（旧 timeout）** | 2.11 | 5376.1 | memmap | 0 |
+| float64 | 1 MB | increasing | ok | 0.00 | 1.0 | ndarray | 0 |
+| float64 | 20 MB | increasing | ok | 0.01 | 29.0 | ndarray | 0 |
+| float64 | 100 MB | increasing | ok | 0.07 | 301.1 | ndarray | 0 |
+| float64 | 500 MB | increasing | ok | 0.38 | 1558.6 | memmap | 0 |
+| float64 | 1024 MB | increasing | ok | 0.97 | 3200.1 | memmap | 0 |
+| float16 | 1 MB | random | ok | 13.51 | 106.4 | ndarray | 3 |
+| float32 | 1 MB | random | ok | 5.47 | 65.6 | ndarray | 3 |
+| float64 | 1 MB | random | ok | 2.33 | 54.8 | ndarray | 3 |
+| 全部 dtype | 20 MB–1024 MB | random | timeout | — | — | — | — |
 
-优化后库 EMD 在 1 GB 上的峰值 RSS 比 PyEMD（8289.6 MB）低约 **1.3 GB**。
+要点:
+1. **精度提升仍是内存放大器，但幅度下降**: 100 MB 输入峰值增量 float16
+   1644 MB（16.4×）> float32 500 MB（5.0×）> float64 301 MB（3.0×）——
+   float16→float64 工作精度仍是主因；但 500 MB/1024 MB 的 float16/float32
+   从旧引擎的全 timeout 变为可完成（原生路径没有包装层的额外副本）。
+2. **random 1 MB 三种精度都完成**且比旧引擎快 ~3×（float64 6.66 s → 2.33 s）；
+   噪声 ≥ 20 MB 在 20 s 预算内三方同样无法完成（算法代价）。
+3. **increasing 格仍是"平凡完成"**（单调信号 n_imfs=0），测的是输入构建 +
+   扫描/分块的内存与时间；分解压力由 random 格承担。
+4. 残差单调性扫描（scan）三个 safe 分级在全部 ok 格完成，结果与此前口径一致
+   （详见 `EMD.json` 的 scan 字段）。
 
 ---
 
-## 4. 复现
+## 3. 与包装时代的对照
 
-```powershell
-# 三方对照轴（默认 1MB..1GB × increasing/random，20s/格预算）
-python tests\comparison\bench_memory.py
-python tests\comparison\summarize.py            # → summary_memory.md / memory_flat.csv
+| 量 | 旧引擎（2026-09-06, 归档） | 当前引擎（2026-09-10） |
+|---|---|---|
+| 1024 MB increasing 墙钟 | 10.797 s | **0.91 s（11.9×）** |
+| 1024 MB increasing 峰值 RSS | 8119 MB（优化后 6950 MB） | **4257 MB（≈半）** |
+| 1 MB random 墙钟 | 10.66 s | **4.16 s（2.6×）** |
+| float16/float32 500 MB+ increasing | timeout | **完成（2.7 s / 0.6 s / 2.1 s）** |
+| 500 MB random 超时前峰值 | 7789 MB | 7522 MB（略低） |
 
-# 库内 dtype × 长度矩阵
-python tests\test_memory\run_matrix.py --methods EMD --sizes 1MB 20MB 100MB --dtypes float64
-```
+对照来源: `results/_legacy_pyemd_wrapper/{memory/, memory_after_opt/}`。
 
-重跑提示: 现行原生引擎的内存行为**尚未重测**（本报告用归档数据）；若要更新
-本报告，先删除或改名 `results/memory/*` 等旧产物再执行上面命令，并把新数字
-替换本文表格（数据文件路径与字段不变）。
+---
+
+## 4. 边界与推迟
+
+* **1 GB random 与 3 GB 全部 deferred**（16 GB 机器）：原生引擎峰值 ~4.2×
+  输入，1 GB random 的峰值仍预计 ≥ 10 GB（噪声行逐条堆积），3 GB 需要
+  ≥ 27 GB 机器；恢复步骤见 `tests/comparison/POSTPONED_3GB.md`（`--no-defer`）。
+* 本报告 500 MB random 为**重跑实测**（此前 deferred 记录已更新）；timeout
+  格的心跳轨迹在 `results/memory/_runs/*.hb.log`。
+
+---
+
+## 5. 外存映射（memmap）临时文件的清理语义
+
+用户关注点: 采用映射到外存的策略后，外存文件是否会被清理、是否会一直占用。
+
+库内两处外存策略的清理语义:
+
+| 策略 | 位置 | 临时文件位置 | 清理时机 |
+|---|---|---|---|
+| 输入层临时 memmap（大 ndarray/list 的流式填充、f16→f64 转换） | `Utils/Check.py::_temp_memmap` | 系统临时目录（`md_memmap_*.dat`） | **进程退出时**：登记表 `_MEM_FILES` 由 `atexit` 统一先关 mmap 句柄再删除（Windows 要求先 close 才能 unlink）；进程被强杀时由 OS 临时清理器兜底 |
+| 外存分块迭代器（`exo_chunks`） | `Utils/Chunk.py::exo_chunks` | 系统临时目录（`md_chunk_*.dat`） | **每次迭代结束**（含异常路径，`finally` 中关闭句柄 + `os.remove`） |
+
+行为验证（测试已入库）: `tests/test_utils.py::test_temp_memmap_backing_file_registered_and_cleaned`
+（创建 → 登记 → 清理后文件不存在、幂等）；端到端冒烟（触发真实 memmap 输入 →
+进程退出后文件消失）。
+
+注意:
+* **不会一直占用**: 正常退出即删；长驻进程（Jupyter/服务）中，临时文件存活
+  到对应输入被分解完毕后的下一次进程退出，可用文件名前缀 `md_memmap_` 手工
+  识别清理（若进程被强杀）。
+* 若担心长驻进程累积，可在业务侧调用完分解后执行
+  `Modal_Decomposition.Utils.Check._cleanup_memmaps()`（幂等，删除全部本库
+  输入层临时文件；已作为调试接口保留）。

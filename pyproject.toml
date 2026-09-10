@@ -1,12 +1,10 @@
 [build-system]
-# numpy/Cython 用于在 wheel / sdist 构建时编译 _fht_native 扩展
-# (见根目录 setup.py; 纯 Python 回退实现保证即使编译失败库也可用)。
 requires = ["setuptools>=68.2.0", "wheel", "Cython>=3.0", "numpy>=1.21"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "Modal-Decomposition"
-version = "0.1.6"
+version = "0.2.0"
 requires-python = ">=3.10"
 
 authors = [
@@ -21,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: Apache Software License",
-    # 发布版为各平台编译 wheel, 不再是纯 Python / 平台无关包
+
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
@@ -31,10 +29,8 @@ dependencies = [
     "EMD-signal",
     "ewtpy",
     "scipy",
-    "tqdm",
     "vmdpy",
-    "psutil",
-    "calorine"
+    "psutil"
 ]
 
 optional-dependencies = {"dev"=["pytest>=7.0", "black"], "plot"=["matplotlib"]}
@@ -45,13 +41,7 @@ repository = "https://github.com/a-raining-day/Modal-Decomposition.git"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-# 注: .pyx 与 _C/ 源文件会被带进 wheel(纯属冗余, 无运行时影响,
-# 且带 SAO 出处声明); 若想瘦身需自定义 wheel 构建钩子, 暂不做。
 
 [tool.cibuildwheel]
-# 发布矩阵: Windows / macOS / Linux 的 cp310-cp313 平台 wheel。
-# 架构默认跟随 runner(macos-13 -> x86_64, macos-14 -> arm64, 其余 x86_64)。
-# 测试: 各平台加速内核的数值一致性已由 .github/workflows/test.yml 中的
-# 可编辑安装(同样会编译扩展)覆盖, 此处不再重复安装完整依赖跑测试。
 build = "cp310-* cp311-* cp312-* cp313-*"
 skip = "*-musllinux*"

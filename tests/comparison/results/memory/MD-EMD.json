@@ -1,0 +1,460 @@
+[
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 1048576,
+      "pattern": "increasing",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "increasing",
+      "dtype": "float64",
+      "n_samples": 131072,
+      "size_bytes": 1048576,
+      "shape": [
+        131072
+      ],
+      "nbytes": 1048576,
+      "backing": "ndarray",
+      "backing_file": "None",
+      "build_wall_s": 0.000933,
+      "build_peak_delta_rss_bytes": 1204224
+    },
+    "decompose": {
+      "status": "ok",
+      "wall_s": 0.0,
+      "baseline_rss_bytes": 35225600,
+      "peak_rss_bytes": 35266560,
+      "delta_rss_bytes": 40960,
+      "hb_n_samples": 1
+    },
+    "result": {
+      "n_rows": 1,
+      "rows": {
+        "shape": [
+          1,
+          131072
+        ],
+        "dtype": "float64",
+        "nbytes": 1048576,
+        "backing": "ndarray"
+      },
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.0
+    },
+    "hb": {
+      "n_samples": 1,
+      "first_t_monotonic": 79053.0,
+      "last_t_monotonic": 79053.0,
+      "window_s": 0.0,
+      "first_rss_bytes": 35266560,
+      "last_rss_bytes": 35266560,
+      "peak_rss_bytes": 35266560
+    },
+    "_killed_phase": null
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 1048576,
+      "pattern": "random",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "random",
+      "dtype": "float64",
+      "n_samples": 131072,
+      "size_bytes": 1048576,
+      "shape": [
+        131072
+      ],
+      "nbytes": 1048576,
+      "backing": "ndarray",
+      "backing_file": "None",
+      "build_wall_s": 0.008391,
+      "build_peak_delta_rss_bytes": 3919872
+    },
+    "decompose": {
+      "status": "ok",
+      "wall_s": 4.156,
+      "baseline_rss_bytes": 38195200,
+      "peak_rss_bytes": 100720640,
+      "delta_rss_bytes": 62525440,
+      "hb_n_samples": 132
+    },
+    "result": {
+      "n_rows": 17,
+      "rows": {
+        "shape": [
+          17,
+          131072
+        ],
+        "dtype": "float64",
+        "nbytes": 17825792,
+        "backing": "ndarray"
+      },
+      "recon_max_abs_err": 1.7763568394002505e-15,
+      "orthogonality_index": -0.0707649264018061
+    },
+    "hb": {
+      "n_samples": 132,
+      "first_t_monotonic": 79053.156,
+      "last_t_monotonic": 79057.281,
+      "window_s": 4.125,
+      "first_rss_bytes": 38264832,
+      "last_rss_bytes": 100720640,
+      "peak_rss_bytes": 100720640
+    },
+    "_killed_phase": null
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 20971520,
+      "pattern": "increasing",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "increasing",
+      "dtype": "float64",
+      "n_samples": 2621440,
+      "size_bytes": 20971520,
+      "shape": [
+        2621440
+      ],
+      "nbytes": 20971520,
+      "backing": "ndarray",
+      "backing_file": "None",
+      "build_wall_s": 0.011739,
+      "build_peak_delta_rss_bytes": 21102592
+    },
+    "decompose": {
+      "status": "ok",
+      "wall_s": 0.016,
+      "baseline_rss_bytes": 55177216,
+      "peak_rss_bytes": 55197696,
+      "delta_rss_bytes": 20480,
+      "hb_n_samples": 1
+    },
+    "result": {
+      "n_rows": 1,
+      "rows": {
+        "shape": [
+          1,
+          2621440
+        ],
+        "dtype": "float64",
+        "nbytes": 20971520,
+        "backing": "ndarray"
+      },
+      "recon_max_abs_err": null,
+      "orthogonality_index": null,
+      "note": "metrics skipped above 2000000 samples"
+    },
+    "hb": {
+      "n_samples": 1,
+      "first_t_monotonic": 79057.562,
+      "last_t_monotonic": 79057.562,
+      "window_s": 0.0,
+      "first_rss_bytes": 55197696,
+      "last_rss_bytes": 55197696,
+      "peak_rss_bytes": 55197696
+    },
+    "_killed_phase": null
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 20971520,
+      "pattern": "random",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "random",
+      "dtype": "float64",
+      "n_samples": 2621440,
+      "size_bytes": 20971520,
+      "shape": [
+        2621440
+      ],
+      "nbytes": 20971520,
+      "backing": "ndarray",
+      "backing_file": "None",
+      "build_wall_s": 0.029117,
+      "build_peak_delta_rss_bytes": 24014848
+    },
+    "decompose": {
+      "status": "timeout",
+      "error": "killed after decompose budget"
+    },
+    "hb": {
+      "n_samples": 550,
+      "first_t_monotonic": 79057.796,
+      "last_t_monotonic": 79077.718,
+      "window_s": 19.922,
+      "first_rss_bytes": 58044416,
+      "last_rss_bytes": 403193856,
+      "peak_rss_bytes": 435326976
+    },
+    "_killed_phase": "decompose"
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 104857600,
+      "pattern": "increasing",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "increasing",
+      "dtype": "float64",
+      "n_samples": 13107200,
+      "size_bytes": 104857600,
+      "shape": [
+        13107200
+      ],
+      "nbytes": 104857600,
+      "backing": "ndarray",
+      "backing_file": "None",
+      "build_wall_s": 0.054432,
+      "build_peak_delta_rss_bytes": 148643840
+    },
+    "decompose": {
+      "status": "ok",
+      "wall_s": 0.078,
+      "baseline_rss_bytes": 138989568,
+      "peak_rss_bytes": 343257088,
+      "delta_rss_bytes": 204267520,
+      "hb_n_samples": 3
+    },
+    "result": {
+      "n_rows": 1,
+      "rows": {
+        "shape": [
+          1,
+          13107200
+        ],
+        "dtype": "float64",
+        "nbytes": 104857600,
+        "backing": "ndarray"
+      },
+      "recon_max_abs_err": null,
+      "orthogonality_index": null,
+      "note": "metrics skipped above 2000000 samples"
+    },
+    "hb": {
+      "n_samples": 3,
+      "first_t_monotonic": 79077.984,
+      "last_t_monotonic": 79078.046,
+      "window_s": 0.062,
+      "first_rss_bytes": 139063296,
+      "last_rss_bytes": 244989952,
+      "peak_rss_bytes": 343257088
+    },
+    "_killed_phase": null
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 104857600,
+      "pattern": "random",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "random",
+      "dtype": "float64",
+      "n_samples": 13107200,
+      "size_bytes": 104857600,
+      "shape": [
+        13107200
+      ],
+      "nbytes": 104857600,
+      "backing": "ndarray",
+      "backing_file": "None",
+      "build_wall_s": 0.127267,
+      "build_peak_delta_rss_bytes": 186499072
+    },
+    "decompose": {
+      "status": "timeout",
+      "error": "killed after decompose budget"
+    },
+    "hb": {
+      "n_samples": 450,
+      "first_t_monotonic": 79078.39,
+      "last_t_monotonic": 79098.281,
+      "window_s": 19.891,
+      "first_rss_bytes": 142114816,
+      "last_rss_bytes": 1422266368,
+      "peak_rss_bytes": 1865244672
+    },
+    "_killed_phase": "decompose"
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 524288000,
+      "pattern": "increasing",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "increasing",
+      "dtype": "float64",
+      "n_samples": 65536000,
+      "size_bytes": 524288000,
+      "shape": [
+        65536000
+      ],
+      "nbytes": 524288000,
+      "backing": "memmap",
+      "backing_file": "C:\\Users\\kongtin\\AppData\\Local\\Temp\\dsh-vkbOho\\md_signal_5g77qcra.dat",
+      "build_wall_s": 0.966859,
+      "build_peak_delta_rss_bytes": 564703232
+    },
+    "decompose": {
+      "status": "ok",
+      "wall_s": 0.438,
+      "baseline_rss_bytes": 558501888,
+      "peak_rss_bytes": 2188251136,
+      "delta_rss_bytes": 1629749248,
+      "hb_n_samples": 13
+    },
+    "result": {
+      "n_rows": 1,
+      "rows": {
+        "shape": [
+          1,
+          65536000
+        ],
+        "dtype": "float64",
+        "nbytes": 524288000,
+        "backing": "ndarray"
+      },
+      "recon_max_abs_err": null,
+      "orthogonality_index": null,
+      "note": "metrics skipped above 2000000 samples"
+    },
+    "hb": {
+      "n_samples": 13,
+      "first_t_monotonic": 79099.39,
+      "last_t_monotonic": 79099.796,
+      "window_s": 0.406,
+      "first_rss_bytes": 558530560,
+      "last_rss_bytes": 1574453248,
+      "peak_rss_bytes": 2188251136
+    },
+    "_killed_phase": null
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 524288000,
+      "pattern": "random",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "random",
+      "dtype": "float64",
+      "n_samples": 65536000,
+      "size_bytes": 524288000,
+      "shape": [
+        65536000
+      ],
+      "nbytes": 524288000,
+      "backing": "memmap",
+      "backing_file": "C:\\Users\\kongtin\\AppData\\Local\\Temp\\dsh-vkbOho\\md_signal_g_fdru33.dat",
+      "build_wall_s": 1.079588,
+      "build_peak_delta_rss_bytes": 527278080
+    },
+    "decompose": {
+      "status": "timeout",
+      "error": "killed after decompose budget"
+    },
+    "hb": {
+      "n_samples": 421,
+      "first_t_monotonic": 79101.218,
+      "last_t_monotonic": 79119.062,
+      "window_s": 17.844,
+      "first_rss_bytes": 561475584,
+      "last_rss_bytes": 5604634624,
+      "peak_rss_bytes": 7887212544
+    },
+    "_killed_phase": "decompose"
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 1073741824,
+      "pattern": "increasing",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "input": {
+      "pattern": "increasing",
+      "dtype": "float64",
+      "n_samples": 134217728,
+      "size_bytes": 1073741824,
+      "shape": [
+        134217728
+      ],
+      "nbytes": 1073741824,
+      "backing": "memmap",
+      "backing_file": "C:\\Users\\kongtin\\AppData\\Local\\Temp\\dsh-vkbOho\\md_signal_fj3elatr.dat",
+      "build_wall_s": 2.118614,
+      "build_peak_delta_rss_bytes": 1125912576
+    },
+    "decompose": {
+      "status": "ok",
+      "wall_s": 0.906,
+      "baseline_rss_bytes": 1108000768,
+      "peak_rss_bytes": 4463558656,
+      "delta_rss_bytes": 3355557888,
+      "hb_n_samples": 27
+    },
+    "result": {
+      "n_rows": 1,
+      "rows": {
+        "shape": [
+          1,
+          134217728
+        ],
+        "dtype": "float64",
+        "nbytes": 1073741824,
+        "backing": "ndarray"
+      },
+      "recon_max_abs_err": null,
+      "orthogonality_index": null,
+      "note": "metrics skipped above 2000000 samples"
+    },
+    "hb": {
+      "n_samples": 27,
+      "first_t_monotonic": 79122.515,
+      "last_t_monotonic": 79123.421,
+      "window_s": 0.906,
+      "first_rss_bytes": 1108078592,
+      "last_rss_bytes": 2181861376,
+      "peak_rss_bytes": 4463558656
+    },
+    "_killed_phase": null
+  },
+  {
+    "cell": {
+      "impl": "MD-EMD",
+      "size_bytes": 1073741824,
+      "pattern": "random",
+      "dtype": "float64",
+      "out_dir": "C:\\PythonPorject\\Github_Project\\Modal_Decomposition\\tests\\comparison\\results\\memory"
+    },
+    "decompose": {
+      "status": "deferred",
+      "error": "random noise at >= 512MB is postponed on this 16GB machine - see POSTPONED_3GB.md (pass --no-defer on a larger machine)"
+    }
+  }
+]

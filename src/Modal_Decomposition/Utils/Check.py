@@ -11,6 +11,7 @@ decision of the global memory policy (``Utils.Memory``) are applied here,
 one shot.
 """
 
+import atexit
 import os
 import tempfile
 import warnings
@@ -30,13 +31,44 @@ _LIST_MEM_THRESHOLD = 10 * SIZE["1MB"]  # elements: lists above this become memm
 _F64_DISK_BYTES = 256 * SIZE["1MB"]     # float64 working copy above this goes to disk
 _FILL_CHUNK_ELEMS = 8 * SIZE["1MB"]     # chunk size for streaming fills (8M elements)
 
+#: 输入层创建的临时 memmap 登记表 (path -> memmap)。临时文件位于系统临时目录,
+#: 进程正常退出时由 ``atexit`` 统一关闭句柄并删除 (Windows 需先 close 才能
+#: unlink); 进程被强杀时由 OS 临时清理器兜底 (文件名前缀 ``md_memmap_``)。
+_MEM_FILES: dict = {}
+
 
 def _temp_memmap(dtype, shape) -> np.memmap:
-    """Create a writable temporary memmap. The backing file is left for the
-    OS temp cleaner (it cannot be unlinked while mapped on Windows)."""
+    """Create a writable temporary memmap in the system temp dir.
+
+    The backing file is registered in ``_MEM_FILES`` and deleted at
+    interpreter exit (the ``mmap`` handle is closed first — required on
+    Windows); the OS temp cleaner is the fallback for hard-killed processes.
+    """
     fd, path = tempfile.mkstemp(prefix="md_memmap_", suffix=".dat")
     os.close(fd)
-    return np.memmap(path, dtype=dtype, mode="w+", shape=shape)
+    mm = np.memmap(path, dtype=dtype, mode="w+", shape=shape)
+    _MEM_FILES[path] = mm
+    return mm
+
+
+def _cleanup_memmaps() -> None:
+    """Close and delete every temporary memmap backing file created here.
+
+    Idempotent; errors are swallowed (the OS cleaner remains the fallback).
+    """
+    for path, mm in list(_MEM_FILES.items()):
+        try:
+            mm._mmap.close()
+        except Exception:
+            pass
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    _MEM_FILES.clear()
+
+
+atexit.register(_cleanup_memmaps)
 
 
 def _fill_memmap(fp: np.memmap, source) -> None:

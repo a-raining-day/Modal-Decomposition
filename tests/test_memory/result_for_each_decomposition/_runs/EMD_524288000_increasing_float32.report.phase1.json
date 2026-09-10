@@ -9,9 +9,9 @@
       131072000
     ],
     "nbytes": 524288000,
-    "backing": "ndarray",
-    "build_wall_s": 1.983995,
-    "build_peak_delta_rss_bytes": 582565888
+    "backing": "memmap",
+    "build_wall_s": 1.465749,
+    "build_peak_delta_rss_bytes": 586084352
   },
-  "rss_after_input_bytes": 557621248
+  "rss_after_input_bytes": 558211072
 }

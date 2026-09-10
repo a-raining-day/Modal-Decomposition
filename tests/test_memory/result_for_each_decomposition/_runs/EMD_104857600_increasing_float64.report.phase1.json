@@ -10,8 +10,8 @@
     ],
     "nbytes": 104857600,
     "backing": "ndarray",
-    "build_wall_s": 0.075423,
-    "build_peak_delta_rss_bytes": 198590464
+    "build_wall_s": 0.051236,
+    "build_peak_delta_rss_bytes": 136167424
   },
-  "rss_after_input_bytes": 138387456
+  "rss_after_input_bytes": 138719232
 }

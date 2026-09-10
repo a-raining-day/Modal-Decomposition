@@ -9,9 +9,9 @@
 > `results/_legacy_pyemd_wrapper/` —— 下文出现的 `results/summary_timing.md`、
 > `results/timing_median.csv`、`results/summary_memory.md`、`results/memory/*`、
 > `results/memory_after_opt/*` 等路径，请统一加该前缀解读（如
-> `results/_legacy_pyemd_wrapper/summary_timing.md`）。计时类数据已由现行原生
-> 引擎重跑（报告见 `docs/EMD_Timing_Memory_Quality_Report.md`），内存类按用户
-> 指示沿用归档数据（报告见 `docs/EMD_Large_Signal_Memory_Report.md`）。
+> `results/_legacy_pyemd_wrapper/summary_timing.md`）。计时与内存实验均已由
+> 现行原生引擎重跑（报告见 `docs/EMD_Timing_Memory_Quality_Report.md` 与
+> `docs/EMD_Large_Signal_Memory_Report.md`）；本报告历史结论仅适用于包装版时代。
 
 ---
 

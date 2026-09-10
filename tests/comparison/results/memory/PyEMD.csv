@@ -1,0 +1,11 @@
+impl,size_bytes,n_samples,pattern,dtype,status,dec_wall_s,dec_baseline_rss_bytes,dec_peak_rss_bytes,dec_delta_rss_bytes,hb_n,input_backing,input_build_wall_s,input_build_delta_rss_bytes,n_rows,recon_max_abs_err,error
+PyEMD,1048576,131072,increasing,float64,ok,0.0,118833152,118902784,69632,1,ndarray,0.000985,1179648,1,0.0,
+PyEMD,1048576,131072,random,float64,ok,10.172,118755328,145895424,27140096,331,ndarray,0.021405,4050944,17,8.673617379884035e-19,
+PyEMD,20971520,2621440,increasing,float64,ok,0.109,138952704,243904512,104951808,4,ndarray,0.008253,21110784,1,,
+PyEMD,20971520,2621440,random,float64,timeout,,,,,582,ndarray,0.027798,23928832,,,killed after decompose budget
+PyEMD,104857600,13107200,increasing,float64,ok,0.562,222711808,935706624,712994816,17,ndarray,0.052158,130105344,1,,
+PyEMD,104857600,13107200,random,float64,timeout,,,,,511,ndarray,0.113336,204152832,,,killed after decompose budget
+PyEMD,524288000,65536000,increasing,float64,ok,3.016,642109440,4292235264,3650125824,90,memmap,0.980886,570171392,1,,
+PyEMD,524288000,65536000,random,float64,timeout,,,,,467,memmap,1.003869,536489984,,,killed after decompose budget
+PyEMD,1073741824,134217728,increasing,float64,ok,7.5,1191862272,8684195840,7492333568,221,memmap,2.226876,1119502336,1,,
+PyEMD,1073741824,,random,float64,deferred,,,,,,,,,,,random noise at >= 512MB is postponed on this 16GB machine - see POSTPONED_3GB.md (pass --no-defer on a larger machine)

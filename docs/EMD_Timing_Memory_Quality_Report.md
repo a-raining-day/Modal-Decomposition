@@ -64,48 +64,41 @@
 * **行数**: 库比外部少 1 行（A/C 12 vs 12/13；B 6 vs 7）——末行低能量噪声尾的
   归属差异，不影响能量完整性。
 
-## 3. 内存（**归档数据, 采于 2026-09-06**）
+## 3. 内存（**当前原生引擎重跑, 2026-09-10**）
 
-> ⚠️ 适用边界: 内存实验按用户要求**沿用归档数据，未重跑**。该批数据采集时
-> 库 EMD 仍是 PyEMD 包装版；现行原生引擎的内存特性未重测，但方向明确
-> （原生实现去掉了包装层的额外拷贝，且 `Check_Time_and_Signal(default_T=...)`
-> 优化已消除引擎不用的时间轴分配——见下表"优化后"列）。
-> 数据源: `results/_legacy_pyemd_wrapper/{summary_memory.md, memory_flat.csv,
-> memory_after_opt/MD-EMD.csv}`。
+> 本批内存数据已在现行原生引擎上重跑（`results/memory/`，2026-09-10）。
+> 包装时代归档数据（`results/_legacy_pyemd_wrapper/`）作为对照；完整矩阵
+> 见 `docs/EMD_Large_Signal_Memory_Report.md`。
+> 方法: 每格独立子进程；输入完全建成后才计分解预算（20 s/格）；RSS 以
+> 50 ms 心跳采样；输入 ≥ 500 MB 以 `memmap` 建底。
 
-每格独立子进程；输入完全建成后才开始计分解预算；RSS 以 50 ms 心跳采样
-（被 kill 的超时格也有增长轨迹记录）。预算 20 s/格。
+### 3.1 increasing（确定性递增信号）
 
-### 3.1 increasing（确定性递增信号，可完成）
-
-| 输入 | MD-EMD 峰值 MB | MD-EMD 优化后 | PyEMD | PySDKit | MD 墙钟 s | PyEMD | PySDKit |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 MB | 113.0 | — | 113.3 | 119.0 | 0.00 | 0.016 | 0.00 |
-| 20 MB | 273.8 | — | 234.7 | 250.7 | 0.125 | 0.125 | 0.109 |
-| 100 MB | 992.2 | **852** | 816.9 | 818.2 | 0.734 | 0.578 | 0.593 |
-| 500 MB | 4576.0 | **4259** | 4100.3 | 4058.2 | 4.313 | 3.391 | 3.844 |
-| 1024 MB | 8119.4 | **6950** | 8289.6 | 8160.5 | 10.797 | 9.016 | 9.812 |
+| 输入 | MD-EMD 峰值 MB | PyEMD | PySDKit | MD 墙钟 s | PyEMD 墙钟 s | PySDKit 墙钟 s |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 MB | 33.6 | 113.4 | 119.0 | 0.00 | 0.00 | 0.02 |
+| 20 MB | 52.6 | 232.6 | 258.6 | 0.02 | 0.11 | 0.12 |
+| 100 MB | 327.4 | 892.4 | 800.3 | 0.08 | 0.56 | 0.59 |
+| 500 MB | 2086.9 | 4093.4 | 4015.6 | 0.44 | 3.02 | 3.34 |
+| 1024 MB | **4256.8** | 8281.9 | 8216.2 | **0.91** | 7.50 | 7.27 |
 
 要点:
-* 峰值 RSS 三方同档（约为输入的 8–9×；1 GB 输入约 7–8.3 GB 峰值）；
-  **优化后**的库 MD-EMD 在 1 GB 上降到 6950 MB（比 PyEMD 低 ~1.3 GB）。
-* 墙钟与计时轴一致：库实现 500 MB/1 GB 与外部实现同档（±10–20%），
-  小尺寸（1 MB）外部更快——与 §1 的"小样本固定开销"结论一致。
+* 原生引擎峰值 RSS 稳定在 **~3.3–4.2× 输入**，外部实现仍 ~8×：1 GB 格上库
+  比 PyEMD 少 **~4.0 GB**；墙钟快 **8×**。旧引擎同格为 10.8 s / 8119 MB
+  （`default_T` 优化 + 原生路径的共同结果）。
 
 ### 3.2 random（白噪声，分解预算内多不可完成）
 
-| 输入 | MD-EMD | PyEMD | PySDKit | 说明 |
-|---:|---|---|---|---|
-| 1 MB | ok, 10.66 s, 141.6 MB | ok, 10.75 s, 138.9 MB | ok, 11.42 s, 158.9 MB | 17 行 IMF，重构 8.7e-19 |
-| 20 MB | timeout | timeout | timeout | 预算 20 s 内未完成，峰值 608–628 MB |
-| 100 MB | timeout | timeout | timeout | 峰值 2567–2670 MB |
-| 500 MB | timeout | timeout | timeout | 峰值 7789–8576 MB |
-| 512 MB+ | — | — | — | random ≥ 512 MB 记为 **deferred**（16 GB 机器推迟，见 `POSTPONED_3GB.md`） |
+| 输入 | MD-EMD | PyEMD | PySDKit |
+|---:|---|---|---|
+| 1 MB | **ok, 4.16 s**, 96.1 MB, 17 行 | ok, 10.17 s, 139.1 MB | ok, 11.50 s, 164.2 MB |
+| 20 MB | timeout（峰值 415 MB） | timeout（605 MB） | timeout（608 MB） |
+| 100 MB | timeout（峰值 1779 MB） | timeout（2563 MB） | timeout（2552 MB） |
+| 500 MB | timeout（峰值 7522 MB） | timeout（8439 MB） | timeout（8730 MB） |
+| 1024 MB | deferred | deferred | deferred |
 
-要点: 白噪声的 sift 次数远高于确定性信号，三方在 20 s 预算下同样无法完成；
-这是**算法代价**而非实现缺陷（`results/_legacy_pyemd_wrapper/memory/_runs/*.hb.log`
-保留了被 kill 格的 RSS 增长轨迹）。库实现对噪声的实测速度见 §1 case C
-（同长度 2.1× 于 PyEMD），因此同样的预算下库可处理的噪声长度更长。
+要点: 1 MB 噪声库快 PyEMD 2.4×；20 s 预算下三方同样无法完成 ≥ 20 MB 噪声
+（算法代价，非实现缺陷）；库在超时前到达的峰值更低（500 MB 格少 ~1 GB）。
 
 ## 4. 结论
 
@@ -113,8 +106,8 @@
    现行质量档（`faster=False`）已含窄带门成本，仍是同档最快实现。
 2. **质量**: 重构/正交性与外部实现同档；case B 模式捕获几乎相同；case A 弱音调
    单行捕获仍差 0.15（已从旧默认档的 0.25 收窄）。
-3. **内存**: 三方峰值 RSS 同量级（8–9× 输入）；库经 `default_T` 优化后在 1 GB
-   上低于两个外部实现约 1.3 GB；噪声场景的 timeout 为算法固有代价，三方一致。
+3. **内存**: 当前引擎峰值 RSS **3.3–4.2× 输入**（外部 ~8×），1 GB 格比 PyEMD
+   少 ~4 GB 且快 8×；噪声 ≥ 20 MB 的 timeout 为算法固有代价（三方一致）。
 
 ## 5. 复现
 
@@ -123,5 +116,6 @@ $env:PYTHONPATH='src'
 python tests\comparison\bench_timing.py --method EMD        # → results/emd/
 python tests\comparison\bench_plot.py                       # 可选出图 (figs/)
 ```
-内存轴（归档数据，未重跑）：`python tests\comparison\bench_memory.py`
-（默认网格 1MB–1GB × increasing/random，20 s/格预算）。
+内存轴（当前引擎重跑版）：`python tests\comparison\bench_memory.py`
+（默认网格 1MB–1GB × increasing/random，20 s/格预算；1 GB random 与 3 GB
+保持 deferred，见 `tests/comparison/POSTPONED_3GB.md`）。

@@ -13,7 +13,7 @@
 | `bench_emd_validation.py` + `refresh_emd_validation_md.py` | 三方验证网格（256–65536） | `docs/EMD_Validation_and_Comparison_Report.md` |
 | `bench_emd_new.py` | 原生 vs `EMD_new` 性能 + 参数扫描 | `docs/EMD_vs_EMD_new_Performance_Report.md`、`docs/EMD_new_Parameter_Sweep_Report.md` |
 | `bench_timing.py` | 通用计时轴：`--method EMD\|VMD\|LMD\|FMD\|EFD`，输出到 `results/<method>/` | `docs/EMD_Timing_Memory_Quality_Report.md`、`docs/Decomposition_Methods_Timing_Report.md` |
-| `bench_memory.py` + `summarize.py` | 内存轴（1MB–1GB，子进程 + RSS 心跳 + 预算） | `docs/EMD_Large_Signal_Memory_Report.md`（归档数据） |
+| `bench_memory.py` + `summarize.py` | 内存轴（1MB–1GB，子进程 + RSS 心跳 + 预算） | `docs/EMD_Large_Signal_Memory_Report.md`（2026-09-10 原生引擎重跑版） |
 | `summarize_vmd.py` / `summarize_lmd.py` | VMD/LMD 目录的单次口径 summary（正式报告改用 3 次中位） | 同上 |
 | `bench_plot.py` | 出图到 `figs/*.png` | — |
 | `bench_cache.py` | 缓存层基准 | `docs/CacheSpeedReport.md` |

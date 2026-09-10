@@ -14,8 +14,8 @@
 | 三方验证网格（MD/PyEMD/PySDKit × A/B/C × 256–65536） | `comparison/bench_emd_validation.py` + `comparison/refresh_emd_validation_md.py` | `comparison/results/emd_validation_raw.json` | `docs/EMD_Validation_and_Comparison_Report.md` |
 | 原生 vs `EMD_new` 性能 + 参数扫描 | `comparison/bench_emd_new.py` | 直接产出 docs 两份 | `docs/EMD_vs_EMD_new_Performance_Report.md`、`docs/EMD_new_Parameter_Sweep_Report.md` |
 | 计时·质量三方（原生引擎，现行默认） | `comparison/bench_timing.py --method EMD` | `comparison/results/emd/{timing_raw.csv,timing_metrics.json}` | `docs/EMD_Timing_Memory_Quality_Report.md` |
-| 大数据内存轴（三方 RSS，1MB–1GB × increasing/random） | `comparison/bench_memory.py`（**沿用归档数据，未重跑**） | `comparison/results/_legacy_pyemd_wrapper/{memory/,memory_after_opt/,summary_memory.md,memory_flat.csv}` | 同上（§内存，含适用边界说明） |
-| 大数据内存矩阵（dtype × 长度 × pattern × chunk 策略） | `test_memory/run_matrix.py`、`test_memory/test_emd_memory.py`（**沿用归档数据，未重跑**） | `test_memory/result_for_each_decomposition/EMD_legacy_pyemd_wrapper.{json,csv}` | `docs/EMD_Large_Signal_Memory_Report.md` |
+| 大数据内存轴（三方 RSS，1MB–1GB × increasing/random） | `comparison/bench_memory.py`（**2026-09-10 原生引擎重跑**） | `comparison/results/memory/*.{json,csv}`（旧数据归档于 `_legacy_pyemd_wrapper/memory/`） | `docs/EMD_Large_Signal_Memory_Report.md`（重跑版） |
+| 大数据内存矩阵（dtype × 长度 × pattern × chunk 策略） | `test_memory/run_matrix.py`、`test_memory/test_emd_memory.py`（**2026-09-10 原生引擎重跑**） | `test_memory/result_for_each_decomposition/EMD.{json,csv}`（旧数据归档为 `EMD_legacy_pyemd_wrapper.*`） | 同上 |
 
 ## 2. 其它方法实验
 

@@ -3,6 +3,14 @@
 > 记录日期: 2026-09-06 (会话快照)
 > 范围: EMD 对比套件中 "数据尺寸达到 2~3 GB" 的记忆/吞吐格子。
 > 状态: **推迟，不执行** — 本文件是它的计划与理由记录。
+>
+> **2026-09-10 更新**: 内存轴已在**原生引擎**上重跑
+> （`docs/EMD_Large_Signal_Memory_Report.md`）:
+> * increasing 轴原生引擎快 6–12×（1 GB: 0.91 s, 峰值 4257 MB），本机 16 GB
+>   完全可承载 —— 与 §2 的"包装时代先例"结论已不同（当时 1 GB 需 10.8 s /
+>   8119 MB）;
+> * random 500 MB 重跑仍 timeout（MD 峰值 7522 MB vs 旧 7789 MB）；
+> * random 1 GB 与 3 GB **保持 deferred**（§4 理由不变）。
 
 ## 1. 这套格子是什么
 
@@ -56,8 +64,9 @@ implementation × data size × pattern × dtype
 本套件实际执行边界 (与阈值的字节换算):
 
 * random **500MB(十进制 MB, 即 476.8MiB, 低于 512MiB 阈值)** 已执行并记录:
-  三家均在 20s 预算内 timeout, kill 时峰值 RSS 达 **7.8~8.6GB** —— 已贴近本机
-  换页边界, 属于"跑得动但已无比较价值"的极限格;
+  三家均在 20s 预算内 timeout。**2026-09-10 原生引擎重跑**: MD-EMD kill 时
+  峰值 7522 MB（旧引擎 7789 MB），PyEMD 8439 MB、PySDKit 8730 MB —— 已贴近
+  本机换页边界, 属于"跑得动但已无比较价值"的极限格;
 * random **>= 512MiB (如 1GB token)** 默认记录为 `deferred` 不执行
   (1GB random 曾在 `tests/test_memory` 以 20s 预算尝试过, 仅留下 phase-1);
 * 换大内存机器: `python tests\comparison\bench_memory.py --sizes 500MB 1GB --patterns random --no-defer`

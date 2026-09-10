@@ -2,41 +2,41 @@
   "method": "EMD",
   "input": {
     "pattern": "increasing",
-    "dtype": "float64",
-    "n_samples": 13107200,
-    "size_bytes": 104857600,
+    "dtype": "float32",
+    "n_samples": 131072000,
+    "size_bytes": 524288000,
     "shape": [
-      13107200
+      131072000
     ],
-    "nbytes": 104857600,
-    "backing": "ndarray",
-    "build_wall_s": 0.051236,
-    "build_peak_delta_rss_bytes": 136167424
+    "nbytes": 524288000,
+    "backing": "memmap",
+    "build_wall_s": 1.465749,
+    "build_peak_delta_rss_bytes": 586084352
   },
   "decompose": {
     "status": "ok",
-    "wall_s": 0.068981,
-    "baseline_rss_bytes": 138829824,
-    "peak_rss_bytes": 454553600,
-    "delta_rss_bytes": 315723776
+    "wall_s": 0.569393,
+    "baseline_rss_bytes": 558288896,
+    "peak_rss_bytes": 3310239744,
+    "delta_rss_bytes": 2751950848
   },
   "result": {
     "n_imfs": 0,
     "imfs": {
       "shape": [
         0,
-        13107200
+        131072000
       ],
-      "dtype": "float64",
+      "dtype": "float32",
       "nbytes": 0,
       "backing": "ndarray"
     },
     "res": {
       "shape": [
-        13107200
+        131072000
       ],
-      "dtype": "float64",
-      "nbytes": 104857600,
+      "dtype": "float32",
+      "nbytes": 524288000,
       "backing": "ndarray"
     }
   },
@@ -45,15 +45,15 @@
       "safe": 0,
       "chunk_size": 1048576,
       "result": true,
-      "wall_s": 0.019738,
-      "delta_rss_bytes": 4734976,
+      "wall_s": 0.118586,
+      "delta_rss_bytes": 131076096,
       "error": null
     },
     {
       "safe": 1,
       "chunk_size": 1048576,
       "result": true,
-      "wall_s": 0.009357,
+      "wall_s": 0.069622,
       "delta_rss_bytes": 1077248,
       "error": null
     },
@@ -61,8 +61,8 @@
       "safe": 2,
       "chunk_size": 1048576,
       "result": true,
-      "wall_s": 0.016328,
-      "delta_rss_bytes": 180224,
+      "wall_s": 0.128664,
+      "delta_rss_bytes": 1077248,
       "error": null
     }
   ]

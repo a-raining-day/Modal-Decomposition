@@ -562,3 +562,29 @@ def test_check_long_list_keep_dtype(monkeypatch):
     # Python list 本身无 dtype, keep 模式下退化为 float64
     assert S.dtype == np.float64
     assert np.allclose(S, np.arange(6) + 0.5)
+
+
+def test_temp_memmap_backing_file_registered_and_cleaned():
+    """输入层临时 memmap: 文件登记在案, 清理后外存文件被删除 (不留垃圾)。"""
+    import os
+
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    mm = check_mod._temp_memmap(np.float64, (1024,))
+    path = mm.filename
+    assert os.path.exists(path)
+    assert path in check_mod._MEM_FILES
+    assert os.path.basename(path).startswith("md_memmap_")
+
+    check_mod._cleanup_memmaps()
+    assert not os.path.exists(path), f"temporary backing file not removed: {path}"
+    assert path not in check_mod._MEM_FILES
+
+
+def test_temp_memmap_cleanup_is_idempotent():
+    import Modal_Decomposition.Utils.Check as check_mod
+
+    check_mod._temp_memmap(np.float32, (256,))
+    check_mod._cleanup_memmaps()
+    check_mod._cleanup_memmaps()  # 重复调用不报错、不残留
+    assert check_mod._MEM_FILES == {}

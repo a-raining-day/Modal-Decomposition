@@ -145,6 +145,42 @@
   },
   {
     "impl": "MD-EFD",
+    "case": "A",
+    "n": 65536,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -9.049558223643378e-10,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9986044280375994,
+        "best_nrmse": 0.05281287210846468
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9673046055288311,
+        "best_nrmse": 0.25361743532054026
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "A",
+    "n": 65536,
+    "n_rows": 4,
+    "recon_max_abs_err": 6.938893903907228e-18,
+    "orthogonality_index": -0.0005620799152208801,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9971596391883454,
+        "best_nrmse": 0.07531704411632222
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9683540015563914,
+        "best_nrmse": 0.2495807104989252
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
     "case": "B",
     "n": 256,
     "n_rows": 4,
@@ -316,6 +352,50 @@
       "trend": {
         "best_abs_corr": 0.988575541546714,
         "best_nrmse": 0.10086775524460213
+      }
+    }
+  },
+  {
+    "impl": "MD-EFD",
+    "case": "B",
+    "n": 65536,
+    "n_rows": 4,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -6.944140016227437e-09,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.8623942459825535,
+        "best_nrmse": 0.5062372641437318
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.5062034530068925,
+        "best_nrmse": 0.8624140913996992
+      },
+      "trend": {
+        "best_abs_corr": 0.9990672552795767,
+        "best_nrmse": 0.7459088715756096
+      }
+    }
+  },
+  {
+    "impl": "PySDKit-EFD",
+    "case": "B",
+    "n": 65536,
+    "n_rows": 4,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": -9.998407792146373e-05,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.790348768429701,
+        "best_nrmse": 0.6126571854159716
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.999969868661965,
+        "best_nrmse": 0.007763066759556327
+      },
+      "trend": {
+        "best_abs_corr": 0.9978693098650145,
+        "best_nrmse": 0.04351575153230413
       }
     }
   },

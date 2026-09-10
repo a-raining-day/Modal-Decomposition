@@ -4,6 +4,14 @@
 > 结论速览: **两者性能与内存几乎一致; pysdkit 的 EMD 是 PyEMD 同源移植,
 > 常规长度下约慢 5~20%; 我库封装开销 ~0–4%; 分解结果逐位级一致**。
 > 3GB/超大噪声实验已推迟并记录: 见 `POSTPONED_3GB.md`。
+>
+> 📦 **数据归档说明 (2026-09-10)**: 本次清理把本报告引用的原始数据移动到
+> `results/_legacy_pyemd_wrapper/` —— 下文出现的 `results/summary_timing.md`、
+> `results/timing_median.csv`、`results/summary_memory.md`、`results/memory/*`、
+> `results/memory_after_opt/*` 等路径，请统一加该前缀解读（如
+> `results/_legacy_pyemd_wrapper/summary_timing.md`）。计时类数据已由现行原生
+> 引擎重跑（报告见 `docs/EMD_Timing_Memory_Quality_Report.md`），内存类按用户
+> 指示沿用归档数据（报告见 `docs/EMD_Large_Signal_Memory_Report.md`）。
 
 ---
 

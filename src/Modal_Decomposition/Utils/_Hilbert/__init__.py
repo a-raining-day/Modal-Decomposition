@@ -35,6 +35,7 @@ from typing import Literal
 
 import numpy as np
 
+from ...Base import HILBERT_BACKEND
 from . import (
     _fft,             # noqa: F401  (reserved empty placeholder)
     _fht,
@@ -60,6 +61,7 @@ def hilbert(
         "FFT",
         "Optional-order FIR",
     ] = "Scipy",
+    **kwargs
 ) -> np.ndarray:
     """
     Hilbert transform of a real signal with a selectable spline_kind.
@@ -89,13 +91,12 @@ def hilbert(
     """
     match mod:
         case "Scipy":
-            return _scipy_backend._hilbert(S)
+            return _scipy_backend._hilbert(S, **kwargs)
 
         case "FHT":
-            return _fht._hilbert(S)
+            return _fht._hilbert(S, **kwargs)
 
         case _:
             raise ValueError(
-                f"Unknown Hilbert spline_kind {mod!r}; expected one of "
-                f"{sorted(_BACKENDS)}"
+                f"Unknown Hilbert spline_kind {mod!r}; expected one of {sorted(HILBERT_BACKEND)}"
             )

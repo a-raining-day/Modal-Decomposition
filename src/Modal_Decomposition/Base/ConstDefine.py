@@ -6,7 +6,7 @@ Size constants shared by the whole package.
 ``Utils.Monotonicity``), 避免各模块各自书写魔数。
 """
 
-__all__ = ["SIZE", "SPLINE_KIND", "DEFAULT_NUMPY_TYPE", "CACHE_KEY"]
+__all__ = ["SIZE", "SPLINE_KIND", "DEFAULT_NUMPY_TYPE", "CACHE_KEY", "HILBERT_BACKEND"]
 
 import numpy as np
 
@@ -36,3 +36,16 @@ CACHE_KEY = \
             "interpolate": "scipy.interpolate",
         }
 }
+
+HILBERT_BACKEND = \
+[
+    "Scipy",
+    "Fourth-order Wave",
+    "FHT",
+    "SB-Hilbert",
+    "Kramers-Kronig",
+    "FIR",
+    "HST",
+    "FFT",
+    "Optional-order FIR",
+]

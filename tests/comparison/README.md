@@ -1,70 +1,62 @@
-# EMD 对比套件 — Modal_Decomposition vs PySDKit (ref/pysdkit)
+# 对比与基准套件（tests/comparison）
 
-目标: 回答"我的 EMD 和他的 EMD, 性能(时间/内存)谁更好"。
-方法: 三列黑盒对比 —— `MD-EMD`(我的封装, 内部是 PyEMD sifter)、
-`PyEMD`(直用同一 sifter, 隔离封装开销的基线)、`PySDKit`(ref/pysdkit v0.5.0
-的独立移植)。三列全部默认参数, 同一台机器、同一输入数组。
+本目录是库与外部实现（PyEMD / PySDKit / vmdpy 等）的**基准与验证套件**。
+所有结论报告位于 **`docs/`**（见下表"docs 报告"列）；本目录只保留脚本与原始产物。
 
-## 目录
+## 1. 脚本清单
 
-| 文件 | 内容 |
-|---|---|
-| `REPORT_EMD_MD_vs_PySDKit.md` | **结论报告** (速度/内存/质量/引擎同源性分析 + 复现命令) |
-| `POSTPONED_3GB.md` | 3GB 及超大随机噪声实验的**推迟记录** (理由/先例/恢复步骤) |
-| `signals.py` | 确定性基准信号 (A 双音+噪声 / B AM-FM+趋势 / C 白噪声) |
-| `workers.py` | 三个实现的统一 worker + 参数对齐说明 |
-| `quality.py` | 质量指标 (重构误差/正交性 IO/模式恢复) |
-| `bench_timing.py` | 常规长度计时轴 (n=256..65536, 3 重复中位数) |
-| `bench_memory.py` | 大数据内存轴驱动 (1MB..1GB, 子进程+预算+心跳) |
-| `case_worker.py` | 内存轴单格子进程 (输入构建 → 预热 → 测量 → 心跳 RSS) |
-| `summarize.py` | 汇总为 markdown/CSV 表格 |
-| `bench_plot.py` | 出图 (`figs/*.png`) |
-| `results/` | 原始记录: `timing_raw.csv`, `timing_metrics.json`,
-  `memory/<impl>.json/csv`, `env.json`, `summary_*.md`, `memory_flat.csv` |
+| 文件 | 内容 | docs 报告 |
+|---|---|---|
+| `bench_emd_faster.py` | EMD `faster` 两档 × PyEMD/PySDKit 四向对比（A/B/C 全网格） | `docs/EMD_faster_Branch_Comparison_Report.md` |
+| `bench_emd_stopping_variants.py` | 停止判据变体 V0–V6（sd 收紧 / svar / 窄带门） | `docs/EMD_Quality_Gap_and_Optimization.md` |
+| `bench_emd_vs_pyemd_alignment.py` | EMD × PyEMD 十二问逐点对照（E-A…E-H） | `docs/EMD_vs_PyEMD_Detailed_Comparison.md` |
+| `bench_emd_validation.py` + `refresh_emd_validation_md.py` | 三方验证网格（256–65536） | `docs/EMD_Validation_and_Comparison_Report.md` |
+| `bench_emd_new.py` | 原生 vs `EMD_new` 性能 + 参数扫描 | `docs/EMD_vs_EMD_new_Performance_Report.md`、`docs/EMD_new_Parameter_Sweep_Report.md` |
+| `bench_timing.py` | 通用计时轴：`--method EMD\|VMD\|LMD\|FMD\|EFD`，输出到 `results/<method>/` | `docs/EMD_Timing_Memory_Quality_Report.md`、`docs/Decomposition_Methods_Timing_Report.md` |
+| `bench_memory.py` + `summarize.py` | 内存轴（1MB–1GB，子进程 + RSS 心跳 + 预算） | `docs/EMD_Large_Signal_Memory_Report.md`（归档数据） |
+| `summarize_vmd.py` / `summarize_lmd.py` | VMD/LMD 目录的单次口径 summary（正式报告改用 3 次中位） | 同上 |
+| `bench_plot.py` | 出图到 `figs/*.png` | — |
+| `bench_cache.py` | 缓存层基准 | `docs/CacheSpeedReport.md` |
+| `signals.py` / `quality.py` / `workers.py` / `case_worker.py` | 信号定义、质量指标、实现适配、内存单格 worker | —（身份与参数集中在此） |
+| `verify_envelope_modes.py` / `verify_lmd_recon.py` | 包络模式 / LMD 重构校验（控制台） | 结论并入方法报告 |
 
-## 快速开始
+## 2. 快速开始
 
 ```powershell
-# 1) 常规长度计时+质量 (约 5 分钟)
-.venv\Scripts\python.exe tests\comparison\bench_timing.py
-
-# 2) 大数据内存网格 (1MB..1GB; 20s/格; 3GB 与 >=1GB 随机默认记为 deferred 不跑)
-.venv\Scripts\python.exe tests\comparison\bench_memory.py
-
-# 3) 汇总 + 图
-.venv\Scripts\python.exe tests\comparison\summarize.py
-.venv\Scripts\python.exe tests\comparison\bench_plot.py
+$env:PYTHONPATH='src'
+# 计时 + 质量（EMD）
+python tests\comparison\bench_timing.py --method EMD            # → results/emd/
+# 其它方法
+python tests\comparison\bench_timing.py --method VMD --out tests\comparison\results\vmd
+# 内存轴（默认 1MB..1GB × increasing/random，20 s/格预算）
+python tests\comparison\bench_memory.py
+python tests\comparison\summarize.py
+# 出图
+python tests\comparison\bench_plot.py
 ```
 
-子集/调参例子:
+## 3. 公平性约定
 
-```powershell
-python tests\comparison\bench_timing.py --cases A B --ns 4096 16384
-python tests\comparison\bench_memory.py --sizes 1GB --patterns increasing
-python tests\comparison\bench_memory.py --budget 60            # 放宽分解预算
-python tests\comparison\bench_memory.py --no-defer            # 大内存机器上执行 deferred 格
+* 计时: 同进程、轮转顺序、每格多次重复取**中位**；import/预热不计时；每次
+  运行前 `gc`，并校验输入未被实现改写（`bench_timing.py` 内置断言）。
+* 内存: 每格独立子进程；输入完全建成后才计分解预算；RSS 以 50 ms 心跳采样
+  （被 kill 的超时格也有增长轨迹，见 `results/memory/_runs/*.hb.log`）。
+* 质量: 所有实现的重构/正交性/模式恢复指标在同一代码路径计算（`quality.py`）。
+* 限制: 单机 16 GB RAM，系统负载波动 ±5–10%；亚毫秒格（n=256）的比值不作结论。
+
+## 4. 数据布局
+
+```
+results/
+  emd/                     # bench_timing.py --method EMD（现行引擎）
+  vmd/ lmd_fixed/ fmd/ efd_fixed/   # 各方法计时
+  emd_*_raw.json           # EMD 专项实验原始数据
+  _legacy_pyemd_wrapper/   # 归档: PyEMD 包装时代的计时/内存数据 + 优化前后对照
+  figs/*.png               # 出图
 ```
 
-## 公平性约定
-
-* 计时: 同进程、轮转顺序、3 次重复取中位数; import/预热不计时;
-  每次运行前 gc, 并校验输入未被实现改写。
-* 内存: 每格独立子进程; **输入完全建成后**才开始计分解预算; RSS 以 50 ms
-  心跳采样 (被 kill 的超时格也有增长轨迹, 见 `results/memory/_runs/*.hb.log`)。
-* 质量: 三种实现的重构/正交性/模式恢复指标在同一代码路径计算。
-* 限制: 单机 16GB RAM, 系统负载波动 ±5–10%; 亚毫秒格子 (n=256) 的比值无意义。
-
-## 主要结论 (详见 REPORT)
-
-* 常规长度: PySDKit 慢约 5–20% (中位 ~1.1x), 我的封装 ~0–4% 开销, 两者都 ≈ PyEMD;
-* 大数据: 峰值 RSS 三者基本一致 (~8–9× 输入); pysdkit 无内存优势;
-* 质量: 逐位级一致 (尾部边界偶尔 ±1 个低能 IMF);
-* 我库的可优化点已按指示**以 EMD 为代表修复** (REPORT §8): `Check_Time_and_Signal`
-  新增 `default_T` 开关, EMD 不再分配引擎用不到的默认时间轴 —— 峰值 RSS
-  100MB/500MB/1GB 分别降 ~0.1–0.2GB / ~0.5–1.5GB / ~1.5GB; 其余算法未动,
-  留待各自优化轮次。
-
-## 已推迟实验 (只记录不执行)
-
-3GB 全网格、随机噪声 ≥1GB: 见 `POSTPONED_3GB.md`;
-先前 `tests/test_memory` 的 3GB 尝试 (EMD.csv) 全部为 timeout。
+* 旧结论报告 `REPORT_EMD_MD_vs_PySDKit.md` 描述 **PyEMD 包装时代**；其引用的
+  `results/summary_timing.md`、`results/memory/*` 等已归档到
+  `results/_legacy_pyemd_wrapper/`（路径按该前缀解读）。
+* 3 GB 与随机 ≥512 MB 的格子按 `POSTPONED_3GB.md` 推迟（只记录不执行）。
+* 实验 ↔ 报告总索引见 `docs/EXPERIMENTS_INDEX.md`。

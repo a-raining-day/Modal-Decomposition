@@ -6,12 +6,13 @@ Each worker takes one 1-D float64 signal and returns the component stack as
 the implementation reports one:
 
 +-----------------+------------------------------------------------------+
-| key             | spline_kind                                              |
+| key             | engine                                                   |
 +-----------------+------------------------------------------------------+
 | ``MD-EMD``      | ``Modal_Decomposition.Class.EMD`` — **原生实现**      |
 |                 | (原 EMD_new; 2026-09 转正, 取代旧 PyEMD 包装版)。     |
-|                 | 默认 = linear/sd0.3 (参数扫描选定); 同包络对照档 =    |
-|                 | ``EMD(spline_kind='CubicSpline', sd_thr=0.2)``        |
+|                 | 现行默认 = CubicSpline + sd_thr=0.01 + faster=False   |
+|                 | (质量档: SD 收敛外加 |zc-ext|<=1 窄带门)。           |
+|                 | 高速对照 = ``EMD(faster=True)``                       |
 | ``PyEMD``       | ``PyEMD.EMD`` direct (the legacy alias shipped with  |
 |                 | EMD-signal 1.9.0) — cubic/nbsym=2 默认                |
 | ``PySDKit``     | ``pysdkit.EMD`` (ref/pysdkit, v0.5.0; independent    |
@@ -20,12 +21,13 @@ the implementation reports one:
 
 The three are independent engines today (the library EMD is no longer a
 PyEMD wrapper). External columns run their shipped defaults (cubic, nbsym=2);
-the MD column reports the *current optimised default* (linear/sd0.3) and, for
-an apples-to-apples envelope comparison, a CubicSpline/sd0.2 variant. The
-module only imports numpy; backends are imported lazily so that the
-subprocess memory cells can keep import cost out of the measured windows.
+the MD column runs the shipped library default (quality branch, see
+``docs/EMD_faster_Branch_Comparison_Report.md``). The module only imports
+numpy; backends are imported lazily so that the subprocess memory cells can
+keep import cost out of the measured windows.
 (Note: the pre-2026-09 benchmark conclusions in REPORT_EMD_MD_vs_PySDKit.md
-describe the PyEMD-wrapper era.)
+describe the PyEMD-wrapper era; its raw data is archived under
+``results/_legacy_pyemd_wrapper/``.)
 """
 
 from __future__ import annotations
@@ -108,7 +110,8 @@ LMD_ENGINE_NOTES = {
 ENGINE_NOTES = {
     "MD-EMD": "Modal_Decomposition.EMD - native sifting implementation "
               "(ex-EMD_new, since 2026-09; formerly a PyEMD wrapper). "
-              "Default linear/sd0.3; CubicSpline/sd0.2 used for envelope parity",
+              "Shipped default: CubicSpline + sd_thr=0.01 + faster=False "
+              "(quality branch with the |zc-ext|<=1 narrowband gate)",
     "PyEMD": "PyEMD.EMD.emd direct - cubic/nbsym=2 defaults",
     "PySDKit": "pysdkit.EMD.fit_transform - independent port of the PyEMD "
                "sifter (ref/pysdkit/_emd/emd.py)",

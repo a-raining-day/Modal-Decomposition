@@ -8,6 +8,12 @@
 > `python tests/comparison/bench_emd_new.py`（干净双音调速查 + 参数扫描报告）。
 > 逐点机制对照（幅值标定/端点/病态/平台/3 点样条/linear/白噪声检验/行级窄带/
 > 泄漏/极值计数 + 「194×」口径与质量等价点）: `docs/EMD_vs_PyEMD_Detailed_Comparison.md`。
+>
+> ⚠️ **faster 参数引入后的适用范围**: 本报告的库默认档（MD-def）测于
+> `faster` 参数引入前, 其语义 = 现在的 `EMD(faster=True)` 高速档。现行库默认
+> 为 `EMD(faster=False)`（质量档: 在 SD 收敛外加 |zc−ext|≤1 窄带门）, 四向
+> 对比（MD-quality / MD-fast / PyEMD / PySDKit）见
+> `docs/EMD_faster_Branch_Comparison_Report.md`。
 
 ---
 

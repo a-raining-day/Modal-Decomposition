@@ -159,6 +159,70 @@ def test_int_and_float16_promoted_to_float64():
 # --------------------------------------------------------------------------- #
 # 5. 算法变体
 # --------------------------------------------------------------------------- #
+def _balance_row(x):
+    """|zc − ext| 单行不平衡度 (zc: 符号积 + 零段; ext: MD Peaks 规则)。"""
+    s1, s2 = x[:-1], x[1:]
+    zc = int(np.sum(s1 * s2 < 0))
+    if np.any(x == 0):
+        z = x == 0
+        dz = np.diff(np.concatenate(([0], z, [0])))
+        debz = np.nonzero(dz == 1)[0]
+        if debz.size:
+            zc += int(debz.size)
+    m1 = int(np.sum((x[1:-1] > x[:-2]) & (x[1:-1] >= x[2:])))
+    m2 = int(np.sum((x[1:-1] < x[:-2]) & (x[1:-1] <= x[2:])))
+    return abs(zc - (m1 + m2))
+
+
+def test_faster_default_is_quality_branch():
+    r = EMD().decompose(_two_tone(n=256, noise=0.05, seed=3)[0])
+    assert r.config.faster is False          # 默认 = 质量档
+    assert EMD(faster=True).config.faster is True
+    assert EMD(config=EMDConfig(faster=True, nbsym=2, spline_kind="CubicSpline",
+                                max_imf=-1, max_iter=100, sd_thr=0.01,
+                                dtype=None, compile=False,
+                                find_peaks_mod="numpy")).config.faster is True
+
+
+def test_faster_invalid_value_raises():
+    with pytest.raises(ValueError, match="faster"):
+        EMD(faster=1)
+
+
+@pytest.mark.parametrize("faster", [True, False])
+def test_faster_branches_reconstruct_exactly(faster):
+    S, _ = _two_tone(n=512, noise=0.1, seed=2)
+    r = EMD(faster=faster).decompose(S)
+    assert np.allclose(r.IMFs.sum(0) + r.Res, S, atol=1e-9)
+    assert len(r.info["iterations"]) == r.IMFs.shape[0]
+
+
+def test_faster_false_improves_row_balance_on_noise():
+    """质量档: 纯噪声场景行级 |zc−ext|≤1 全过, 高速档存在不平衡行, 且迭代更多。
+
+    注: 用 n=8192 —— 更短样本上"加门改变行轨迹"的混沌效应可能让总迭代
+    出现反例; 长噪声样本行为稳定 (质量档 ~2-3x 迭代预算)。
+    """
+    rng = np.random.default_rng(5)
+    S = rng.standard_normal(8192)
+    rq = EMD(faster=False).decompose(S)      # 默认质量档
+    rf = EMD(faster=True).decompose(S)       # 高速档
+    vq = sum(1 for row in rq.IMFs if _balance_row(row) <= 1)
+    vf = sum(1 for row in rf.IMFs if _balance_row(row) <= 1)
+    assert vq == rq.IMFs.shape[0], f"quality branch not all balanced: {vq}/{rq.IMFs.shape[0]}"
+    assert vf < rf.IMFs.shape[0], "fast branch unexpectedly balanced all rows"
+    assert sum(rq.info["iterations"]) > sum(rf.info["iterations"])
+
+
+def test_faster_false_zero_cost_on_clean_signal():
+    """干净信号: 质量档与高速档迭代次数相同 (窄带门立即满足, 零额外代价)。"""
+    S, _ = _two_tone(n=1024)
+    rq = EMD(faster=False).decompose(S)
+    rf = EMD(faster=True).decompose(S)
+    assert rq.info["iterations"] == rf.info["iterations"]
+    assert np.allclose(rq.IMFs.sum(0) + rq.Res, S, atol=1e-9)
+
+
 @pytest.mark.parametrize("spline_kind", ["CubicSpline", "PCHIP", "linear"])
 def test_spline_kind_variants(spline_kind):
     S, _ = _two_tone(n=256)

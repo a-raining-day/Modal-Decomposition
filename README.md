@@ -186,11 +186,21 @@ tests/               pytest suite + benchmarking harnesses (comparison/,
 
 - `EMD` is now the native self-implemented sifting engine (ex-`EMD_new`,
   registered as the public `EMD`; the former PyEMD wrapper was removed) —
-  ~5-17x faster than PyEMD at equal mode quality, cold start ~ms vs ~0.5 s
+  faster than PyEMD at equal mode quality, cold start ~ms vs ~0.5 s
   (`docs/EMD_vs_EMD_new_Performance_Report.md`).
-- `EMD` defaults (linear envelope + `sd_thr=0.3`) chosen by the parameter
-  sweep (`docs/EMD_new_Parameter_Sweep_Report.md`); `spline_kind` accepts the
-  canonical `Utils.Spline` kinds.
+- `EMD(faster=...)` two-branch stopping policy: `faster=False` (default,
+  quality branch) additionally requires the classic narrowband balance
+  `|zc - ext| <= 1` before accepting each IMF (clean signals cost nothing;
+  noisy / long signals trade speed for row-level purity comparable with
+  PyEMD); `faster=True` keeps the legacy fast branch (energy Cauchy SD
+  stops sifting). Full four-way comparison (MD-quality / MD-fast / PyEMD /
+  PySDKit) in `docs/EMD_faster_Branch_Comparison_Report.md`. Speed ratios
+  are always quoted same-process/same-script (median timing in the bench
+  scripts), never cross-day absolute timings.
+- `EMD` defaults (CubicSpline envelope + `sd_thr=0.01` + `faster=False`)
+  chosen by the mode-level validation (`docs/EMD_Validation_and_Comparison_Report.md`)
+  and the mechanism/optimization analysis (`docs/EMD_Quality_Gap_and_Optimization.md`);
+  `spline_kind` accepts the canonical `Utils.Spline` kinds.
 - LMD defaults to the extrema (Spline) interpolation envelope; the analytic
   Hilbert envelope stays as an explicit opt-in only. The Hilbert-vs-Spline
   envelope concepts are separated again (`Utils.Envelope` restored as its own

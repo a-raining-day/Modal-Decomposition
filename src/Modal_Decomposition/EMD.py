@@ -24,8 +24,20 @@ EMD 已由自研实现转正: 本模块取代原 PyEMD 包装版, 注册键 ``"E
 2. 端点以 ``nbsym`` 个镜像极值外延, 三次样条 (或 PCHIP/线性) 插值上下
    包络, 局部均值 ``m = (up + low) / 2``;
 3. ``h <- h - m``, 直到 Cauchy 型判据 ``sum(m^2)/sum(h_prev^2) < sd_thr``
-   或达到 ``max_iter``;
+   (``faster=True``) —— 或该判据与经典窄带平衡 ``|zc - ext| <= 1`` 同时
+   满足 (``faster=False``, 默认), 或达到 ``max_iter``;
 4. 每得一个 IMF 即从残差中减去; 残差极值不足或单调时停止, 余量即 ``Res``。
+
+``faster`` 分支语义
+------------------
+* ``faster=True``: 旧高速档 —— 能量型 Cauchy SD 收敛即停, 迭代预算最小;
+  带噪/弱分量场景行的 |zc−ext| 平衡不保证 (质量参考: 上一轮机制分析报告
+  ``docs/EMD_Quality_Gap_and_Optimization.md``)。
+* ``faster=False`` (默认, 质量档): 在 SD 收敛之外还要求当前 h 满足经典
+  IMF 必要条件 ``|zc − ext| <= 1`` (zc 用与 PyEMD 一致的过零计数口径),
+  不满足则继续筛分直到 ``max_iter``。对已窄带的行零额外迭代 (干净信号
+  代价≈0); 对噪声/长信号迭代次数上升, 换来行级纯度 (corr/valid) 对标
+  PyEMD。``sd_thr`` / ``max_iter`` / ``spline_kind`` 两档通用、语义不变。
 
 返回契约
 --------
@@ -73,6 +85,7 @@ class EMDConfig(Config):
     dtype: np.dtype | None
     compile: bool
     find_peaks_mod: str
+    faster: bool
 
 
 def _work_dtype(dtype) -> np.dtype:
@@ -96,9 +109,32 @@ class EMD(Decomposer):
        ``Utils.Spline`` (``spline_kind`` is the canonical backend name;
        ``"linear"`` evaluates ``np.interp`` directly);
     3. subtract the local-mean envelope repeatedly until the Cauchy-type
-       criterion ``sum(m^2)/sum(h_prev^2) < sd_thr`` or ``max_iter``;
+       criterion ``sum(m^2)/sum(h_prev^2) < sd_thr`` (``faster=True``) or
+       until that criterion *and* the classic narrowband balance
+       ``|zc - ext| <= 1`` hold (``faster=False``, default), or
+       ``max_iter``;
     4. the sifted component is one IMF; subtract it from the residual and
        repeat until the residual is monotonic or has too few extrema.
+
+    ``faster`` branch (两档停止策略)
+    -------------------------------
+    * ``faster=True`` — legacy fast branch: the energy Cauchy SD criterion
+      alone stops sifting (minimal iteration budget; on noisy / long signals
+      the rows are not guaranteed to satisfy the zero-crossing/extrema
+      balance).
+    * ``faster=False`` (default, quality branch): after the SD criterion is
+      met the current ``h`` must also satisfy ``|zc - ext| <= 1``
+      (zero crossings counted with the PyEMD-consistent ``indzer``
+      convention; extrema counted with the MD-native ``Utils.Peaks`` rule
+      ``S[i-1] < S[i] >= S[i+1]``); otherwise sifting continues up to
+      ``max_iter``. Rows already narrowband exit immediately (clean signals
+      cost nothing extra); noisy / long signals spend more iterations and
+      gain row-level purity (tone capture and IMF-validity comparable with
+      PyEMD). On plateau/quantized signals the two counting conventions
+      diverge (MD counts every rising edge into a flat run, PyEMD counts
+      plateau midpoints with rise-then-fall — experiment E-H in
+      ``docs/EMD_vs_PyEMD_Detailed_Comparison.md``); the gate is aligned to
+      the MD-native rule there, like the rest of the native engine.
 
     Effect (效果要点)
     -----------------
@@ -106,14 +142,12 @@ class EMD(Decomposer):
       tracks the dominant high-frequency component of the signal;
     * exact reconstruction — ``IMFs.sum(axis=0) + Res == S`` (the residual is
       the successive-subtraction remainder), so ``reconstruct()`` reproduces
-      the input to machine precision;
+      the input to machine precision (both branches);
     * float32/float64 inputs keep their precision, float16 / integer / bool
       inputs are promoted to float64;
-    * the shipped defaults (CubicSpline envelope, sd_thr=0.01, nbsym=2) are
-      validated by mode-level IMF checks (zero-crossing/extrema balance) and
-      run ~4-60x faster than PyEMD/PySDKit at equal mode quality on the
-      three-way benchmark (``tests/comparison/bench_emd_new.py`` /
-      ``bench_emd_validation.py``; reports under ``docs/``).
+    * quality branch (default, ``faster=False``) is benchmarked in
+      ``docs/EMD_faster_Branch_Comparison_Report.md`` against the fast
+      branch, PyEMD and PySDKit (mode capture, row validity, runtime).
 
     Use as ``Class.EMD(**params).decompose(S, T)`` or ``Function.EMD(S, T,
     **params)``; a frozen ``EMDConfig`` snapshot of the effective parameters
@@ -132,6 +166,7 @@ class EMD(Decomposer):
         dtype: np.dtype = None,
         compile: bool = False,
         find_peaks_mod: Literal["scipy", "numpy", "numba"] = "numpy",
+        faster: bool = False,
         config: EMDConfig = None,
     ) -> None:
         """
@@ -158,21 +193,35 @@ class EMD(Decomposer):
             Reserved flag (kept for future JIT backends; currently unused).
         find_peaks_mod : {"scipy", "numpy", "numba"}
             Peak-detection backend of ``Utils.Peaks``.
+        faster : bool
+            Stopping-policy branch. ``True`` keeps the legacy fast branch
+            (Cauchy-type SD convergence stops sifting); ``False`` (default)
+            additionally requires the classic narrowband balance
+            ``|zc - ext| <= 1`` before a sifted row is accepted — higher
+            row quality at the price of extra iterations on noisy / long
+            signals (clean signals: no extra cost).
         config : EMDConfig, optional
             Frozen parameter snapshot; when given it overrides every other
             argument (``self.config`` stays that snapshot).
 
         Notes
         -----
-        Defaults: CubicSpline envelope + ``sd_thr=0.01``. The envelope choice
-        keeps the same spline semantics as the external references
-        (PyEMD/PySDKit); the SD threshold is set by the mode-level validation
-        in ``docs/EMD_Validation_and_Comparison_Report.md``: the loose sweep
+        Defaults: CubicSpline envelope + ``sd_thr=0.01`` + ``faster=False``
+        (quality branch). The envelope choice keeps the same spline
+        semantics as the external references (PyEMD/PySDKit); the SD
+        threshold is set by the mode-level validation in
+        ``docs/EMD_Validation_and_Comparison_Report.md``: the loose sweep
         optimum (0.3) stops sifting before IMFs satisfy the classic
         zero-crossing/extrema balance and splits tones across adjacent rows
         (single-row tone capture ~0.65-0.87), while ``sd_thr=0.01`` restores
         single-row capture (~0.94) at a still-small cost (CubicSpline
-        ~14 ms, linear ~4 ms at n=4096 vs ~56 ms for PyEMD).
+        ~14 ms, linear ~4 ms at n=4096 vs ~56 ms for PyEMD). ``faster=False``
+        adds the narrowband gate measured in
+        ``docs/EMD_Quality_Gap_and_Optimization.md`` (variant V4): row-level
+        validity on noise reaches the PyEMD level while remaining faster
+        than PyEMD; ``faster=True`` reproduces the pre-``faster`` behaviour
+        (see the four-way benchmark in
+        ``docs/EMD_faster_Branch_Comparison_Report.md``).
         """
         self.config = config
 
@@ -185,6 +234,7 @@ class EMD(Decomposer):
             self.dtype = self.config.dtype
             self.compile = self.config.compile
             self.find_peaks_mod = self.config.find_peaks_mod
+            self.faster = self.config.faster
         else:
             self.nbsym = nbsym
             self.spline_kind = spline_kind
@@ -194,6 +244,7 @@ class EMD(Decomposer):
             self.dtype = dtype
             self.compile = compile
             self.find_peaks_mod = find_peaks_mod
+            self.faster = faster
 
         # --- 参数校验 --------------------------------------------------- #
         if not isinstance(self.nbsym, int) or self.nbsym < 0:
@@ -216,6 +267,8 @@ class EMD(Decomposer):
             raise ValueError(
                 f"find_peaks_mod must be one of {_PEAKS_MODS}, got {self.find_peaks_mod!r}"
             )
+        if not isinstance(self.faster, bool):
+            raise ValueError(f"faster must be a bool, got {self.faster!r}")
 
         if self.config is None:
             self.config = EMDConfig(
@@ -227,6 +280,7 @@ class EMD(Decomposer):
                 dtype=np.dtype(self.dtype) if self.dtype is not None else None,
                 compile=self.compile,
                 find_peaks_mod=self.find_peaks_mod,
+                faster=self.faster,
             )
 
         # 工具惰性取用 (Utils getter 首次访问时 import + 注册进进程级缓存)。
@@ -315,10 +369,28 @@ class EMD(Decomposer):
             last_sd = float(np.dot(mean, mean)) / prev_energy
             h = h_new
             iters = it + 1
+
             if last_sd < self.sd_thr:
-                break
+                # faster=False (默认质量档): 收敛之上还需窄带平衡才放行;
+                # faster=True (高速档): 能量收敛即停 (旧行为)。
+                if self.faster or self._narrowband_ok(h):
+                    break
 
         return h, iters, last_sd
+
+    def _narrowband_ok(self, h) -> bool:
+        """经典 IMF 必要条件: |过零数 − 极值数| ≤ 1。
+
+        过零用 PyEMD ``indzer`` 同口径 (严格符号积 <0 + 零点段中点); 极值用
+        MD 原生 ``Utils.Peaks`` 规则 (``S[i-1] < S[i] >= S[i+1]``, 平台取升沿
+        右缘)。无平台信号上与 PyEMD 的 f2 (|ext−zc|<2) 等价; 平台/量化信号上
+        两引擎计数契约不同 (见 ``docs/EMD_vs_PyEMD_Detailed_Comparison.md``
+        实验 E-H), 本开关在库内对齐 MD 原生规则。
+        """
+        zc = _zero_cross_count(h)
+        m_idx, _ = self.find_peaks(h, mod=self.find_peaks_mod)
+        n_idx, _ = self.find_peaks(-h, mod=self.find_peaks_mod)
+        return abs(zc - (m_idx.size + n_idx.size)) <= 1
 
     def _envelope(self, positions, values, grid) -> np.ndarray:
         """在索引网格 [0, N) 上按镜像后的极值插值包络 (回投工作 dtype)。"""
@@ -329,3 +401,17 @@ class EMD(Decomposer):
             sp = self.spline(positions, values, spline_kind=self.spline_kind)
             out = sp(grid)
         return np.asarray(out, dtype=values.dtype)
+
+
+def _zero_cross_count(x: np.ndarray) -> int:
+    """过零计数 (PyEMD ``indzer`` 同口径): 严格符号积 <0 加零点段中点。"""
+    s1, s2 = x[:-1], x[1:]
+    n = int(np.sum(s1 * s2 < 0))
+    if np.any(x == 0):
+        indz = np.nonzero(x == 0)[0]
+        if np.any(np.diff(indz) == 1):  # 存在零点段才做段合并 (PyEMD 同款条件)
+            z = x == 0
+            dz = np.diff(np.concatenate(([0], z, [0])))
+            debz = np.nonzero(dz == 1)[0]
+            n += int(debz.size)
+    return n

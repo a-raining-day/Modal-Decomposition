@@ -1,0 +1,720 @@
+{
+  "numpy": "2.2.6",
+  "cells": [
+    {
+      "case": "A",
+      "n": 1024,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 6.5,
+        "k": 7,
+        "finite": true,
+        "recon": "4.44e-16",
+        "io": 0.0842,
+        "valid": 7,
+        "corr_tone_37hz": 0.8653,
+        "corr_tone_113hz": 0.5943,
+        "iters_sum": 32,
+        "iters": [
+          10,
+          4,
+          2,
+          4,
+          5,
+          4,
+          3
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 6.82,
+        "k": 7,
+        "finite": true,
+        "recon": "4.44e-16",
+        "io": 0.0781,
+        "valid": 6,
+        "corr_tone_37hz": 0.8841,
+        "corr_tone_113hz": 0.6043,
+        "iters_sum": 33,
+        "iters": [
+          8,
+          5,
+          2,
+          5,
+          6,
+          4,
+          3
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 13.36,
+        "k": 7,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.0331,
+        "valid": 7,
+        "corr_tone_37hz": 0.8751,
+        "corr_tone_113hz": 0.5625
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 13.93,
+        "k": 7,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.0331,
+        "valid": 7,
+        "corr_tone_37hz": 0.8751,
+        "corr_tone_113hz": 0.5625
+      }
+    },
+    {
+      "case": "A",
+      "n": 4096,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 25.01,
+        "k": 8,
+        "finite": true,
+        "recon": "4.44e-16",
+        "io": 0.0346,
+        "valid": 8,
+        "corr_tone_37hz": 0.9657,
+        "corr_tone_113hz": 0.71,
+        "iters_sum": 76,
+        "iters": [
+          47,
+          9,
+          1,
+          3,
+          3,
+          4,
+          4,
+          5
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 12.52,
+        "k": 9,
+        "finite": true,
+        "recon": "6.66e-16",
+        "io": 0.0373,
+        "valid": 6,
+        "corr_tone_37hz": 0.8748,
+        "corr_tone_113hz": 0.6185,
+        "iters_sum": 43,
+        "iters": [
+          14,
+          6,
+          2,
+          3,
+          4,
+          4,
+          4,
+          3,
+          3
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 58.04,
+        "k": 9,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.031,
+        "valid": 9,
+        "corr_tone_37hz": 0.9605,
+        "corr_tone_113hz": 0.7594
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 72.16,
+        "k": 9,
+        "finite": true,
+        "recon": "0.00e+00",
+        "io": 0.031,
+        "valid": 9,
+        "corr_tone_37hz": 0.9605,
+        "corr_tone_113hz": 0.7594
+      }
+    },
+    {
+      "case": "A",
+      "n": 16384,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 192.92,
+        "k": 11,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 0.0235,
+        "valid": 10,
+        "corr_tone_37hz": 0.95,
+        "corr_tone_113hz": 0.726,
+        "iters_sum": 163,
+        "iters": [
+          100,
+          7,
+          2,
+          24,
+          3,
+          7,
+          3,
+          5,
+          3,
+          5,
+          4
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 46.29,
+        "k": 10,
+        "finite": true,
+        "recon": "6.66e-16",
+        "io": 0.0356,
+        "valid": 5,
+        "corr_tone_37hz": 0.8712,
+        "corr_tone_113hz": 0.6309,
+        "iters_sum": 53,
+        "iters": [
+          15,
+          7,
+          2,
+          3,
+          4,
+          5,
+          3,
+          3,
+          5,
+          6
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 380.13,
+        "k": 11,
+        "finite": true,
+        "recon": "4.34e-19",
+        "io": 0.0389,
+        "valid": 11,
+        "corr_tone_37hz": 0.974,
+        "corr_tone_113hz": 0.8772
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 358.89,
+        "k": 11,
+        "finite": true,
+        "recon": "4.34e-19",
+        "io": 0.0389,
+        "valid": 11,
+        "corr_tone_37hz": 0.974,
+        "corr_tone_113hz": 0.8772
+      }
+    },
+    {
+      "case": "A",
+      "n": 65536,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 794.38,
+        "k": 12,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 0.0331,
+        "valid": 11,
+        "corr_tone_37hz": 0.9759,
+        "corr_tone_113hz": 0.8225,
+        "iters_sum": 314,
+        "iters": [
+          100,
+          26,
+          2,
+          100,
+          57,
+          4,
+          6,
+          5,
+          3,
+          4,
+          4,
+          3
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 126.35,
+        "k": 12,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 0.0408,
+        "valid": 7,
+        "corr_tone_37hz": 0.9016,
+        "corr_tone_113hz": 0.6236,
+        "iters_sum": 56,
+        "iters": [
+          15,
+          9,
+          2,
+          3,
+          3,
+          5,
+          4,
+          3,
+          3,
+          3,
+          5,
+          1
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 4477.54,
+        "k": 14,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0441,
+        "valid": 13,
+        "corr_tone_37hz": 0.9759,
+        "corr_tone_113hz": 0.919
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 4952.83,
+        "k": 13,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0441,
+        "valid": 12,
+        "corr_tone_37hz": 0.9759,
+        "corr_tone_113hz": 0.919
+      }
+    },
+    {
+      "case": "B",
+      "n": 1024,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 3.76,
+        "k": 4,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 3.4407,
+        "valid": 4,
+        "corr_amfm": 0.9985,
+        "corr_tone_89hz": 0.9973,
+        "corr_trend": 0.978,
+        "corr_Res_trend": 0.961,
+        "iters_sum": 15,
+        "iters": [
+          3,
+          2,
+          7,
+          3
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 3.43,
+        "k": 4,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 3.4407,
+        "valid": 4,
+        "corr_amfm": 0.9985,
+        "corr_tone_89hz": 0.9973,
+        "corr_trend": 0.978,
+        "corr_Res_trend": 0.961,
+        "iters_sum": 15,
+        "iters": [
+          3,
+          2,
+          7,
+          3
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 4.33,
+        "k": 4,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0014,
+        "valid": 4,
+        "corr_amfm": 0.9993,
+        "corr_tone_89hz": 0.9986,
+        "corr_trend": 0.5661,
+        "corr_Res_trend": 0.9777
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 5.62,
+        "k": 4,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0014,
+        "valid": 4,
+        "corr_amfm": 0.9993,
+        "corr_tone_89hz": 0.9986,
+        "corr_trend": 0.5661,
+        "corr_Res_trend": 0.9777
+      }
+    },
+    {
+      "case": "B",
+      "n": 4096,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 3.48,
+        "k": 4,
+        "finite": true,
+        "recon": "1.89e-15",
+        "io": 0.0571,
+        "valid": 4,
+        "corr_amfm": 0.9996,
+        "corr_tone_89hz": 0.999,
+        "corr_trend": 0.9022,
+        "corr_Res_trend": 0.909,
+        "iters_sum": 10,
+        "iters": [
+          2,
+          2,
+          3,
+          3
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 3.42,
+        "k": 4,
+        "finite": true,
+        "recon": "1.89e-15",
+        "io": 0.0571,
+        "valid": 4,
+        "corr_amfm": 0.9996,
+        "corr_tone_89hz": 0.999,
+        "corr_trend": 0.9022,
+        "corr_Res_trend": 0.909,
+        "iters_sum": 10,
+        "iters": [
+          2,
+          2,
+          3,
+          3
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 10.4,
+        "k": 5,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0082,
+        "valid": 5,
+        "corr_amfm": 0.9982,
+        "corr_tone_89hz": 0.9988,
+        "corr_trend": 0.433,
+        "corr_Res_trend": 0.996
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 11.16,
+        "k": 5,
+        "finite": true,
+        "recon": "5.55e-17",
+        "io": 0.0082,
+        "valid": 5,
+        "corr_amfm": 0.9982,
+        "corr_tone_89hz": 0.9988,
+        "corr_trend": 0.433,
+        "corr_Res_trend": 0.996
+      }
+    },
+    {
+      "case": "B",
+      "n": 16384,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 12.18,
+        "k": 5,
+        "finite": true,
+        "recon": "4.44e-16",
+        "io": 0.0013,
+        "valid": 5,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.091,
+        "corr_Res_trend": 1.0,
+        "iters_sum": 14,
+        "iters": [
+          2,
+          2,
+          2,
+          5,
+          3
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 12.09,
+        "k": 5,
+        "finite": true,
+        "recon": "4.44e-16",
+        "io": 0.0013,
+        "valid": 5,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.091,
+        "corr_Res_trend": 1.0,
+        "iters_sum": 14,
+        "iters": [
+          2,
+          2,
+          2,
+          5,
+          3
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 28.16,
+        "k": 6,
+        "finite": true,
+        "recon": "1.11e-16",
+        "io": 0.0012,
+        "valid": 6,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.1034,
+        "corr_Res_trend": 0.9999
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 32.17,
+        "k": 6,
+        "finite": true,
+        "recon": "1.11e-16",
+        "io": 0.0012,
+        "valid": 6,
+        "corr_amfm": 0.9998,
+        "corr_tone_89hz": 0.9996,
+        "corr_trend": 0.1034,
+        "corr_Res_trend": 0.9999
+      }
+    },
+    {
+      "case": "C",
+      "n": 4096,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 20.36,
+        "k": 10,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 0.0433,
+        "valid": 10,
+        "share1": 0.6328,
+        "iters_sum": 58,
+        "iters": [
+          8,
+          13,
+          7,
+          4,
+          3,
+          5,
+          3,
+          4,
+          6,
+          5
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 12.37,
+        "k": 9,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 0.0478,
+        "valid": 6,
+        "share1": 0.6591,
+        "iters_sum": 38,
+        "iters": [
+          4,
+          3,
+          5,
+          5,
+          3,
+          4,
+          4,
+          5,
+          5
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 38.18,
+        "k": 10,
+        "finite": true,
+        "recon": "1.73e-18",
+        "io": 0.0376,
+        "valid": 10,
+        "share1": 0.6283
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 43.46,
+        "k": 10,
+        "finite": true,
+        "recon": "1.73e-18",
+        "io": 0.0376,
+        "valid": 10,
+        "share1": 0.6283
+      }
+    },
+    {
+      "case": "C",
+      "n": 8192,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 53.75,
+        "k": 10,
+        "finite": true,
+        "recon": "1.33e-15",
+        "io": 0.0451,
+        "valid": 10,
+        "share1": 0.584,
+        "iters_sum": 101,
+        "iters": [
+          33,
+          20,
+          15,
+          4,
+          3,
+          10,
+          4,
+          3,
+          2,
+          7
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 14.47,
+        "k": 10,
+        "finite": true,
+        "recon": "8.88e-16",
+        "io": 0.0426,
+        "valid": 6,
+        "share1": 0.658,
+        "iters_sum": 37,
+        "iters": [
+          4,
+          3,
+          4,
+          5,
+          5,
+          5,
+          3,
+          3,
+          3,
+          2
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 76.85,
+        "k": 11,
+        "finite": true,
+        "recon": "1.73e-18",
+        "io": 0.0462,
+        "valid": 11,
+        "share1": 0.5829
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 88.6,
+        "k": 11,
+        "finite": true,
+        "recon": "1.73e-18",
+        "io": 0.0462,
+        "valid": 11,
+        "share1": 0.5829
+      }
+    },
+    {
+      "case": "C",
+      "n": 16384,
+      "MD-quality(faster=False)": {
+        "impl": "MD-quality(faster=False)",
+        "t_ms": 201.35,
+        "k": 11,
+        "finite": true,
+        "recon": "1.33e-15",
+        "io": 0.0459,
+        "valid": 11,
+        "share1": 0.5962,
+        "iters_sum": 163,
+        "iters": [
+          31,
+          77,
+          15,
+          9,
+          9,
+          8,
+          3,
+          3,
+          2,
+          3,
+          3
+        ]
+      },
+      "MD-fast(faster=True)": {
+        "impl": "MD-fast(faster=True)",
+        "t_ms": 39.59,
+        "k": 11,
+        "finite": true,
+        "recon": "1.33e-15",
+        "io": 0.0426,
+        "valid": 7,
+        "share1": 0.6704,
+        "iters_sum": 42,
+        "iters": [
+          4,
+          4,
+          5,
+          6,
+          3,
+          4,
+          4,
+          4,
+          3,
+          2,
+          3
+        ]
+      },
+      "PyEMD": {
+        "impl": "PyEMD",
+        "t_ms": 222.51,
+        "k": 12,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0503,
+        "valid": 12,
+        "share1": 0.5926
+      },
+      "PySDKit": {
+        "impl": "PySDKit",
+        "t_ms": 228.33,
+        "k": 12,
+        "finite": true,
+        "recon": "2.17e-19",
+        "io": 0.0503,
+        "valid": 12,
+        "share1": 0.5926
+      }
+    }
+  ]
+}

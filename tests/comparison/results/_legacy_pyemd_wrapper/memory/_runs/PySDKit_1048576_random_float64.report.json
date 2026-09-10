@@ -1,0 +1,39 @@
+{
+  "impl": "PySDKit",
+  "input": {
+    "pattern": "random",
+    "dtype": "float64",
+    "n_samples": 131072,
+    "size_bytes": 1048576,
+    "shape": [
+      131072
+    ],
+    "nbytes": 1048576,
+    "backing": "ndarray",
+    "backing_file": "None",
+    "build_wall_s": 0.009162,
+    "build_peak_delta_rss_bytes": 3948544
+  },
+  "decompose": {
+    "status": "ok",
+    "wall_s": 11.422,
+    "baseline_rss_bytes": 124788736,
+    "peak_rss_bytes": 166617088,
+    "delta_rss_bytes": 41828352,
+    "hb_n_samples": 434
+  },
+  "result": {
+    "n_rows": 17,
+    "rows": {
+      "shape": [
+        17,
+        131072
+      ],
+      "dtype": "float64",
+      "nbytes": 17825792,
+      "backing": "ndarray"
+    },
+    "recon_max_abs_err": 8.673617379884035e-19,
+    "orthogonality_index": -0.06372832254090516
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "impl": "MD-EMD",
+  "input": {
+    "pattern": "random",
+    "dtype": "float64",
+    "n_samples": 131072,
+    "size_bytes": 1048576,
+    "shape": [
+      131072
+    ],
+    "nbytes": 1048576,
+    "backing": "ndarray",
+    "backing_file": "None",
+    "build_wall_s": 0.009114,
+    "build_peak_delta_rss_bytes": 3960832
+  },
+  "decompose": {
+    "status": "ok",
+    "wall_s": 10.656,
+    "baseline_rss_bytes": 119087104,
+    "peak_rss_bytes": 148447232,
+    "delta_rss_bytes": 29360128,
+    "hb_n_samples": 341
+  },
+  "result": {
+    "n_rows": 17,
+    "rows": {
+      "shape": [
+        17,
+        131072
+      ],
+      "dtype": "float64",
+      "nbytes": 17825792,
+      "backing": "ndarray"
+    },
+    "recon_max_abs_err": 8.673617379884035e-19,
+    "orthogonality_index": -0.06372832254090516
+  }
+}

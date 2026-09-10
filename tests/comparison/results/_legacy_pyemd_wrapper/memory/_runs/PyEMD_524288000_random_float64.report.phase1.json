@@ -1,0 +1,18 @@
+{
+  "phase": "input",
+  "input": {
+    "pattern": "random",
+    "dtype": "float64",
+    "n_samples": 65536000,
+    "size_bytes": 524288000,
+    "shape": [
+      65536000
+    ],
+    "nbytes": 524288000,
+    "backing": "memmap",
+    "backing_file": "C:\\Users\\kongtin\\AppData\\Local\\Temp\\dsh-e4gJKw\\md_signal_45l7k3tg.dat",
+    "build_wall_s": 0.964073,
+    "build_peak_delta_rss_bytes": 544493568
+  },
+  "rss_after_input_bytes": 557121536
+}

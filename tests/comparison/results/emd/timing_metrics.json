@@ -1,0 +1,698 @@
+[
+  {
+    "impl": "MD-EMD",
+    "case": "A",
+    "n": 256,
+    "n_rows": 6,
+    "recon_max_abs_err": 3.3306690738754696e-16,
+    "orthogonality_index": -0.002940577101063331,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9192625709851683,
+        "best_nrmse": 0.3932976952109729
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.6447331749975918,
+        "best_nrmse": 0.7644526395190001
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "A",
+    "n": 256,
+    "n_rows": 5,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": -0.22037907788368047,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.7179059466810721,
+        "best_nrmse": 0.7002995850251575
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.6729978327096717,
+        "best_nrmse": 0.7401941662770425
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "A",
+    "n": 256,
+    "n_rows": 5,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": -0.22037907788368047,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.7179059466810721,
+        "best_nrmse": 0.7002995850251575
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.6729978327096717,
+        "best_nrmse": 0.7401941662770425
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 8,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -0.08509707039955694,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8652984714936738,
+        "best_nrmse": 0.5012562651673687
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.594349014016077,
+        "best_nrmse": 0.8044928161012985
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 8,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": -0.05785856462618052,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8750599936529668,
+        "best_nrmse": 0.48407175116156415
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.5624920390600107,
+        "best_nrmse": 0.8267994034332583
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "A",
+    "n": 1024,
+    "n_rows": 8,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": -0.05785856462618052,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.8750599936529668,
+        "best_nrmse": 0.48407175116156415
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.5624920390600107,
+        "best_nrmse": 0.8267994034332583
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 9,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": 0.026076371600432132,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9657307999155457,
+        "best_nrmse": 0.2595562311993653
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.7099735582748234,
+        "best_nrmse": 0.704237291383321
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 10,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": 0.010368820491768323,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9605227980714438,
+        "best_nrmse": 0.27821690520418635
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.7593952608094867,
+        "best_nrmse": 0.6506322786102741
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "A",
+    "n": 4096,
+    "n_rows": 10,
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": 0.010368820491768323,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9605227980714438,
+        "best_nrmse": 0.27821690520418635
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.7593952608094867,
+        "best_nrmse": 0.6506322786102741
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "A",
+    "n": 16384,
+    "n_rows": 12,
+    "recon_max_abs_err": 8.881784197001252e-16,
+    "orthogonality_index": -0.007383222448997322,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9500367156544024,
+        "best_nrmse": 0.31213909858266886
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.7259892292331891,
+        "best_nrmse": 0.6877067450302101
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "A",
+    "n": 16384,
+    "n_rows": 12,
+    "recon_max_abs_err": 4.336808689942018e-19,
+    "orthogonality_index": -0.026073579348607104,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9740046782469227,
+        "best_nrmse": 0.22654133713009267
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.8772484712046759,
+        "best_nrmse": 0.48003901998214576
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "A",
+    "n": 16384,
+    "n_rows": 12,
+    "recon_max_abs_err": 4.336808689942018e-19,
+    "orthogonality_index": -0.026073579348607104,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9740046782469227,
+        "best_nrmse": 0.22654133713009267
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.8772484712046759,
+        "best_nrmse": 0.48003901998214576
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "A",
+    "n": 65536,
+    "n_rows": 13,
+    "recon_max_abs_err": 8.881784197001252e-16,
+    "orthogonality_index": 0.0026388387168717387,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9759083766391751,
+        "best_nrmse": 0.21818724495417732
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.8225078638400771,
+        "best_nrmse": 0.5687537415430672
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "A",
+    "n": 65536,
+    "n_rows": 15,
+    "recon_max_abs_err": 2.168404344971009e-19,
+    "orthogonality_index": -0.059060552201837625,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9759346885799282,
+        "best_nrmse": 0.21806305995752584
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9189732438965481,
+        "best_nrmse": 0.39432221347893
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "A",
+    "n": 65536,
+    "n_rows": 14,
+    "recon_max_abs_err": 2.168404344971009e-19,
+    "orthogonality_index": -0.0590871517898906,
+    "mode_recovery": {
+      "tone_37hz": {
+        "best_abs_corr": 0.9759346885799282,
+        "best_nrmse": 0.21806305995752584
+      },
+      "tone_113hz": {
+        "best_abs_corr": 0.9189732438965481,
+        "best_nrmse": 0.39432221347893
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "B",
+    "n": 256,
+    "n_rows": 3,
+    "recon_max_abs_err": 2.220446049250313e-16,
+    "orthogonality_index": -0.034547138104763134,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9966937876065158,
+        "best_nrmse": 0.08230719955169882
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9910963110070289,
+        "best_nrmse": 0.13457783066181866
+      },
+      "trend": {
+        "best_abs_corr": 0.9840407095815095,
+        "best_nrmse": 0.15283975505255218
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "B",
+    "n": 256,
+    "n_rows": 3,
+    "recon_max_abs_err": 2.7755575615628914e-17,
+    "orthogonality_index": -0.020888028371160054,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.998146418180304,
+        "best_nrmse": 0.06168812606617305
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9945391541019533,
+        "best_nrmse": 0.10451200611451891
+      },
+      "trend": {
+        "best_abs_corr": 0.9934728815582292,
+        "best_nrmse": 0.09002981888549653
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "B",
+    "n": 256,
+    "n_rows": 3,
+    "recon_max_abs_err": 2.7755575615628914e-17,
+    "orthogonality_index": -0.020888028371160054,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.998146418180304,
+        "best_nrmse": 0.06168812606617305
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9945391541019533,
+        "best_nrmse": 0.10451200611451891
+      },
+      "trend": {
+        "best_abs_corr": 0.9934728815582292,
+        "best_nrmse": 0.09002981888549653
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 5,
+    "recon_max_abs_err": 8.881784197001252e-16,
+    "orthogonality_index": -0.9347072543082448,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9984846816947318,
+        "best_nrmse": 0.05516391630022379
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9973459648543431,
+        "best_nrmse": 0.07290624932226036
+      },
+      "trend": {
+        "best_abs_corr": 0.9779701985873492,
+        "best_nrmse": 0.21432246214509154
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 5,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": -0.005993889201552249,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9993093425066945,
+        "best_nrmse": 0.037457475861044386
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9985635778964377,
+        "best_nrmse": 0.053638114264761394
+      },
+      "trend": {
+        "best_abs_corr": 0.977741440564248,
+        "best_nrmse": 0.15100008232890105
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "B",
+    "n": 1024,
+    "n_rows": 5,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": -0.005993889201552249,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9993093425066945,
+        "best_nrmse": 0.037457475861044386
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9985635778964377,
+        "best_nrmse": 0.053638114264761394
+      },
+      "trend": {
+        "best_abs_corr": 0.977741440564248,
+        "best_nrmse": 0.15100008232890105
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 5,
+    "recon_max_abs_err": 1.887379141862766e-15,
+    "orthogonality_index": -0.9826110705095823,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9995540513842094,
+        "best_nrmse": 0.029885573183346843
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9990249667164671,
+        "best_nrmse": 0.04414878520100417
+      },
+      "trend": {
+        "best_abs_corr": 0.9089848389718262,
+        "best_nrmse": 0.4202785114378037
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 6,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": -0.014722461973953339,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9981577872487395,
+        "best_nrmse": 0.06082520624383089
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9988495796640593,
+        "best_nrmse": 0.04795326223989341
+      },
+      "trend": {
+        "best_abs_corr": 0.995957543101129,
+        "best_nrmse": 0.06095429292846787
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "B",
+    "n": 4096,
+    "n_rows": 6,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": -0.014722461973953339,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9981577872487395,
+        "best_nrmse": 0.06082520624383089
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9988495796640593,
+        "best_nrmse": 0.04795326223989341
+      },
+      "trend": {
+        "best_abs_corr": 0.995957543101129,
+        "best_nrmse": 0.06095429292846787
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "B",
+    "n": 16384,
+    "n_rows": 6,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": 0.0016725241935736583,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.999788327993905,
+        "best_nrmse": 0.02057490090559826
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9996205550838576,
+        "best_nrmse": 0.02754730660007305
+      },
+      "trend": {
+        "best_abs_corr": 0.999963504079291,
+        "best_nrmse": 0.0056979113534232516
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "B",
+    "n": 16384,
+    "n_rows": 7,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": 0.0011830466255085984,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9998194400310205,
+        "best_nrmse": 0.019002817423318642
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9996321277377458,
+        "best_nrmse": 0.027124154679462515
+      },
+      "trend": {
+        "best_abs_corr": 0.9999088436110553,
+        "best_nrmse": 0.009229506420931982
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "B",
+    "n": 16384,
+    "n_rows": 7,
+    "recon_max_abs_err": 1.1102230246251565e-16,
+    "orthogonality_index": 0.0011830466255085984,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9998194400310205,
+        "best_nrmse": 0.019002817423318642
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9996321277377458,
+        "best_nrmse": 0.027124154679462515
+      },
+      "trend": {
+        "best_abs_corr": 0.9999088436110553,
+        "best_nrmse": 0.009229506420931982
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "B",
+    "n": 65536,
+    "n_rows": 8,
+    "recon_max_abs_err": 6.661338147750939e-16,
+    "orthogonality_index": 0.0022501455807279525,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9998568498621638,
+        "best_nrmse": 0.016923257002442512
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.999703228940699,
+        "best_nrmse": 0.02436102714168876
+      },
+      "trend": {
+        "best_abs_corr": 0.9997888861123716,
+        "best_nrmse": 0.013789883032506757
+      }
+    }
+  },
+  {
+    "impl": "PyEMD",
+    "case": "B",
+    "n": 65536,
+    "n_rows": 9,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": 0.0019183358449247133,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9998877531079748,
+        "best_nrmse": 0.01498610532963673
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9997517132560745,
+        "best_nrmse": 0.02228258421199563
+      },
+      "trend": {
+        "best_abs_corr": 0.9997984290549458,
+        "best_nrmse": 0.013388134799394777
+      }
+    }
+  },
+  {
+    "impl": "PySDKit",
+    "case": "B",
+    "n": 65536,
+    "n_rows": 9,
+    "recon_max_abs_err": 5.551115123125783e-17,
+    "orthogonality_index": 0.0019183358449247133,
+    "mode_recovery": {
+      "amfm": {
+        "best_abs_corr": 0.9998877531079748,
+        "best_nrmse": 0.01498610532963673
+      },
+      "tone_89hz": {
+        "best_abs_corr": 0.9997517132560745,
+        "best_nrmse": 0.02228258421199563
+      },
+      "trend": {
+        "best_abs_corr": 0.9997984290549458,
+        "best_nrmse": 0.013388134799394777
+      }
+    }
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "C",
+    "n": 256,
+    "n_rows": 6,
+    "recon_max_abs_err": 4.440892098500626e-16,
+    "orthogonality_index": -0.13489602146575067
+  },
+  {
+    "impl": "PyEMD",
+    "case": "C",
+    "n": 256,
+    "n_rows": 6,
+    "recon_max_abs_err": 2.7755575615628914e-17,
+    "orthogonality_index": -0.13052819445005204
+  },
+  {
+    "impl": "PySDKit",
+    "case": "C",
+    "n": 256,
+    "n_rows": 6,
+    "recon_max_abs_err": 2.7755575615628914e-17,
+    "orthogonality_index": -0.13052819445005204
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 9,
+    "recon_max_abs_err": 6.661338147750939e-16,
+    "orthogonality_index": -0.06937744650241592
+  },
+  {
+    "impl": "PyEMD",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 9,
+    "recon_max_abs_err": 4.336808689942018e-19,
+    "orthogonality_index": -0.067299949343581
+  },
+  {
+    "impl": "PySDKit",
+    "case": "C",
+    "n": 1024,
+    "n_rows": 9,
+    "recon_max_abs_err": 4.336808689942018e-19,
+    "orthogonality_index": -0.067299949343581
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 11,
+    "recon_max_abs_err": 8.881784197001252e-16,
+    "orthogonality_index": -0.05733374312767353
+  },
+  {
+    "impl": "PyEMD",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 11,
+    "recon_max_abs_err": 1.734723475976807e-18,
+    "orthogonality_index": -0.05579899860961759
+  },
+  {
+    "impl": "PySDKit",
+    "case": "C",
+    "n": 4096,
+    "n_rows": 11,
+    "recon_max_abs_err": 1.734723475976807e-18,
+    "orthogonality_index": -0.05579899860961759
+  },
+  {
+    "impl": "MD-EMD",
+    "case": "C",
+    "n": 16384,
+    "n_rows": 12,
+    "recon_max_abs_err": 1.3322676295501878e-15,
+    "orthogonality_index": -0.07199223123173366
+  },
+  {
+    "impl": "PyEMD",
+    "case": "C",
+    "n": 16384,
+    "n_rows": 13,
+    "recon_max_abs_err": 2.168404344971009e-19,
+    "orthogonality_index": -0.07363783660491768
+  },
+  {
+    "impl": "PySDKit",
+    "case": "C",
+    "n": 16384,
+    "n_rows": 13,
+    "recon_max_abs_err": 2.168404344971009e-19,
+    "orthogonality_index": -0.07363783660491768
+  }
+]

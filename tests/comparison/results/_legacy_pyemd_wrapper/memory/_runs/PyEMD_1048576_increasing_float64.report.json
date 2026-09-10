@@ -1,0 +1,39 @@
+{
+  "impl": "PyEMD",
+  "input": {
+    "pattern": "increasing",
+    "dtype": "float64",
+    "n_samples": 131072,
+    "size_bytes": 1048576,
+    "shape": [
+      131072
+    ],
+    "nbytes": 1048576,
+    "backing": "ndarray",
+    "backing_file": "None",
+    "build_wall_s": 0.001001,
+    "build_peak_delta_rss_bytes": 1200128
+  },
+  "decompose": {
+    "status": "ok",
+    "wall_s": 0.016,
+    "baseline_rss_bytes": 118693888,
+    "peak_rss_bytes": 118763520,
+    "delta_rss_bytes": 69632,
+    "hb_n_samples": 1
+  },
+  "result": {
+    "n_rows": 1,
+    "rows": {
+      "shape": [
+        1,
+        131072
+      ],
+      "dtype": "float64",
+      "nbytes": 1048576,
+      "backing": "ndarray"
+    },
+    "recon_max_abs_err": 0.0,
+    "orthogonality_index": 0.0
+  }
+}

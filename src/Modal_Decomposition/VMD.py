@@ -22,6 +22,7 @@ MATLAB / vmdpy 的镜像延拓与单边谱约定; 中心频率与模态与 vmdpy
 
 import atexit
 import os
+import sys
 import tempfile
 from dataclasses import dataclass, replace
 from typing import ClassVar, Literal
@@ -230,11 +231,16 @@ class VMDConfig(Config):
     chunk_size: int
     out_of_core: bool
     store_history: bool
+    vmdpy: bool
 
 #: 旧版 ``VMD`` (vmdpy 包装) 的关键字 → 本实现参数 (向后兼容)。
 _VMD_LEGACY = {"K": "num_imf", "init": "init_mod", "tol": "epsilon"}
 #: vmdpy ``init`` 取值 → ``init_mod`` (0=zero / 1=uniform / 2=random)。
 _VMD_INIT_MAP = {0: "zero", 1: "uniform", 2: "random"}
+#: ``init_mod`` → vmdpy ``init`` (反向映射; "peak" 仅原生实现支持)。
+_INIT_TO_VMDPY = {"zero": 0, "uniform": 1, "random": 2}
+#: cache 键 (与 CacheConventions §2 一致: sys.modules 风格名)。
+_VMDPY_CACHE_KEY = "vmdpy"
 
 
 def _work_dtype(dtype) -> np.dtype:
@@ -381,6 +387,7 @@ class VMD(Decomposer):
         chunk_size: int | None = None,
         out_of_core: bool | None = None,
         store_history: bool = False,
+        vmdpy: bool = False,
         config: VMDConfig = None,
         **legacy,
     ) -> None:
@@ -482,6 +489,10 @@ class VMD(Decomposer):
             self.init_mod = config.init_mod
             self.seed = config.seed
             self.store_history = config.store_history
+            self.engine = config.engine
+            self.chunk_size = config.chunk_size
+            self.out_of_core = config.out_of_core
+            self.vmdpy = config.vmdpy
         elif config is None:
             self.num_imf = num_imf
             self.n = n
@@ -496,6 +507,7 @@ class VMD(Decomposer):
             self.chunk_size = chunk_size
             self.out_of_core = out_of_core
             self.store_history = store_history
+            self.vmdpy = vmdpy
         else:
             raise TypeError(
                 f"config must be a VMDConfig or None, got {type(config).__name__}"
@@ -575,6 +587,9 @@ class VMD(Decomposer):
         if not isinstance(self.store_history, bool):
             raise ValueError(f"store_history must be a bool, got {self.store_history!r}")
 
+        if not isinstance(self.vmdpy, bool):
+            raise ValueError(f"vmdpy must be a bool, got {self.vmdpy!r}")
+
         if not isinstance(config, VMDConfig):
             self.config = VMDConfig(
                 num_imf=self.num_imf,
@@ -590,10 +605,11 @@ class VMD(Decomposer):
                 chunk_size=self.chunk_size,
                 out_of_core=self.out_of_core,
                 store_history=self.store_history,
+                vmdpy=self.vmdpy,
             )
 
-        # 工具惰性取用: FFT 与 VMD_new 一致地走 Utils.FFT 分发器 (后端由
-        # Base.ConstDefine.FFT_BACKEND 决定), 本模块不再直接调 np.fft。
+        # 工具惰性取用: FFT 走 Utils.FFT 分发器 (后端由 Base.ConstDefine.FFT_BACKEND
+        # 决定), 本模块不直接调 np.fft; vmdpy 分支的第三方库按需经 import cache 取。
         self.fft = get_fft()
 
     def decompose(self, S, T=None) -> DecompositionResult:
@@ -643,6 +659,10 @@ class VMD(Decomposer):
 
         out_dtype = _work_dtype(np.asarray(S).dtype)
         f = np.asarray(S, dtype=np.float64).reshape(-1)
+
+        # --- vmdpy 分支: 交给可选的第三方实现 (不强制安装) ----------------- #
+        if self.vmdpy:
+            return self._decompose_vmdpy(S, f, N, K, out_dtype)
 
         effective_seed, _ = resolve_seed(self.seed, self.name)
         rng = np.random.default_rng(effective_seed)
@@ -732,6 +752,73 @@ class VMD(Decomposer):
                 chunk_size=chunk_size,
                 out_of_core=out_of_core,
             ),
+        )
+
+    # ------------------------------------------------------------------ #
+    # 可选分支: 用第三方 vmdpy 分解 (vmdpy=True)
+    # ------------------------------------------------------------------ #
+    def _decompose_vmdpy(self, S, f, N, K, out_dtype) -> DecompositionResult:
+        """
+        调用可选的第三方实现 ``vmdpy`` (经 import cache 惰性导入)。
+
+        本分支用于**对照/复现**参考实现, 与原生分支的差异:
+        - 迭代上限固定 500 (vmdpy 内部硬编码, ``n`` 不生效), 收敛判据为其原式;
+        - 初值只支持 ``zero``/``uniform``/``random`` (``init_mod="peak"`` 仅原生支持);
+        - **奇数长度不支持** (vmdpy 内部会丢末样本, 与本库返回契约冲突, 这里直接报错);
+        - ``fs`` / ``seed`` / ``store_history`` / ``engine`` / ``chunk_size`` /
+          ``out_of_core`` 在本分支不生效 (无迭代历史可存, 也不支持分块/外存);
+        - 未安装 vmdpy 时抛 ``ImportError`` 并给出安装命令 —— 它是可选依赖, 不强制安装。
+        """
+        from .Base.Cache import cache
+
+        if N % 2 != 0:
+            raise ValueError(
+                f"{self.name}(vmdpy=True): vmdpy 会丢弃末样本, 仅支持偶数长度; got N={N}"
+            )
+        init_code = _INIT_TO_VMDPY.get(self.init_mod)
+        if init_code is None:
+            raise ValueError(
+                f"{self.name}(vmdpy=True): init_mod={self.init_mod!r} 仅原生实现支持; "
+                f"vmdpy 分支请用 {sorted(_INIT_TO_VMDPY)}"
+            )
+
+        try:
+            vmdpy = cache.import_module(
+                _VMDPY_CACHE_KEY,
+                description="vmdpy: 可选第三方 VMD 实现 (VMD(vmdpy=True) 分支使用)",
+            )
+        except ImportError as exc:
+            raise ImportError(
+                "VMD(vmdpy=True) 需要可选的第三方实现 vmdpy; 请先安装:\n"
+                "    %s -m pip install vmdpy" % sys.executable
+            ) from exc
+
+        # vmdpy.VMD(f, alpha, tau, K, DC, init, tol) -> (u, u_hat, omega_history)
+        u, u_hat, omega_hist = vmdpy.VMD(
+            f, self.alpha, self.tau, K, int(self.DC), init_code, self.epsilon
+        )
+        modes = np.asarray(u)
+        omega_history = np.asarray(omega_hist)
+        omega = omega_history[-1] if omega_history.ndim == 2 else omega_history
+        n_iter = int(omega_history.shape[0]) if omega_history.ndim == 2 else 0
+
+        IMFs = modes.astype(out_dtype, copy=False)
+        Res = (f - modes.sum(axis=0)).astype(out_dtype, copy=False)
+        norm_f = float(np.linalg.norm(f))
+        info = {
+            "impl": "vmdpy",
+            "omega": np.asarray(omega).copy(),
+            "omega_hz": np.asarray(omega) * self.fs,
+            "omega_history": omega_history.copy(),
+            "u_hat": np.asarray(u_hat),
+            "fft_backend": None,            # vmdpy 内部自行调用 np.fft
+            "n_iter": n_iter,
+            "converged": None,              # vmdpy 不报告是否收敛
+            "init_mod": self.init_mod,
+            "residual_ratio": (float(np.linalg.norm(Res)) / norm_f) if norm_f > 0 else 0.0,
+        }
+        return DecompositionResult(
+            IMFs, Res, info, replace(self.config, vmdpy=True)
         )
 
     # ------------------------------------------------------------------ #

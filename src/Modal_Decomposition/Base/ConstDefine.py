@@ -60,8 +60,9 @@ FFT_BACKEND_LIST = \
 #: 默认 FFT 后端。"auto" = 按数组体积分流: ``< BIG_ARRAY`` 用 ``FFT_BACKEND_SMALL``, 否则用 ``FFT_BACKEND_BIG``。
 FFT_BACKEND = "auto"
 
-#: "auto" 在小数组 (< BIG_ARRAY) 上选用的后端。批量/热循环场景可改 "pyfftw" (暖态 10MB 快 5x、100MB 快 3.1x, 但冷态要付 ~0.15s 规划)
-FFT_BACKEND_SMALL = "numpy"
+#: "auto" 在小数组 (< BIG_ARRAY) 上选用的后端。pyfftw 暖态更快 (10MB 5x / 100MB 3.1x, 需多线程),
+#: 代价是每进程每形状一次冷态规划 (~0.15s); 未安装时默认路径自动降级 numpy 并告警。
+FFT_BACKEND_SMALL = "pyfftw"
 
 #: "auto" 在大数组 (>= BIG_ARRAY) 上选用的后端。实测 >=500MB 时 numpy 既更快更省内存
 #: (1GB: 2.87s/4106MB vs pyfftw 5.71s/6796MB)。

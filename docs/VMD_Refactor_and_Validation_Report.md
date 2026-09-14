@@ -86,7 +86,22 @@ Function.VMD(S, T, num_imf=3)
 | `init_mod` | `uniform`/`random`/`zero`/`peak` | vmdpy `init` 0/1/2(自动映射) |
 | `seed` / `store_history` | 局部种子 / 保存迭代过程 | — |
 | `engine` / `chunk_size` / `out_of_core` | 存储引擎(默认 `auto`) | — |
+| **`vmdpy`** (默认 False) | **True 时改用可选第三方 `vmdpy` 分解**(经 import cache 惰性导入) | = 旧版 `VMD` 的实现 |
 | `config` | 冻结参数快照(EMD 同款) | — |
+
+### 4.1 `vmdpy=True` 分支(可选依赖, 不强制安装)
+
+- 经 ``cache.import_module("vmdpy", ...)`` 惰性导入 ⇒ **未安装只在使用该分支时报错**并给出
+  `pip install vmdpy` 命令, 不影响其余功能; `pyproject.toml` 里已把它放进
+  `optional-dependencies["vmdpy"]`(不再是必装依赖)。
+- 与原生分支的差异(已在 docstring 写明): 迭代上限固定 500(`n` 不生效)、初值只支持
+  `zero`/`uniform`/`random`(`peak` 仅原生)、**不支持奇数长度**、`fs`/`seed`/
+  `store_history`/`engine`/`chunk_size`/`out_of_core` 不生效。
+- 返回契约保持一致: `IMFs` = vmdpy 的 `u`, `Res` = `S − ΣIMFs`(真实余量) ⇒ `reconstruct()` 精确;
+  `info` 带 `impl="vmdpy"`, `omega_history` 为其历史矩阵, `n_iter`/`converged`(vmdpy 不报告,
+  置 None)/`fft_backend`(None, 它内部自调 `np.fft`)。
+- 实测一致性(N=4096, DC 偏置+两音): 两分支 ω 差 **9.4e-10**, IMFs 相对差 **8.0e-06**
+  (该差异即 §5 的 Nyquist 约定), 残差比**完全相同**(1.3784e-02)。
 
 **兼容性实测**: 旧关键字 `K` / `init` / `tol` 可用(`VMD(K=3)`、`VMD(init=2, tol=1e-9)`),
 未知关键字抛 `TypeError` 并提示这三个名字; `Function.VMD(S, K=2)` 工作正常。

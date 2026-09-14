@@ -5,9 +5,9 @@
   `BIG_ARRAY` / `FFT_BACKEND` / `FFT_BACKEND_SMALL` / `FFT_BACKEND_BIG`, 以及
   `Utils/Memory.py` 的检测修复
 - 基准脚本: `tests/comparison/bench_fft.py`(可复现), 原始数据 `docs/FFT_Backend_Results.json`
-- 结论一句话: **默认后端选 `numpy`**(冷态在每个尺寸都最快、提交内存最省、零依赖);
-  `pyfftw` **暖态**最强(10 MB 快 5×、100 MB 快 3.1×, 需多线程)但冷态要付 ~0.15 s 规划、
-  且 ≥500 MB 因内存压力反转变慢 ⇒ 列为**批量场景的一行切换**;
+- 结论一句话: **两个区间都用 `numpy`** —— 它零可选依赖、冷态在每个尺寸都最快、提交内存最省;
+  `pyfftw` 暖态更快(10MB 5×/100MB 3.1×)但**不是声明依赖**且每进程每形状要付 ~0.15s 冷态规划,
+  故只作为显式选项 (`fft.rfft(x, mod="pyfftw")`);
   `scipy` 因 `copy=True` 又慢又费内存; `tiled`(四步分块)在时间与内存两个维度**都**没有收益;
   `cupy` 传输主导, 全尺寸慢于 numpy, 只允许显式请求。
 
@@ -169,14 +169,12 @@ FFT_BACKEND_SMALL  = "numpy"     # < BIG_ARRAY (300MB)
 FFT_BACKEND_BIG    = "numpy"     # >= BIG_ARRAY
 ```
 
-1. **默认 = `numpy`(两个区间都是)**, 依据:
-   - **冷态**在每个尺寸都最快(见 §3.3), 而库内一次 `decompose` 只发 2–3 次变换、
-     形状只有 2 种 ⇒ pyfftw 的规划成本摊销不掉;
-   - 提交内存最省(1 GB: 4106 MB vs pyfftw 6796 MB / scipy 5889 MB), 与
-     `BIG_ARRAY` 想表达的"大数组要克制"一致;
-   - 零可选依赖, 行为可预测。
-2. **批量/热循环请把 `FFT_BACKEND_SMALL` 改成 `"pyfftw"`**: 暖态 10 MB 快 5×、100 MB 快 3.1×
-   (需多线程, 全核最佳); 盈亏平衡见 §3.3。这是"一次改常量"级别的切换。
+1. **两个区间都用 `numpy`**(2026.3.4 定稿): 零可选依赖、冷态在每个尺寸最快、提交内存最省
+   (1 GB: 4106 MB vs pyfftw 6796 MB / scipy 5889 MB), 与 `BIG_ARRAY` 想表达的"大数组要克制"一致。
+   `BIG_ARRAY` 分流机制保留: 一旦将来有后端在某一侧确凿更优, 只需改这两个常量。
+2. **`pyfftw` 不是声明依赖**(`pyproject.toml` 里没有), 因此不做默认: 需要时**显式**用
+   `fft.rfft(x, mod="pyfftw", workers=N)`; 暖态 10 MB 快 5×、100 MB 快 3.1×,
+   代价是每进程每形状一次冷态规划(~0.15s)。实测 32MB: 冷 0.393s → 暖 **0.013s** vs numpy 0.085s。
 3. **`scipy` 不做默认**: 它比 numpy 慢且更费内存(§3.1), `workers` 也几乎不影响结果;
    其开销来自 `copy=True` 默认多复制一份输入。若要用, 应显式 `copy=False`/`overwrite_x=True`
    (会破坏调用方输入, 库内默认不能这么干)。

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Modal-Decomposition"
-version = "0.2.0"
+version = "0.2.1"
 requires-python = ">=3.10"
 
 authors = [
@@ -29,11 +29,10 @@ dependencies = [
     "EMD-signal",
     "ewtpy",
     "scipy",
-    "vmdpy",
     "psutil"
 ]
 
-optional-dependencies = {"dev"=["pytest>=7.0", "black"], "plot"=["matplotlib"]}
+optional-dependencies = {"cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "scipy"=["scipy"]}
 
 [project.urls]
 homepage = "https://github.com/a-raining-day/Modal-Decomposition"

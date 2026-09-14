@@ -10,7 +10,20 @@ get_hilbert / get_spline / get_envelope), 首次访问时惰性 import 并注册
 """
 
 from .Check import Check_Time_and_Signal, detect_dtype, is_uniform, require_ndim, to_signal
-from .Memory import get_available_memory, get_memory_policy, set_absolute_limit, set_memmap_ratio, should_use_memmap
+from .FFT import fft
+from .Memory import (
+    get_available_memory,
+    get_commit_available,
+    get_memory_policy,
+    get_memory_snapshot,
+    get_process_memory,
+    memory_budget,
+    set_absolute_limit,
+    set_memmap_ratio,
+    set_memory_reserve,
+    should_use_memmap,
+    format_bytes,
+)
 from .Monotonicity import Monotony, is_monotonic, monotonic
 from .Seed import get_seed, resolve_seed, set_seed
 
@@ -21,10 +34,16 @@ __all__ = [
     "to_signal",
     "detect_dtype",
     "get_available_memory",
+    "get_commit_available",
+    "get_memory_snapshot",
+    "get_process_memory",
+    "memory_budget",
     "set_memmap_ratio",
     "set_absolute_limit",
+    "set_memory_reserve",
     "get_memory_policy",
     "should_use_memmap",
+    "format_bytes",
     "Monotony",
     "monotonic",
     "is_monotonic",
@@ -41,6 +60,8 @@ __all__ = [
     "get_chunk",
     "get_peaks",
     "get_mirror",
+    "get_fft",
+    "fft",
 ]
 
 # (cache 键, 描述) —— Utils 全部工具模块的惰性注册目录。
@@ -86,6 +107,10 @@ _UTILS_MODULES = {
     "Mirror": (
         "Modal_Decomposition.Utils.Mirror",
         "Utils.Mirror: 端点镜像外拓 (mirror_extrema: EMD nbsym / LMD 边界两用)",
+    ),
+    "FFT": (
+        "Modal_Decomposition.Utils.FFT",
+        "Utils.FFT: FFT 后端分发 (numpy/scipy/pyfftw/tiled/cupy, 大数组按 BIG_ARRAY 分流)",
     ),
 }
 
@@ -210,6 +235,20 @@ def get_mirror():
     """
     key, desc = _UTILS_MODULES["Mirror"]
     return _get_cached_module("Mirror", key, desc)
+
+
+def get_fft():
+    """
+    Return the FFT tool **class** (``Utils.FFT.fft``) via the import cache.
+
+    首次访问时惰性 import 并注册模块 (键 ``"Modal_Decomposition.Utils.FFT"``);
+    返回值是类本身, 全部方法都是静态方法, 用法统一为 ``get_fft().rfft(x)`` /
+    ``fft.rfft(x)`` (``fft`` 亦可直接从 ``Modal_Decomposition.Utils`` 导入)。
+    后端库 (``scipy.fft`` / ``pyfftw`` / ``cupy``) 仍由 ``Utils.FFT`` 内部经
+    ``cache.import_module`` 按分支惰性把守。
+    """
+    key, desc = _UTILS_MODULES["FFT"]
+    return _get_cached_module("FFT", key, desc).fft
 
 
 

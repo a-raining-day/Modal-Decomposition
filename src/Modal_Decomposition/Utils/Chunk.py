@@ -31,7 +31,7 @@ from typing import Callable, Iterator, Literal, Optional, Union
 
 import numpy as np
 
-from ..Base.ConstDefine import SIZE
+from ..Base import MIN_CHUNK_ELEMS, ADAPT_MIN_BYTES, DEFAULT_FILL_CHUNK_ELEMS
 from .Memory import get_available_memory, get_memory_policy
 
 __all__ = [
@@ -47,27 +47,6 @@ __all__ = [
     "ADAPT_MIN_BYTES",
     "DEFAULT_FILL_CHUNK_ELEMS",
 ]
-
-# --------------------------------------------------------------------------- #
-# 常量 (大小统一取自 Base.ConstDefine.SIZE)
-# --------------------------------------------------------------------------- #
-#: 自适应收缩的块大小下限 (元素数) = 4KB 元素。
-MIN_CHUNK_ELEMS = 4 * SIZE["1KB"]
-#: 输入低于该字节数时不咨询全局内存策略 (直接沿用调用方块大小)。
-ADAPT_MIN_BYTES = 64 * SIZE["1MB"]
-#: 流式填充的默认块大小 (元素数) = 8M 元素。
-DEFAULT_FILL_CHUNK_ELEMS = 8 * SIZE["1MB"]
-
-#: Chunk 类支持的模式。
-_MODES = ("memory", "exo-memory", "None")
-
-
-def _as_array(S) -> np.ndarray:
-    """把输入规范为 ndarray (保持 memmap 原样, 避免不必要的拷贝)。"""
-    if isinstance(S, np.ndarray):
-        return S
-    return np.asarray(S)
-
 
 def _validate_chunk_size(chunk_size) -> int:
     """校验块大小: 必须为正整数 (拒绝 bool 与非整数)。"""
@@ -108,7 +87,7 @@ def iter_chunks(S, chunk_size: int) -> Iterator[np.ndarray]:
         On a non-positive ``chunk_size`` or a 0-d input.
     """
     chunk_size = _validate_chunk_size(chunk_size)
-    S = _as_array(S)
+    S = np.asarray(S)
     if S.ndim == 0:
         raise ValueError("chunking requires at least 1 dimension, got 0-d array")
 
@@ -165,7 +144,7 @@ def chunked_map(
     chunk_size = _validate_chunk_size(
         DEFAULT_FILL_CHUNK_ELEMS if chunk_size is None else chunk_size
     )
-    S = _as_array(S)
+    S = np.asarray(S)
     if S.ndim == 0:
         raise ValueError("chunked_map requires at least 1 dimension, got 0-d array")
 
@@ -272,7 +251,7 @@ def exo_chunks(
         One disk-backed chunk per step.
     """
     chunk_size = _validate_chunk_size(chunk_size)
-    S = _as_array(S)
+    S = np.asarray(S)
     if S.ndim == 0:
         raise ValueError("chunking requires at least 1 dimension, got 0-d array")
 
@@ -437,8 +416,6 @@ class Chunk:
         memmap_type=None,
         **kwargs,
     ):
-        if mod not in _MODES:
-            raise ValueError(f"mod must be one of {_MODES}, got {mod!r}")
         self.mod = mod
         self.chunk_size = _validate_chunk_size(chunk_size)
         self.temp_dir = memmap_pth
@@ -446,25 +423,27 @@ class Chunk:
         self.kwargs = kwargs
 
     # -- 迭代 ------------------------------------------------------------- #
-    def chunk(
-        self, S: np.ndarray
-    ) -> Iterator[Union[np.ndarray, np.memmap]]:
+    def chunk(self, S: np.ndarray) -> Iterator[Union[np.ndarray, np.memmap]]:
         """
         Split ``S`` according to ``mod`` — always an iterator (in ``"None"``
         mode a single-chunk iterator over the whole array), so consumers need
         no per-mode branching.
         """
-        if self.mod == "memory":
-            return iter_chunks(S, self.chunk_size)
-        if self.mod == "exo-memory":
-            return exo_chunks(
-                S, self.chunk_size, temp_dir=self.temp_dir, dtype=self.dtype
-            )
-        # mod == "None": 不分块, 单块迭代 (保持统一迭代器语义)
-        S = _as_array(S)
-        if S.ndim == 0:
-            raise ValueError("chunking requires at least 1 dimension, got 0-d array")
-        return iter((S,))
+        match self.mod:
+            case "memory":
+                return iter_chunks(S, self.chunk_size)
+
+            case "exo-memory":
+                return exo_chunks(S, self.chunk_size, temp_dir=self.temp_dir, dtype=self.dtype)
+
+            case "None":
+                S = S.astype(self.dtype)
+                if S.ndim == 0:
+                    raise ValueError("chunking requires at least 1 dimension, got 0-d array")
+                return iter((S,))
+
+            case _:
+                raise ValueError(f"mod must be one of {_MODES}, got {mod!r}")
 
     def __call__(self, S):
         """Alias of :meth:`chunk`."""

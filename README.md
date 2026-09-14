@@ -182,7 +182,7 @@ tests/               pytest suite + benchmarking harnesses (comparison/,
 
 ## Changelog
 
-### Unreleased (0.3.0)
+### 0.2.1
 
 - `EMD` is now the native self-implemented sifting engine (ex-`EMD_new`,
   registered as the public `EMD`; the former PyEMD wrapper was removed) —
@@ -201,6 +201,15 @@ tests/               pytest suite + benchmarking harnesses (comparison/,
   chosen by the mode-level validation (`docs/EMD_Validation_and_Comparison_Report.md`)
   and the mechanism/optimization analysis (`docs/EMD_Quality_Gap_and_Optimization.md`);
   `spline_kind` accepts the canonical `Utils.Spline` kinds.
+- Temporary memmap backing files are now cleaned up: the input-layer memmap
+  registry deletes its files at interpreter exit (`atexit`, handle closed
+  first — required on Windows), and `Utils.Chunk.exo_chunks` deletes its
+  files when each iteration ends; see
+  `docs/EMD_Large_Signal_Memory_Report.md` §5.
+- Timing / quality / memory benchmarks re-run on the native engine and
+  reported under `docs/` (four new reports + `docs/EXPERIMENTS_INDEX.md`);
+  stale test files removed and legacy benchmark data archived under
+  `tests/comparison/results/_legacy_pyemd_wrapper/`.
 - LMD defaults to the extrema (Spline) interpolation envelope; the analytic
   Hilbert envelope stays as an explicit opt-in only. The Hilbert-vs-Spline
   envelope concepts are separated again (`Utils.Envelope` restored as its own

@@ -1,0 +1,212 @@
+[
+  {
+    "config": "vmd_new",
+    "size_mb": 1.0,
+    "n_samples": 131072,
+    "status": "ok",
+    "seconds": 0.09303759999602335,
+    "peak_rss_mb": 63.59765625,
+    "abs_peak_rss_mb": 99.87109375,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32262573612314527,
+    "engine": null,
+    "chunk_size": 0,
+    "out_of_core": false,
+    "projected_total_mb": 0.0,
+    "omega_hz": [
+      0.00542759602346013,
+      0.14716623448562913,
+      0.21376275342349552
+    ]
+  },
+  {
+    "config": "new_ram",
+    "size_mb": 1.0,
+    "n_samples": 131072,
+    "status": "ok",
+    "seconds": 0.08804580000287388,
+    "peak_rss_mb": 39.6015625,
+    "abs_peak_rss_mb": 74.7578125,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32262573612314527,
+    "engine": "ram",
+    "chunk_size": 131072,
+    "out_of_core": false,
+    "projected_total_mb": 32.00006103515625,
+    "omega_hz": [
+      0.00542759602346013,
+      0.14716623448562913,
+      0.21376275342349552
+    ]
+  },
+  {
+    "config": "new_chunk",
+    "size_mb": 1.0,
+    "n_samples": 131072,
+    "status": "ok",
+    "seconds": 0.15041919999930542,
+    "peak_rss_mb": 47.61328125,
+    "abs_peak_rss_mb": 82.82421875,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32262573612314516,
+    "engine": "chunked",
+    "chunk_size": 131072,
+    "out_of_core": false,
+    "projected_total_mb": 32.00006103515625,
+    "omega_hz": [
+      0.005427596023460132,
+      0.14716623448562913,
+      0.21376275342349488
+    ]
+  },
+  {
+    "config": "new_ooc",
+    "size_mb": 1.0,
+    "n_samples": 131072,
+    "status": "ok",
+    "seconds": 0.1522975999978371,
+    "peak_rss_mb": 45.75,
+    "abs_peak_rss_mb": 80.91015625,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32262573612314516,
+    "engine": "chunked",
+    "chunk_size": 131072,
+    "out_of_core": true,
+    "projected_total_mb": 50.00004577636719,
+    "omega_hz": [
+      0.005427596023460132,
+      0.14716623448562913,
+      0.21376275342349488
+    ]
+  },
+  {
+    "config": "new_auto",
+    "size_mb": 1.0,
+    "n_samples": 131072,
+    "status": "ok",
+    "seconds": 0.0806838999997126,
+    "peak_rss_mb": 39.65625,
+    "abs_peak_rss_mb": 74.984375,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32262573612314527,
+    "engine": "ram",
+    "chunk_size": 131072,
+    "out_of_core": false,
+    "projected_total_mb": 32.00006103515625,
+    "omega_hz": [
+      0.00542759602346013,
+      0.14716623448562913,
+      0.21376275342349552
+    ]
+  },
+  {
+    "config": "vmd_new",
+    "size_mb": 10.0,
+    "n_samples": 1310720,
+    "status": "ok",
+    "seconds": 1.2085640000004787,
+    "peak_rss_mb": 630.74609375,
+    "abs_peak_rss_mb": 665.8359375,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32265128635336143,
+    "engine": null,
+    "chunk_size": 0,
+    "out_of_core": false,
+    "projected_total_mb": 0.0,
+    "omega_hz": [
+      0.0054307920570529356,
+      0.14716740228878059,
+      0.21186702068909424
+    ]
+  },
+  {
+    "config": "new_ram",
+    "size_mb": 10.0,
+    "n_samples": 1310720,
+    "status": "ok",
+    "seconds": 1.2267101999968872,
+    "peak_rss_mb": 390.6328125,
+    "abs_peak_rss_mb": 425.78515625,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32265128635336143,
+    "engine": "ram",
+    "chunk_size": 1310720,
+    "out_of_core": false,
+    "projected_total_mb": 320.00006103515625,
+    "omega_hz": [
+      0.0054307920570529356,
+      0.14716740228878059,
+      0.21186702068909424
+    ]
+  },
+  {
+    "config": "new_chunk",
+    "size_mb": 10.0,
+    "n_samples": 1310720,
+    "status": "ok",
+    "seconds": 1.541603400000895,
+    "peak_rss_mb": 323.3515625,
+    "abs_peak_rss_mb": 358.640625,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32265128635336165,
+    "engine": "chunked",
+    "chunk_size": 466033,
+    "out_of_core": false,
+    "projected_total_mb": 320.00006103515625,
+    "omega_hz": [
+      0.005430792057052935,
+      0.14716740228878053,
+      0.2118670206890964
+    ]
+  },
+  {
+    "config": "new_ooc",
+    "size_mb": 10.0,
+    "n_samples": 1310720,
+    "status": "ok",
+    "seconds": 1.5702273999995668,
+    "peak_rss_mb": 320.671875,
+    "abs_peak_rss_mb": 355.88671875,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32265128635336165,
+    "engine": "chunked",
+    "chunk_size": 466033,
+    "out_of_core": true,
+    "projected_total_mb": 358.2221374511719,
+    "omega_hz": [
+      0.005430792057052935,
+      0.14716740228878053,
+      0.2118670206890964
+    ]
+  },
+  {
+    "config": "new_auto",
+    "size_mb": 10.0,
+    "n_samples": 1310720,
+    "status": "ok",
+    "seconds": 1.0751818000062485,
+    "peak_rss_mb": 390.65625,
+    "abs_peak_rss_mb": 426.06640625,
+    "n_iter": 10,
+    "converged": false,
+    "residual_ratio": 0.32265128635336143,
+    "engine": "ram",
+    "chunk_size": 1310720,
+    "out_of_core": false,
+    "projected_total_mb": 320.00006103515625,
+    "omega_hz": [
+      0.0054307920570529356,
+      0.14716740228878059,
+      0.21186702068909424
+    ]
+  }
+]

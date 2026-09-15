@@ -23,7 +23,11 @@ __all__ = [
     "FFT_TILED_MIN_ELEMS",
     "MIN_CHUNK_ELEMS",
     "ADAPT_MIN_BYTES",
-    "DEFAULT_FILL_CHUNK_ELEMS"
+    "DEFAULT_FILL_CHUNK_ELEMS",
+    "VMD_MIN_SAMPLES",
+    "VMD_UHAT_INFO_LIMIT",
+    "VMD_PEAK_INIT_LIMIT",
+    "VMD_CHUNK_WORK_BYTES",
 ]
 
 import numpy as np
@@ -89,6 +93,21 @@ FFT_PIP_PACKAGE = \
 #: 低于 FFT_TILED_MIN_ELEMS 不走四步分块 (不如直算)。
 FFT_THREAD_MIN_ELEMS = 1 << 20      # 1M 元素
 FFT_TILED_MIN_ELEMS = 1 << 18       # 256K 元素
+
+"""
+definition: for VMD
+"""
+#: VMD 最短信号长度 (再短则镜像延拓与 K 个非退化模态都无意义)。
+VMD_MIN_SAMPLES = 8
+
+#: VMD 诊断谱 ``info["u_hat"]`` 的体积上限: 超过则不再计算 (它是 K·N 复数)。
+VMD_UHAT_INFO_LIMIT = 64 * SIZE["1MB"]
+
+#: VMD ``init_mod="peak"`` 需要的整谱幅度上限: 超过则退化为 uniform 初值。
+VMD_PEAK_INIT_LIMIT = 256 * SIZE["1MB"]
+
+#: VMD 分块引擎的目标单块工作集 (字节): 据此按 K 反推默认块长。
+VMD_CHUNK_WORK_BYTES = 64 * SIZE["1MB"]
 
 """
 definition: for spline

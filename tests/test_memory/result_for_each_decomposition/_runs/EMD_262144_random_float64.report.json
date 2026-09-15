@@ -10,15 +10,15 @@
     ],
     "nbytes": 262144,
     "backing": "ndarray",
-    "build_wall_s": 0.026054,
-    "build_peak_delta_rss_bytes": 3481600
+    "build_wall_s": 0.00081,
+    "build_peak_delta_rss_bytes": 749568
   },
   "decompose": {
     "status": "ok",
-    "wall_s": 1.689312,
-    "baseline_rss_bytes": 37314560,
-    "peak_rss_bytes": 80437248,
-    "delta_rss_bytes": 43122688
+    "wall_s": 0.379455,
+    "baseline_rss_bytes": 42201088,
+    "peak_rss_bytes": 85458944,
+    "delta_rss_bytes": 43257856
   },
   "result": {
     "n_imfs": 3,
@@ -45,23 +45,23 @@
       "safe": 0,
       "chunk_size": 1048576,
       "result": false,
-      "wall_s": 0.000856,
-      "delta_rss_bytes": 12288,
+      "wall_s": 0.000317,
+      "delta_rss_bytes": 53248,
       "error": null
     },
     {
       "safe": 1,
       "chunk_size": 1048576,
       "result": false,
-      "wall_s": 0.000693,
-      "delta_rss_bytes": 20480,
+      "wall_s": 0.000245,
+      "delta_rss_bytes": 0,
       "error": null
     },
     {
       "safe": 2,
       "chunk_size": 1048576,
       "result": false,
-      "wall_s": 0.000699,
+      "wall_s": 0.000356,
       "delta_rss_bytes": 24576,
       "error": null
     }

@@ -27,6 +27,7 @@ Chunked processing utilities (统一分块工具)。
 import os
 import tempfile
 import uuid
+import atexit
 from typing import Callable, Iterator, Literal, Optional, Union
 
 import numpy as np
@@ -40,6 +41,8 @@ __all__ = [
     "chunked_map",
     "chunked_fill",
     "exo_chunks",
+    "temp_memmap",
+    "drop_memmap",
     "adapt_chunk_size",
     "default_chunk_size",
     "Chunk",
@@ -291,6 +294,79 @@ def exo_chunks(
                 os.remove(path)
             except OSError:
                 pass
+
+
+#: 持久外存工作区的临时文件登记表 (进程退出时统一关闭并删除)。
+_STORE_FILES: dict = {}
+
+
+def temp_memmap(shape, dtype=np.float64, temp_dir: Optional[str] = None) -> np.memmap:
+    """
+    创建**持久**的临时 memmap (外存工作区), 供跨迭代状态使用。
+
+    与 ``exo_chunks`` 的区别: 后者的 memmap 只在一次迭代步内有效 (用完即删), 而本函数
+    返回的缓冲可长期持有 (如 out-of-core 算法的模态谱/频谱/λ̂), 进程退出时由 ``atexit``
+    统一关闭并删除 —— Windows 需先 close 再 unlink。
+
+    Parameters
+    ----------
+    shape : tuple[int, ...]
+        缓冲形状。
+    dtype : np.dtype
+        元素类型 (默认 float64)。
+    temp_dir : str | None
+        存放目录, 默认系统临时目录。
+
+    Returns
+    -------
+    np.memmap
+        可读写、已登记的临时 memmap。
+    """
+    fd, path = tempfile.mkstemp(prefix="md_store_", suffix=".dat", dir=temp_dir)
+    os.close(fd)
+    try:
+        mm = np.memmap(path, dtype=np.dtype(dtype), mode="w+", shape=tuple(shape))
+    except BaseException:
+        # 建图失败 (非法 shape/dtype 等) 时不能把 mkstemp 留下的空文件遗弃在临时目录。
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise
+    _STORE_FILES[path] = mm
+    return mm
+
+
+def drop_memmap(mm) -> None:
+    """显式释放 ``temp_memmap`` 创建的缓冲 (关句柄 + 删文件 + 注销登记)。"""
+    path = getattr(mm, "filename", None)
+    try:
+        mm._mmap.close()
+    except Exception:
+        pass
+    if path:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        _STORE_FILES.pop(path, None)
+
+
+def _cleanup_stores() -> None:
+    """关闭并删除全部临时外存缓冲 (幂等; 错误吞掉, OS 临时清理器兜底)。"""
+    for path, mm in list(_STORE_FILES.items()):
+        try:
+            mm._mmap.close()
+        except Exception:
+            pass
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    _STORE_FILES.clear()
+
+
+atexit.register(_cleanup_stores)
 
 
 def adapt_chunk_size(chunk_size: int, nbytes: int, extra_per_elem: int = 3) -> int:

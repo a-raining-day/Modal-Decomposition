@@ -32,7 +32,7 @@ dependencies = [
     "psutil"
 ]
 
-optional-dependencies = {"cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "scipy"=["scipy"]}
+optional-dependencies = {"cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "scipy"=["scipy"], "ewtpy"=["ewtpy"]}
 
 [project.urls]
 homepage = "https://github.com/a-raining-day/Modal-Decomposition"

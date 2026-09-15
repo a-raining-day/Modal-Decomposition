@@ -20,183 +20,25 @@ MATLAB / vmdpy 的镜像延拓与单边谱约定; 中心频率与模态与 vmdpy
 ``engine="ram"`` 与 ``"chunked"`` 单块时的数值差异仅来自归约求和顺序 (≈1e-15)。
 """
 
-import atexit
-import os
 import sys
-import tempfile
 from dataclasses import dataclass, replace
 from typing import ClassVar, Literal
 
 import numpy as np
 
 from .Base import Config, Decomposer, DecompositionResult
+from .Base.ConstDefine import (
+    VMD_MIN_SAMPLES,
+    VMD_UHAT_INFO_LIMIT,
+    VMD_PEAK_INIT_LIMIT,
+    VMD_CHUNK_WORK_BYTES,
+)
 from ._Registry import register_class
-from .Utils import Check_Time_and_Signal, get_fft, get_peaks, resolve_seed
-from .Utils.Chunk import chunked_fill, default_chunk_size
+from .Utils import Check_Time_and_Signal, get_fft, get_mirror, get_peaks, resolve_seed
+from .Utils.Chunk import chunked_fill, default_chunk_size, temp_memmap, drop_memmap
 from .Utils.Memory import should_use_memmap
 
 __all__ = ["VMD", "VMDConfig"]
-
-#: ω 初值模式 (canonical; 与 vmdpy init=1/2/0 的对应关系见 _init_omega)。
-_INIT_MODES = ("uniform", "random", "zero", "peak")
-
-#: 频域扫描引擎 (实验开关)。
-_ENGINES = ("ram", "chunked", "auto")
-
-#: 兼容写法 → canonical (含草稿版的 "unique" 命名与 "ramdom" 拼写)。
-_INIT_ALIASES = {
-    "uniform": "uniform",
-    "unique": "uniform",
-    "random": "random",
-    "ramdom": "random",
-    "zero": "zero",
-    "zeros": "zero",
-    "peak": "peak",
-}
-
-#: 最短信号长度 (再短则镜像延拓与 K 个非退化模态都没有意义)。
-_MIN_SAMPLES = 8
-
-#: ``info["u_hat"]`` 的体积上限: 超过则不再计算该诊断谱 (大数组下它是 K·N 复数,
-#: 会额外吃掉与模态谱同量级的内存), 改为在 info 里置 ``"u_hat": None``。
-_UHAT_INFO_LIMIT = 64 * 1024 ** 2
-
-#: ``init_mod="peak"`` 需要的整谱幅度上限: 超过则退化为 "uniform" 初值 (避免为初值
-#: 再分配一份 N 长度幅度谱), 生效值记录在 ``info["init_mod"]``。
-_PEAK_INIT_LIMIT = 256 * 1024 ** 2
-
-#: 分块引擎的目标单块工作集 (字节): 据此按 K 反推默认块长, 再交给
-#: ``Utils.Chunk.default_chunk_size`` 按全局内存策略收缩。
-_CHUNK_WORK_BYTES = 64 * 1024 ** 2
-
-#: 外存工作区的临时文件登记表 (进程退出时统一关闭并删除)。
-_MEM_FILES: dict = {}
-
-
-def _temp_memmap(dtype, shape) -> np.memmap:
-    """
-    在系统临时目录创建可写 memmap (外存工作区)。
-
-    与 ``Utils.Check._temp_memmap`` 同构 (同样的 ``md_memmap_`` 前缀与 ``atexit``
-    清理, Windows 需先 close 再 unlink); 若本实验方案转正, 应把它上移为 ``Utils``
-    公共 API, 避免两处重复实现。
-    """
-    fd, path = tempfile.mkstemp(prefix="md_memmap_", suffix=".dat")
-    os.close(fd)
-    mm = np.memmap(path, dtype=dtype, mode="w+", shape=shape)
-    _MEM_FILES[path] = mm
-    return mm
-
-
-def _cleanup_memmaps() -> None:
-    """关闭并删除本模块创建的全部临时 memmap 后备文件 (幂等, 错误吞掉)。"""
-    for path, mm in list(_MEM_FILES.items()):
-        try:
-            mm._mmap.close()
-        except Exception:
-            pass
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    _MEM_FILES.clear()
-
-
-atexit.register(_cleanup_memmaps)
-
-
-def _drop_memmap(mm) -> None:
-    """显式释放一个临时 memmap (关句柄 + 删文件 + 从登记表移除)。
-
-    大数组下镜像/频谱用完后立刻释放, 避免它们的页缓存与磁盘占用留到分解结束。
-    """
-    path = getattr(mm, "filename", None)
-    try:
-        mm._mmap.close()
-    except Exception:
-        pass
-    if path:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-        _MEM_FILES.pop(path, None)
-
-
-def _spans(n: int, chunk_size: int):
-    """把 ``[0, n)`` 切成 ``(start, stop)`` 半开区间 (分块粒度由调用方给定)。"""
-    for start in range(0, n, chunk_size):
-        yield start, min(start + chunk_size, n)
-
-
-def _fill_mirror(dst, f: np.ndarray, N: int, chunk_size: int) -> None:
-    """
-    把整体镜像延拓写进 ``dst`` (长度 2N), 全程分块搬运以限制工作集。
-
-    ``dst = [flip(f[:L]), f, flip(f[N-R:])]``, ``L = N//2``, ``R = N - N//2``。
-    中间的整段用 ``Utils.Chunk.chunked_fill`` 流式写入 (对 memmap 会自动 flush);
-    两端是反向切片, 必须**按目标区间对齐**取源: ``dst[i] = f[L-1-i]``
-    (写成 ``dst[a:b] = f[a:b][::-1]`` 只在单块时正确, 分块时会错位)。
-    """
-    left = N // 2
-    right = N - left
-
-    chunked_fill(dst[left:left + N], f, chunk_size)
-    for a, b in _spans(left, chunk_size):
-        dst[a:b] = f[left - b:left - a][::-1]                   # flip(f[:left])
-    for a, b in _spans(right, chunk_size):
-        dst[left + N + a:left + N + b] = f[N - b:N - a][::-1]   # flip(f[N-right:])
-
-
-def _project_bytes(N: int, K: int, out_of_core: bool, chunk_size: int) -> dict:
-    """
-    估算一次分解的主要内存项 (字节), 供 ``Utils.Memory`` 策略判定与实验报告引用。
-
-    以 float64 / complex128 计 (``np.fft`` 的工作精度), 按引擎分别建模:
-
-    * 内存内 (``out_of_core=False``): 镜像 + 单边谱 + 模态谱 + λ̂/2 + 累加器 + 频率轴
-      + 逐模态暂存 + (K 个模态一起做的) 逆变换与其输出;
-    * 外存 (``out_of_core=True``): 镜像/模态谱/λ̂ 落盘 ⇒ 常驻项只剩**单边谱**
-      (``np.fft`` 无法分块, 这是"内存地板") + 结果本身 (K·N float64 的 IMFs 与 Res,
-      返回契约要求它们在内存里) + 逐模态逆变换缓冲 + 单块工作集。
-
-    返回各项与 ``total``; 这是量级估算 (未计 FFT 内部临时量), 用于决策与对照实测。
-    """
-    c16, f8 = 16, 8
-    out_modes = K * N * f8                      # 返回的 IMFs (float64 时与工作数组同体)
-    out_res = N * f8                            # 返回的 Res
-    floor = (N + 1) * c16                       # 单边谱: rfft 输出, 无法分块
-
-    if out_of_core:
-        terms = {
-            "input": 0,                         # 输入可保持 memmap
-            "mirror": 0,                        # 落盘
-            "spectrum": floor,
-            "modes": 0,                         # 落盘
-            "dual": 0,                          # 落盘
-            "accum": 0,                         # 逐块
-            "freqs": 0,                         # 逐块
-            "scratch": 0,                       # 逐块
-            "recon": floor + 2 * N * f8,        # 逐模态: (N+1) 复数 + 2N 实数
-            "output": out_modes + out_res,
-            "chunk_ws": K * chunk_size * c16 * 3 + chunk_size * (c16 + f8),
-        }
-    else:
-        terms = {
-            "input": N * f8,
-            "mirror": 2 * N * f8,
-            "spectrum": floor,
-            "modes": K * N * c16,               # û 模态谱 (u_prev 整块已去掉)
-            "dual": N * c16,                    # λ̂/2 (单份)
-            "accum": N * c16,                   # Σ_i û_i
-            "freqs": N * f8,
-            "scratch": N * c16 * 3 + N * f8 * 2,   # 旧值/残差/增量 + denom/power
-            "recon": K * floor + K * 2 * N * f8,   # K 个模态一起逆变换
-            "output": out_modes + out_res,
-            "chunk_ws": 0,
-        }
-    terms["total"] = int(sum(terms.values()))
-    return terms
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -204,7 +46,7 @@ class VMDConfig(Config):
     """
     Effective parameters of a VMD run.
 
-    与 ``VMD_newConfig`` 相同的前 9 个字段, 外加三个实验开关:
+    前 9 个字段与旧版包装器同名同义, 外加四个运行期开关:
 
     ``engine``
         频域扫描引擎 (``"ram"`` / ``"chunked"`` / ``"auto"``);
@@ -233,111 +75,6 @@ class VMDConfig(Config):
     store_history: bool
     vmdpy: bool
 
-#: 旧版 ``VMD`` (vmdpy 包装) 的关键字 → 本实现参数 (向后兼容)。
-_VMD_LEGACY = {"K": "num_imf", "init": "init_mod", "tol": "epsilon"}
-#: vmdpy ``init`` 取值 → ``init_mod`` (0=zero / 1=uniform / 2=random)。
-_VMD_INIT_MAP = {0: "zero", 1: "uniform", 2: "random"}
-#: ``init_mod`` → vmdpy ``init`` (反向映射; "peak" 仅原生实现支持)。
-_INIT_TO_VMDPY = {"zero": 0, "uniform": 1, "random": 2}
-#: cache 键 (与 CacheConventions §2 一致: sys.modules 风格名)。
-_VMDPY_CACHE_KEY = "vmdpy"
-
-
-def _work_dtype(dtype) -> np.dtype:
-    """float32/float64 保持原精度; 其余 (float16/int/bool) 提升为 float64。"""
-    dtype = np.dtype(dtype)
-    if dtype.kind == "f" and dtype.itemsize >= 4:
-        return dtype
-    return np.dtype(np.float64)
-
-
-def _mirror_signal(f: np.ndarray) -> np.ndarray:
-    """
-    端点整体镜像延拓, 长度恰好 ``2N``。
-
-    左段 ``flip(f[:N//2])`` + 原信号 + 右段 ``flip(f[N-(N-N//2):])``。偶数长度与
-    vmdpy/MATLAB 的 ``[flip(f[:N/2]), f, flip(f[-N/2:])]`` 逐位一致; 奇数长度用
-    ``N - N//2`` 补右段以保证总长为偶数, 因此**不会像 vmdpy 那样丢掉末样本**。
-
-    注: ``Utils.Mirror.mirror_extrema`` 镜像是"极值点序列"(EMD nbsym / LMD 边界
-    语义), 与整条信号的镜像不同, 故此处本地实现。
-    """
-    n = f.size
-    left = n // 2
-    right = n - left
-
-    out = np.empty(2 * n, dtype=f.dtype)
-    out[:left] = f[:left][::-1]
-    out[left:left + n] = f
-    out[left + n:] = f[n - right:][::-1]
-    return out
-
-
-def _init_omega(
-    init_mod: str,
-    K: int,
-    freqs: np.ndarray,
-    f_hat_plus: np.ndarray,
-    rng: np.random.Generator,
-    N: int,
-) -> np.ndarray:
-    """
-    中心频率初值 ``ω`` (归一化循环频率, 升序)。
-
-    Parameters
-    ----------
-    init_mod : {"uniform", "random", "zero", "peak"}
-        ``"zero"``    — ``ω ≡ 0`` (vmdpy ``init=0``);
-        ``"uniform"`` — ``ω_i = 0.5·i/K`` (vmdpy ``init=1``, 与 vmdpy/MATLAB 逐位一致;
-                        注意该网格覆盖 ``[0, 0.5)``, 而正频半轴只到 ``0.25``);
-        ``"random"``  — ``[1/N, 0.5]`` 对数均匀取 K 点后升序 (vmdpy ``init=2``);
-        ``"peak"``    — 单边幅度谱最强 K 个峰 (``Utils.Peaks``, numpy 后端), 峰不足
-                        时用谱内等间隔点补齐 —— 自研扩展。
-    K : int
-        模态数。
-    freqs : np.ndarray
-        正频半轴归一化频率 (``j/T``), 长度 N。
-    f_hat_plus : np.ndarray
-        镜像信号的单边谱 (长度 N), ``"peak"`` 模式据此找峰。
-    rng : np.random.Generator
-        局部随机数发生器 (``"random"`` 模式使用)。
-    N : int
-        原始信号长度 (随机初值下界 ``1/N`` 即原始记录的分辨率)。
-
-    Returns
-    -------
-    np.ndarray
-        长度 K、升序的初值频率 (可能含重复值, 例如 ``"zero"``)。
-    """
-    if init_mod == "zero":
-        return np.zeros(K, dtype=np.float64)
-
-    if init_mod == "uniform":
-        return (0.5 / K) * np.arange(K, dtype=np.float64)
-
-    if init_mod == "random":
-        lo, hi = 1.0 / N, 0.5
-        w = np.exp(np.log(lo) + (np.log(hi) - np.log(lo)) * rng.random(K))
-        return np.sort(w)
-
-    # "peak": Utils.Peaks 惰性取用 (每次 decompose 解析一次, 迭代内零开销)。
-    find_peaks = get_peaks().find_peaks
-    idx, props = find_peaks(np.abs(f_hat_plus), mod="numpy")
-
-    if idx.size == 0:
-        return (0.5 / K) * np.arange(K, dtype=np.float64)
-
-    heights = np.asarray(props.get("peak_heights", np.abs(f_hat_plus)[idx]))
-    strongest = np.argsort(heights, kind="stable")[::-1][:K]
-    picked = np.sort(idx[strongest]).astype(np.float64) / (2.0 * N)
-
-    if picked.size < K:
-        # 峰不足 K 个: 其余初值均匀铺在正频半轴内, 再整体升序。
-        tail = np.linspace(freqs[0], freqs[-1], K - picked.size + 2)[1:-1]
-        return np.sort(np.concatenate([picked, tail]))
-
-    return picked
-
 
 @register_class("VMD")
 class VMD(Decomposer):
@@ -355,8 +92,8 @@ class VMD(Decomposer):
     4. stop when ``(1/T)·Σ_k‖Δû_k‖² ≤ epsilon`` or after ``n`` iterations;
     5. rebuild the real modes from the one-sided spectra and drop the mirror.
 
-    Use as ``Class.VMD_new(**params).decompose(S, T)``; every result carries a
-    frozen ``VMD_newConfig`` snapshot of the effective parameters. ``IMFs`` has
+    Use as ``Class.VMD(**params).decompose(S, T)``; every result carries a
+    frozen ``VMDConfig`` snapshot of the effective parameters. ``IMFs`` has
     shape (K,N); ``Res`` is the true remainder ``S − ΣIMFs`` (VMD keeps data
     fidelity as a *soft* constraint when ``tau=0``), so ``reconstruct()``
     reproduces the input exactly.
@@ -380,7 +117,7 @@ class VMD(Decomposer):
         alpha: float = 2000.0,
         tau: float = 0.0,
         epsilon: float = 1e-7,
-        DC: int | bool = 0,
+        DC: bool = False,
         init_mod: Literal["uniform", "random", "zero", "peak"] = "uniform",
         seed: int | None = None,
         engine: Literal["ram", "chunked", "auto"] = "auto",
@@ -389,7 +126,6 @@ class VMD(Decomposer):
         store_history: bool = False,
         vmdpy: bool = False,
         config: VMDConfig = None,
-        **legacy,
     ) -> None:
         """
         Parameters
@@ -408,24 +144,24 @@ class VMD(Decomposer):
         epsilon : float
             Convergence tolerance of ``(1/T)·Σ_k‖Δû_k‖²``; 0 runs all ``n``
             iterations (used by the vmdpy parity check).
-        DC : int | bool
-            When true the first mode is kept at DC (``ω_0 = 0``); ``0/1`` are
-            accepted for ``VMD`` compatibility.
+        DC : bool
+            When true the first mode is kept at DC (``ω_0 = 0``). Must be a real
+            ``bool`` (``1``/``0`` are rejected).
         init_mod : {"uniform", "random", "zero", "peak"}
             Center-frequency initialization; ``"uniform"``/``"random"``/``"zero"``
             match vmdpy ``init=1/2/0`` and ``"peak"`` starts from the strongest
-            spectral peaks (``Utils.Peaks``). The draft spellings ``"unique"``
-            and ``"ramdom"`` are accepted as aliases.
+            spectral peaks (``Utils.Peaks``, native-only).
         seed : int | None
             Local random seed (only affects ``init_mod="random"``). A non-None
             process-level seed set through ``Modal_Decomposition.set_seed``
             overrides it and emits a ``UserWarning``.
         engine : {"ram", "chunked", "auto"}
-            Frequency-axis sweep engine. ``"ram"`` (default) keeps everything in
-            memory and is bit-identical to ``VMD_new``; ``"chunked"`` sweeps the
-            frequency axis in chunks (working set nearly independent of ``K``);
-            ``"auto"`` picks ``"chunked"`` when the projected working set trips
-            the global memory policy (``Utils.Memory.should_use_memmap``).
+            Frequency-axis sweep engine. ``"auto"`` (default) defers to the global
+            memory policy; ``"ram"`` keeps everything in memory (fastest, and by
+            construction identical to a plain single-block sweep); ``"chunked"``
+            sweeps the frequency axis in chunks (working set nearly independent
+            of ``N``); ``"auto"`` picks ``"chunked"`` when the projected working
+            set trips ``Utils.Memory.should_use_memmap``.
         chunk_size : int | None
             Frequency chunk length for ``engine="chunked"``. ``None`` uses
             ``Utils.Chunk.default_chunk_size`` (policy-aware). Values ``>= N``
@@ -436,9 +172,9 @@ class VMD(Decomposer):
             ``None`` decides per run through ``Utils.Memory.should_use_memmap``;
             ``True``/``False`` force it.
         store_history : bool
-            Keep the per-iteration history (same semantics as ``VMD_new``): when True,
-            ``info`` additionally carries ``u_hat_history`` (n_iter, K, N) and
-            ``udiff_history`` (n_iter,), costing ``n_iter·K·N`` complex elements.
+            Keep the per-iteration history: when True, ``info`` additionally
+            carries ``u_hat_history`` (n_iter, K, N) and ``udiff_history``
+            (n_iter,), costing ``n_iter·K·N`` complex elements.
             In the chunked engine the spectra are written **per chunk**, so enabling it
             does not add a full-spectrum copy pass. Default False.
         config : VMDConfig, optional
@@ -461,21 +197,6 @@ class VMD(Decomposer):
         独立 (Jacobi) 更新在频带重叠时会发散, 分块方案也显著增加迭代数, 而多线程
         实测无收益。
         """
-        # --- 旧版 VMD (vmdpy 包装) 关键字兼容: K / init / tol -------------- #
-        # 注意: 本实现的**位置参数顺序与旧版不同** (旧版首参是 alpha), 旧调用请改用
-        # 关键字 (``VMD(alpha=2000, K=3)``) 或走本兼容入口。
-        if "K" in legacy:
-            num_imf = legacy.pop("K")
-        if "init" in legacy:
-            init_mod = _VMD_INIT_MAP.get(legacy.pop("init"), None) or init_mod
-        if "tol" in legacy:
-            epsilon = legacy.pop("tol")
-        if legacy:
-            raise TypeError(
-                "unexpected keyword arguments: %s (旧版 VMD 另接受 K/init/tol)"
-                % sorted(legacy)
-            )
-
         self.config = config
 
         if isinstance(config, VMDConfig):
@@ -550,25 +271,26 @@ class VMD(Decomposer):
         if not np.isfinite(self.epsilon) or self.epsilon < 0.0:
             raise ValueError(f"epsilon must be non-negative and finite, got {self.epsilon!r}")
 
-        if isinstance(self.DC, bool):
-            self.DC = bool(self.DC)
-        elif isinstance(self.DC, (int, np.integer)) and int(self.DC) in (0, 1):
-            self.DC = bool(self.DC)
-        else:
-            raise ValueError(f"DC must be a bool (or 0/1), got {self.DC!r}")
+        if not isinstance(self.DC, bool):
+            raise ValueError(f"DC must be a bool, got {self.DC!r}")
 
-        if not isinstance(self.init_mod, str) or self.init_mod.strip().lower() not in _INIT_ALIASES:
-            raise ValueError(
-                f"init_mod must be one of {_INIT_MODES} "
-                f"(aliases: {sorted(_INIT_ALIASES)}), got {self.init_mod!r}"
-            )
-        self.init_mod = _INIT_ALIASES[self.init_mod.strip().lower()]
+        match self.init_mod.strip().lower() if isinstance(self.init_mod, str) else None:
+            case "uniform" | "random" | "zero" | "peak" as name:
+                self.init_mod = name
+            case _:
+                raise ValueError(
+                    "init_mod must be one of ('uniform', 'random', 'zero', 'peak'), "
+                    f"got {self.init_mod!r}"
+                )
 
-        if not isinstance(self.engine, str) or self.engine.strip().lower() not in _ENGINES:
-            raise ValueError(
-                f"engine must be one of {_ENGINES}, got {self.engine!r}"
-            )
-        self.engine = self.engine.strip().lower()
+        match self.engine.strip().lower() if isinstance(self.engine, str) else None:
+            case "ram" | "chunked" | "auto" as name:
+                self.engine = name
+            case _:
+                raise ValueError(
+                    "engine must be one of ('ram', 'chunked', 'auto'), "
+                    f"got {self.engine!r}"
+                )
 
         if self.chunk_size is not None:
             if isinstance(self.chunk_size, bool) or not isinstance(self.chunk_size, (int, np.integer)):
@@ -611,6 +333,8 @@ class VMD(Decomposer):
         # 工具惰性取用: FFT 走 Utils.FFT 分发器 (后端由 Base.ConstDefine.FFT_BACKEND
         # 决定), 本模块不直接调 np.fft; vmdpy 分支的第三方库按需经 import cache 取。
         self.fft = get_fft()
+        # 端点镜像统一走 Utils.Mirror (整条信号语义, 与极值镜像 mirror_extrema 区分)
+        self.mirror = get_mirror().mirror_signal
 
     def decompose(self, S, T=None) -> DecompositionResult:
         """
@@ -645,9 +369,9 @@ class VMD(Decomposer):
         """
         S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
 
-        if N < _MIN_SAMPLES:
+        if N < VMD_MIN_SAMPLES:
             raise ValueError(
-                f"{self.name}: signal length must be >= {_MIN_SAMPLES}, got {N}"
+                f"{self.name}: signal length must be >= {VMD_MIN_SAMPLES}, got {N}"
             )
 
         K = int(self.num_imf)
@@ -657,7 +381,7 @@ class VMD(Decomposer):
                 f"every mode keeps at least one spectral bin"
             )
 
-        out_dtype = _work_dtype(np.asarray(S).dtype)
+        out_dtype = VMD._work_dtype(np.asarray(S).dtype)
         f = np.asarray(S, dtype=np.float64).reshape(-1)
 
         # --- vmdpy 分支: 交给可选的第三方实现 (不强制安装) ----------------- #
@@ -670,7 +394,7 @@ class VMD(Decomposer):
         T_len = 2 * N
 
         # --- 引擎 / 分块粒度 / 落盘策略解析 (全部走 Utils 的既有策略) ------ #
-        proj_ram = _project_bytes(N, K, False, N)
+        proj_ram = self._project_bytes(N, K, False, N)
         engine = self.engine
         if engine == "auto":
             engine = "chunked" if should_use_memmap(proj_ram["total"]) else "ram"
@@ -680,11 +404,11 @@ class VMD(Decomposer):
             out_of_core = False
         else:
             if self.chunk_size is None:
-                # 策略感知粒度: 目标"每块工作集 ≈ _CHUNK_WORK_BYTES" (K 个模态各需
+                # 策略感知粒度: 目标"每块工作集 ≈ VMD_CHUNK_WORK_BYTES" (K 个模态各需
                 # 旧值/新值/累加, 约 3 份复数), 再交给 Utils.Chunk 按内存策略收缩。
                 # 注: 直接用 Chunk 的默认 8M 频点基数在 K 较大时会得到 GB 级工作集,
                 # 故这里先按 K 折算基数。
-                base = max(1, _CHUNK_WORK_BYTES // (K * 16 * 3))
+                base = max(1, VMD_CHUNK_WORK_BYTES // (K * 16 * 3))
                 chunk_size = int(default_chunk_size(N * 16, base=min(base, N)))
             else:
                 chunk_size = int(self.chunk_size)
@@ -695,7 +419,7 @@ class VMD(Decomposer):
                 else bool(self.out_of_core)
             )
 
-        projection = _project_bytes(N, K, out_of_core, chunk_size)
+        projection = self._project_bytes(N, K, out_of_core, chunk_size)
 
         # store_history=True: 逐次迭代的模态谱与收敛量 (代价 n·K·N 个复数)。
         u_hist = np.empty((self.n, K, N), dtype=np.complex128) if self.store_history else None
@@ -716,8 +440,8 @@ class VMD(Decomposer):
         norm_f = float(np.linalg.norm(f))
         residual_ratio = float(np.linalg.norm(Res)) / norm_f if norm_f > 0.0 else 0.0
 
-        # u_hat 诊断谱是 K·N 复数: 大数组下不再附加计算 (见 _UHAT_INFO_LIMIT)。
-        if K * N * 16 <= _UHAT_INFO_LIMIT:
+        # u_hat 诊断谱是 K·N 复数: 大数组下不再附加计算 (见 VMD_UHAT_INFO_LIMIT)。
+        if K * N * 16 <= VMD_UHAT_INFO_LIMIT:
             u_hat_info = self.fft.fftshift(self.fft.fft(modes, axis=1), axes=1).T
         else:
             u_hat_info = None
@@ -775,16 +499,22 @@ class VMD(Decomposer):
             raise ValueError(
                 f"{self.name}(vmdpy=True): vmdpy 会丢弃末样本, 仅支持偶数长度; got N={N}"
             )
-        init_code = _INIT_TO_VMDPY.get(self.init_mod)
-        if init_code is None:
-            raise ValueError(
-                f"{self.name}(vmdpy=True): init_mod={self.init_mod!r} 仅原生实现支持; "
-                f"vmdpy 分支请用 {sorted(_INIT_TO_VMDPY)}"
-            )
+        match self.init_mod:                 # vmdpy 只认 0/1/2, 转换就地做
+            case "zero":
+                init_code = 0
+            case "uniform":
+                init_code = 1
+            case "random":
+                init_code = 2
+            case _:
+                raise ValueError(
+                    f"{self.name}(vmdpy=True): init_mod={self.init_mod!r} 仅原生实现支持; "
+                    "vmdpy 分支请用 ('zero', 'uniform', 'random')"
+                )
 
         try:
             vmdpy = cache.import_module(
-                _VMDPY_CACHE_KEY,
+                "vmdpy",
                 description="vmdpy: 可选第三方 VMD 实现 (VMD(vmdpy=True) 分支使用)",
             )
         except ImportError as exc:
@@ -822,7 +552,7 @@ class VMD(Decomposer):
         )
 
     # ------------------------------------------------------------------ #
-    # 引擎 1: 全内存单块扫描 (与 VMD_new 逐位一致)
+    # 引擎 1: 全内存单块扫描 (与原单块实现逐位一致)
     # ------------------------------------------------------------------ #
     def _engine_ram(self, f, N, K, rng, T_len, u_hist=None, udiff_hist=None):
         """
@@ -836,13 +566,13 @@ class VMD(Decomposer):
             ``modes`` 为 float64 ``(K, N)`` 时域模态 (去镜像后)。
         """
         freqs = np.arange(N, dtype=np.float64) / T_len
-        f_mirr = _mirror_signal(f)
+        f_mirr = self.mirror(f)
         # fftshift(fft(f_mirr))[T//2:] 等价于 rfft 的前 N 个 bin (Nyquist 被丢弃)
         f_hat_plus = self.fft.rfft(f_mirr)[:N]
         del f_mirr
 
         init_used = self.init_mod
-        omega = _init_omega(self.init_mod, K, freqs, f_hat_plus, rng, N)
+        omega = self._init_omega(self.init_mod, K, freqs, f_hat_plus, rng, N)
         if self.DC:
             omega[0] = 0.0
 
@@ -940,17 +670,17 @@ class VMD(Decomposer):
         """
         # --- 1) 镜像延拓 (可落盘) ---------------------------------------- #
         if out_of_core:
-            mirror = _temp_memmap(np.float64, (T_len,))
+            mirror = temp_memmap((T_len,), np.float64)
         else:
             mirror = np.empty(T_len, dtype=np.float64)
-        _fill_mirror(mirror, f, N, chunk_size)
+        self.mirror(f, out=mirror, chunk_size=chunk_size)
 
         # --- 2) 单边谱: 全数组变换, 无法分块; 这是外存的"内存地板" -------- #
         spec = self.fft.rfft(mirror)               # (N+1,) complex128, 常在内存
         if out_of_core:
-            _drop_memmap(mirror)
-            spec_store = _temp_memmap(np.complex128, (N,))
-            for a, b in _spans(N, chunk_size):
+            drop_memmap(mirror)
+            spec_store = temp_memmap((N,), np.complex128)
+            for a, b in self._spans(N, chunk_size):
                 spec_store[a:b] = spec[a:b]
             f_hat_plus = spec_store
             del spec
@@ -959,11 +689,11 @@ class VMD(Decomposer):
 
         # --- 3) ω 初值 (peak 模式需要整谱幅度: 大数组下退化为 uniform) ------ #
         init_used = self.init_mod
-        if self.init_mod == "peak" and N * 8 > _PEAK_INIT_LIMIT:
+        if self.init_mod == "peak" and N * 8 > VMD_PEAK_INIT_LIMIT:
             init_used = "uniform"
-            omega = _init_omega("uniform", K, None, None, rng, N)
+            omega = self._init_omega("uniform", K, None, None, rng, N)
         else:
-            omega = _init_omega(
+            omega = self._init_omega(
                 self.init_mod, K, np.arange(N, dtype=np.float64) / T_len,
                 np.abs(f_hat_plus) if self.init_mod == "peak" else None, rng, N,
             )
@@ -972,8 +702,8 @@ class VMD(Decomposer):
 
         # --- 4) 状态区 (可落盘) ------------------------------------------ #
         if out_of_core:
-            u_hat = _temp_memmap(np.complex128, (K, N))
-            lam_half = _temp_memmap(np.complex128, (N,))
+            u_hat = temp_memmap((K, N), np.complex128)
+            lam_half = temp_memmap((N,), np.complex128)
         else:
             u_hat = np.zeros((K, N), dtype=np.complex128)
             lam_half = np.zeros(N, dtype=np.complex128)
@@ -991,7 +721,7 @@ class VMD(Decomposer):
             wden = np.zeros(K, dtype=np.float64)
             udiff = 0.0
 
-            for a, b in _spans(N, chunk_size):
+            for a, b in self._spans(N, chunk_size):
                 c = b - a
                 # 读入本块 (memmap → RAM 拷贝; RAM 路径则是视图拷贝)
                 old_k = np.array(u_hat[:, a:b])          # (K, c) 旧值
@@ -1059,4 +789,141 @@ class VMD(Decomposer):
             full = self.fft.irfft(half, n=T_len)
             modes[k] = full[left:left + N]
 
+        # 外存工作区用尽即释放 (关句柄 + 删文件), 不留给进程退出时的清理兜底。
+        if out_of_core:
+            drop_memmap(u_hat)
+            drop_memmap(lam_half)
+            drop_memmap(f_hat_plus)              # 即 spec_store
+
         return modes, omega, omega_history, n_iter, converged, init_used
+
+    @staticmethod
+    def _work_dtype(dtype) -> np.dtype:
+        """float32/float64 保持原精度; 其余 (float16/int/bool) 提升为 float64。"""
+        dtype = np.dtype(dtype)
+        if dtype.kind == "f" and dtype.itemsize >= 4:
+            return dtype
+        return np.dtype(np.float64)
+
+    @staticmethod
+    def _project_bytes(N: int, K: int, out_of_core: bool, chunk_size: int) -> dict:
+        """
+        估算一次分解的主要内存项 (字节), 供 ``Utils.Memory`` 策略判定与实验报告引用。
+
+        以 float64 / complex128 计 (``np.fft`` 的工作精度), 按引擎分别建模:
+
+        * 内存内 (``out_of_core=False``): 镜像 + 单边谱 + 模态谱 + λ̂/2 + 累加器 + 频率轴
+          + 逐模态暂存 + (K 个模态一起做的) 逆变换与其输出;
+        * 外存 (``out_of_core=True``): 镜像/模态谱/λ̂ 落盘 ⇒ 常驻项只剩**单边谱**
+          (``np.fft`` 无法分块, 这是"内存地板") + 结果本身 (K·N float64 的 IMFs 与 Res,
+          返回契约要求它们在内存里) + 逐模态逆变换缓冲 + 单块工作集。
+
+        返回各项与 ``total``; 这是量级估算 (未计 FFT 内部临时量), 用于决策与对照实测。
+        """
+        c16, f8 = 16, 8
+        out_modes = K * N * f8                      # 返回的 IMFs (float64 时与工作数组同体)
+        out_res = N * f8                            # 返回的 Res
+        floor = (N + 1) * c16                       # 单边谱: rfft 输出, 无法分块
+
+        if out_of_core:
+            terms = {
+                "input": 0,                         # 输入可保持 memmap
+                "mirror": 0,                        # 落盘
+                "spectrum": floor,
+                "modes": 0,                         # 落盘
+                "dual": 0,                          # 落盘
+                "accum": 0,                         # 逐块
+                "freqs": 0,                         # 逐块
+                "scratch": 0,                       # 逐块
+                "recon": floor + 2 * N * f8,        # 逐模态: (N+1) 复数 + 2N 实数
+                "output": out_modes + out_res,
+                "chunk_ws": K * chunk_size * c16 * 3 + chunk_size * (c16 + f8),
+            }
+        else:
+            terms = {
+                "input": N * f8,
+                "mirror": 2 * N * f8,
+                "spectrum": floor,
+                "modes": K * N * c16,               # û 模态谱 (u_prev 整块已去掉)
+                "dual": N * c16,                    # λ̂/2 (单份)
+                "accum": N * c16,                   # Σ_i û_i
+                "freqs": N * f8,
+                "scratch": N * c16 * 3 + N * f8 * 2,   # 旧值/残差/增量 + denom/power
+                "recon": K * floor + K * 2 * N * f8,   # K 个模态一起逆变换
+                "output": out_modes + out_res,
+                "chunk_ws": 0,
+            }
+        terms["total"] = int(sum(terms.values()))
+        return terms
+
+    @staticmethod
+    def _spans(n: int, chunk_size: int):
+        """把 ``[0, n)`` 切成 ``(start, stop)`` 半开区间 (分块粒度由调用方给定)。"""
+        for start in range(0, n, chunk_size):
+            yield start, min(start + chunk_size, n)
+
+    @staticmethod
+    def _init_omega(
+        init_mod: str,
+        K: int,
+        freqs: np.ndarray,
+        f_hat_plus: np.ndarray,
+        rng: np.random.Generator,
+        N: int,
+    ) -> np.ndarray:
+        """
+        中心频率初值 ``ω`` (归一化循环频率, 升序)。
+
+        Parameters
+        ----------
+        init_mod : {"uniform", "random", "zero", "peak"}
+            ``"zero"``    — ``ω ≡ 0`` (vmdpy ``init=0``);
+            ``"uniform"`` — ``ω_i = 0.5·i/K`` (vmdpy ``init=1``, 与 vmdpy/MATLAB 逐位一致;
+                            注意该网格覆盖 ``[0, 0.5)``, 而正频半轴只到 ``0.25``);
+            ``"random"``  — ``[1/N, 0.5]`` 对数均匀取 K 点后升序 (vmdpy ``init=2``);
+            ``"peak"``    — 单边幅度谱最强 K 个峰 (``Utils.Peaks``, numpy 后端), 峰不足
+                            时用谱内等间隔点补齐 —— 自研扩展。
+        K : int
+            模态数。
+        freqs : np.ndarray
+            正频半轴归一化频率 (``j/T``), 长度 N。
+        f_hat_plus : np.ndarray
+            镜像信号的单边谱 (长度 N), ``"peak"`` 模式据此找峰。
+        rng : np.random.Generator
+            局部随机数发生器 (``"random"`` 模式使用)。
+        N : int
+            原始信号长度 (随机初值下界 ``1/N`` 即原始记录的分辨率)。
+
+        Returns
+        -------
+        np.ndarray
+            长度 K、升序的初值频率 (可能含重复值, 例如 ``"zero"``)。
+        """
+        if init_mod == "zero":
+            return np.zeros(K, dtype=np.float64)
+
+        if init_mod == "uniform":
+            return (0.5 / K) * np.arange(K, dtype=np.float64)
+
+        if init_mod == "random":
+            lo, hi = 1.0 / N, 0.5
+            w = np.exp(np.log(lo) + (np.log(hi) - np.log(lo)) * rng.random(K))
+            return np.sort(w)
+
+        # "peak": Utils.Peaks 惰性取用 (每次 decompose 解析一次, 迭代内零开销)。
+        find_peaks = get_peaks().find_peaks
+        idx, props = find_peaks(np.abs(f_hat_plus), mod="numpy")
+
+        if idx.size == 0:
+            return (0.5 / K) * np.arange(K, dtype=np.float64)
+
+        heights = np.asarray(props.get("peak_heights", np.abs(f_hat_plus)[idx]))
+        strongest = np.argsort(heights, kind="stable")[::-1][:K]
+        picked = np.sort(idx[strongest]).astype(np.float64) / (2.0 * N)
+
+        if picked.size < K:
+            # 峰不足 K 个: 其余初值均匀铺在正频半轴内, 再整体升序。
+            tail = np.linspace(freqs[0], freqs[-1], K - picked.size + 2)[1:-1]
+            return np.sort(np.concatenate([picked, tail]))
+
+        return picked

@@ -24,6 +24,10 @@ from .ConstDefine import (
     MIN_CHUNK_ELEMS,
     ADAPT_MIN_BYTES,
     DEFAULT_FILL_CHUNK_ELEMS,
+    VMD_MIN_SAMPLES,
+    VMD_UHAT_INFO_LIMIT,
+    VMD_PEAK_INIT_LIMIT,
+    VMD_CHUNK_WORK_BYTES,
 )
 from .TextDefine import Name, Reference
 
@@ -48,4 +52,8 @@ __all__ = [
     "FFT_PIP_PACKAGE",
     "FFT_THREAD_MIN_ELEMS",
     "FFT_TILED_MIN_ELEMS",
+    "VMD_MIN_SAMPLES",
+    "VMD_UHAT_INFO_LIMIT",
+    "VMD_PEAK_INIT_LIMIT",
+    "VMD_CHUNK_WORK_BYTES",
 ]

@@ -18,6 +18,32 @@ import pytest
 import src.Modal_Decomposition as Modal_Decomposition
 # import Modal_Decomposition
 
+from _cases import OPTIONAL_DEPENDENCIES
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    可选依赖缺失时, 自动跳过相关方法的全部用例。
+
+    ``EWTpy`` 需要可选第三方包 ``ewtpy``; 未安装时 (例如只装了
+    ``pip install Modal-Decomposition`` 而未装 extras) 不该让整个测试套件失败,
+    故在此集中打 skip, 而不是逐个测试文件写 importorskip。
+    """
+    import importlib.util
+
+    missing = {
+        method: dep
+        for method, dep in OPTIONAL_DEPENDENCIES.items()
+        if importlib.util.find_spec(dep) is None
+    }
+    if not missing:
+        return
+    for item in items:
+        for method, dep in missing.items():
+            if f"[{method}]" in item.nodeid:
+                item.add_marker(pytest.mark.skip(reason=f"可选依赖 {dep!r} 未安装"))
+                break
+
 
 @pytest.fixture(scope="session")
 def signal():

@@ -159,7 +159,7 @@ def _peaks_numba(S: np.ndarray, kwargs: dict):
 
 def find_peaks(
     S,
-    mod: Literal["scipy", "numpy", "numba"] = "scipy",
+    mod: Literal["scipy", "numpy", "numba"] = "numpy",
     **kwargs,
 ) -> tuple[np.ndarray, dict]:
     """

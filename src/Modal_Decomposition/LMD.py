@@ -79,7 +79,7 @@ class LMD(Decomposer):
         Parameters
         ----------
         max_pf : int | None
-            Maximum number of product functions. None selects log2(N), -1
+            Maximum number of product functions. None selects log2(num_imfs), -1
             decomposes completely.
         max_iter : int
             Maximum sifting iterations per product function (midpoint

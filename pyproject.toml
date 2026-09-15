@@ -27,7 +27,6 @@ classifiers = [
 dependencies = [
     "numpy",
     "EMD-signal",
-    "ewtpy",
     "scipy",
     "psutil"
 ]

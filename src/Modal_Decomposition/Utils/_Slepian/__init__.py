@@ -1,0 +1,1 @@
+from .numpy_slepian import generate_slepian_numpy

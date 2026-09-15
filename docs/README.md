@@ -46,6 +46,7 @@ IMFs, Res, Info = f.EMD(S)
 | EFD      | Empirical Fourier Decomposition                                             |   `Function.EFD(signal)`    |                                                                                                                        [10.1016/j.ymssp.2021.108155](https://www.sciencedirect.com/science/article/abs/pii/S0888327021005355?via%3Dihub)                                                                                                                        |
 | EMD      | Empirical Mode Decomposition                                                |   `Function.EMD(signal)`    |                                                                                              [10.1098/rspa.1998.0193](https://www.semanticscholar.org/paper/The-empirical-mode-decomposition-and-the-Hilbert-Huang-Shen/3842d81b0375dae8ae92734aa2a5d4aeed7a91d1)                                                                                               |
 | EWT      | Empirical Wavelet Transform                                                 |   `Function.EWT(signal)`    |                                                                                                                                                  [10.48550/arXiv.2304.06274](https://arxiv.org/abs/2304.06274)                                                                                                                                                  |
+| EWTpy    | Empirical Wavelet Transform (optional `ewtpy` backend)                      |  `Function.EWTpy(signal)`   |                                                                                                                                                  [10.48550/arXiv.2304.06274](https://arxiv.org/abs/2304.06274)                                                                                                                                                  |
 | FMD      | Filtered Mode Decomposition                                                 |   `Function.FMD(signal)`    |                                                                                                                                            [10.1109/TIE.2022.3156156](https://ieeexplore.ieee.org/document/9732251)                                                                                                                                             |
 | ICEEMDAN | Improved Complete Ensemble Empirical Mode Decomposition with Adaptive Noise | `Function.ICEEMDAN(signal)` |                                                                                                                                [10.1007/s10470-021-01901-3](https://link.springer.com/article/10.1007/s10470-021-01901-3#citeas)                                                                                                                                |
 | LMD      | Local Mean Decomposition                                                    |   `Function.LMD(signal)`    |                                                                                                                                     [10.1098/rsif.2005.0058](https://royalsocietypublishing.org/doi/10.1098/rsif.2005.0058)                                                                                                                                     |
@@ -77,8 +78,11 @@ This lib's dependence are:
 ***Python: 3.10***
 
 - [EMD-signal](https://github.com/laszukdawid/PyEMD)
-- [ewtpy](https://github.com/vrcarva/ewtpy)
 - [vmdpy](https://github.com/vrcarva/vmdpy)
+
+Optional (only needed by `Function.EWTpy` / `Class.EWTpy`, imported lazily):
+
+- [ewtpy](https://github.com/vrcarva/ewtpy) — the built-in `EWT` needs no third-party package
 
 *Other dependence please read "requirements.txt"*
 

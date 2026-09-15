@@ -21,6 +21,7 @@ algorithms (or benchmarking them against each other) is a one-line change.
 | EFD      | Empirical Fourier Decomposition                                          | `Function.EFD(S)`          | [10.1016/j.ymssp.2021.108155](https://www.sciencedirect.com/science/article/abs/pii/S0888327021005355?via%3Dihub) |
 | EMD      | Empirical Mode Decomposition                                             | `Function.EMD(S)`          | [10.1098/rspa.1998.0193](https://www.semanticscholar.org/paper/The-empirical-mode-decomposition-and-the-Hilbert-Huang-Shen/3842d81b0375dae8ae92734aa2a5d4aeed7a91d1) |
 | EWT      | Empirical Wavelet Transform                                              | `Function.EWT(S)`          | [10.48550/arXiv.2304.06274](https://arxiv.org/abs/2304.06274) |
+| EWTpy    | Empirical Wavelet Transform (optional `ewtpy` backend)                   | `Function.EWTpy(S)`        | [10.48550/arXiv.2304.06274](https://arxiv.org/abs/2304.06274) |
 | FMD      | Filtered Mode Decomposition                                              | `Function.FMD(S)`          | [10.1109/TIE.2022.3156156](https://ieeexplore.ieee.org/document/9732251) |
 | ICEEMDAN | Improved Complete Ensemble Empirical Mode Decomposition with Adaptive Noise | `Function.ICEEMDAN(S)`  | [10.1007/s10470-021-01901-3](https://link.springer.com/article/10.1007/s10470-021-01901-3#citeas) |
 | LMD      | Local Mean Decomposition                                                  | `Function.LMD(S)`          | [10.1098/rsif.2005.0058](https://royalsocietypublishing.org/doi/10.1098/rsif.2005.0058) |
@@ -65,11 +66,19 @@ Requires **Python >= 3.10**.
 | numpy       | core arrays and vectorized kernels                 |
 | scipy       | splines, envelope / Hilbert, filtering, peaks, FFT |
 | EMD-signal (PyEMD) | EMD, EEMD, CEEMDAN (and ensemble chains)  |
-| ewtpy       | EWT                                               |
+| ewtpy       | *optional*: only the `EWTpy` entry                 |
 | vmdpy       | VMD                                               |
 | psutil      | available-memory reading for the memmap policy     |
 
 > Please install `EMD-signal`, not `PyEMD` (the latter is an unrelated older package).
+
+`EWT` (Empirical Wavelet Transform) is implemented **inside this library** and
+needs no third-party package. The ewtpy-backed variant `EWTpy` is **optional**:
+`ewtpy` is imported lazily (via `cache.import_module`) only when you actually
+call `Function.EWTpy` / `Class.EWTpy(...).decompose(...)`, so a missing `ewtpy`
+never affects the rest of the library — install it with
+`pip install Modal-Decomposition[ewtpy]` (or plain `pip install ewtpy`) if you
+want that entry.
 
 Optional extras (not required at runtime): `[dev]` (pytest, black) and
 `[plot]` (matplotlib). `numba` may be installed to activate the optional

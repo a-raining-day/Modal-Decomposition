@@ -28,6 +28,15 @@ __all__ = [
     "VMD_UHAT_INFO_LIMIT",
     "VMD_PEAK_INIT_LIMIT",
     "VMD_CHUNK_WORK_BYTES",
+    "EWT_CHUNK_WORK_BYTES",
+    "EWT_SLEPIAN_MAX_SAMPLES",
+    "SLEPIAN_BACKEND_LIST",
+    "SLEPIAN_BACKEND",
+    "SLEPIAN_NUMPY_MAX_BYTES",
+    "SLEPIAN_SMALL_N_ORDER",
+    "SLEPIAN_CACHE",
+    "SLEPIAN_CACHE_SIZE",
+    "SLEPIAN_CACHE_MAX_BYTES",
 ]
 
 import numpy as np
@@ -110,6 +119,58 @@ VMD_PEAK_INIT_LIMIT = 256 * SIZE["1MB"]
 VMD_CHUNK_WORK_BYTES = 64 * SIZE["1MB"]
 
 """
+definition: for EWT
+"""
+#: EWT 分块滤波的目标单块工作集 (字节): 据此按算子每元素临时量反推默认块长
+#: (滤波器组体积达到 ``BIG_ARRAY`` 时启用分块路径, 见 ``EWT``)。
+EWT_CHUNK_WORK_BYTES = 64 * SIZE["1MB"]
+
+#: EWT ``pre_deal="Slepian-Optimize"`` 的样本数上限: ``scipy.signal.windows.dpss``
+#: 的代价随 N 增长过快 (构造 N×N 三对角矩阵的特征分解), 超过该长度时该分支降级
+#: 为普通 ``|rfft|`` (并在 ``info["slepian_degraded"]`` 标记)。
+EWT_SLEPIAN_MAX_SAMPLES = 1 << 15       # 32768 样本
+
+"""
+definition: for slepian
+"""
+#: Slepian 后端 canonical 名单 (``Utils.Slepian`` 的 ``mod`` 取值; "auto" 额外允许)。
+SLEPIAN_BACKEND_LIST = \
+[
+    "numpy",
+    "scipy",
+    "C",
+]
+
+#: 默认后端: 实测最优者 (稳态最快 + 峰值内存最低 + 零构建), 见
+#: docs/Slepian_Backend_Report.md §6。备选: "C" (冷启动最快、调用路径不依赖 scipy,
+#: 自研实现) 与 "numpy" (无 scipy 依赖, 但有 N 上限); 用 mod="C"/"auto" 可切换。
+SLEPIAN_BACKEND = "scipy"
+
+#: numpy 后端的稠密矩阵内存预算 (字节)。折半后需对 (N/2)×(N/2) 稠密矩阵做 eigh,
+#: 故 N 稍大就会 GB 级分配 (N=65536 → 8.6 GB); 超过该预算时 numpy 后端直接报错并
+#: 提示改用 "C"/"scipy" (两者的内存都是 O(N))。对应样本上限 N_max = 2*sqrt(B/8)。
+SLEPIAN_NUMPY_MAX_BYTES = 256 * SIZE["1MB"]     # 256 MB -> N_max = 8192
+
+#: scipy 后端的固有规模限制 ``scipy.signal.windows.dpss`` 要求 ``NW < M/2``
+#: (即 ``2*halfBW < N``); 不满足时该后端必然抛 ValueError, 此时按下面的顺序改用
+#: 其他后端 (默认参数 NW=3.0 时即 N <= 6)。
+SLEPIAN_SMALL_N_ORDER = \
+[
+    "C",        # 小 N 实测 4.5-6.7 us / 2.3-3.2 KB, 比 numpy 快 7-10x、内存小 2.4x
+    "numpy",
+]
+
+#: Slepian 的 **Tier-1 进程内缓存** (纯函数记忆化): 相同 (后端, N, NW 精确位, 阶数,
+#: sym, norm, 是否需要集中比) 的结果直接复用。命中返回副本, 主副本只读。
+SLEPIAN_CACHE = True
+
+#: 缓存条数上限 (LRU)。
+SLEPIAN_CACHE_SIZE = 8
+
+#: 缓存总字节上限: 超出按 LRU 淘汰; 单条超过该值则不缓存 (只算不存)。
+SLEPIAN_CACHE_MAX_BYTES = 256 * SIZE["1MB"]
+
+"""
 definition: for spline
 """
 SPLINE_KIND = \
@@ -142,6 +203,9 @@ CACHE_KEY = \
             "pyfftw_cache": "pyfftw.interfaces.cache",
             "cupy": "cupy",
         },
+    # 可选第三方后端: EWTpy 适配层用它经 cache.import_module 惰性导入 ewtpy
+    # (未安装时只有 EWTpy 入口不可用, EWT 自研实现不受影响)。
+    "ewtpy": "ewtpy",
 }
 
 """

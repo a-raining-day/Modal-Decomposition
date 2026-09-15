@@ -3,7 +3,7 @@ Modal Decomposition
 
 A unified library for modal decomposition methods:
 LMD, CEEMDAN, EFD, CEEFD, VMD, EEMD, FMD, EWT, SSA, RPSEMD, CEEMD, MEMD,
-ICEEMDAN, EMD, SVMD.
+ICEEMDAN, EMD, SVMD, and the optional EWTpy (ewtpy-backed EWT).
 
 Public interface
 ----------------
@@ -15,6 +15,10 @@ Public interface
 Every method returns a ``DecompositionResult`` with ``.IMFs``, ``.Res``,
 ``.info`` and ``.config``. ``Res`` is None for methods without a residual
 concept (SSA, VMD).
+
+``EWT`` 是本库自研实现(不依赖 ewtpy); ``EWTpy`` 是可选适配层, 只在真正
+``decompose`` 时经 ``Base.Cache.cache.import_module`` 惰性导入 ``ewtpy``,
+未安装该可选依赖时不影响其余方法。
 """
 
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
@@ -28,6 +32,7 @@ from . import \
     EFD,
     EMD,
     EWT,
+    EWTpy,
     FMD,
     ICEEMDAN,
     LMD,
@@ -138,9 +143,24 @@ def _compose_doc(name: str, cls: type) -> str:
 def _make_facade(name: str, cls: type):
     """
     Build Function.X from Class.X.
+
+    ``decompose`` 自身的具名参数 (如 ``EWT`` 的 ``fs``) 会从 kwargs 里分离出来
+    转交给 ``decompose``, 而不是被构造函数吞掉 —— 否则
+    ``Function.EWT(S, fs=1000)`` 会被静默忽略并退回 ``fs=1.0``
+    (构造函数的 ``**kwargs`` 接住了它, 却没有任何用处)。
     """
+    import inspect
+
+    decompose_params = {
+        p.name
+        for p in inspect.signature(cls.decompose).parameters.values()
+        if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+        and p.name not in ("self", "S", "T")
+    }
+
     def facade(S, T=None, **kwargs):
-        return cls(**kwargs).decompose(S, T)
+        decompose_kwargs = {k: kwargs.pop(k) for k in list(kwargs) if k in decompose_params}
+        return cls(**kwargs).decompose(S, T, **decompose_kwargs)
 
     facade.__name__ = name
     facade.__qualname__ = f"Function.{name}"

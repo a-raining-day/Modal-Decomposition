@@ -332,6 +332,8 @@ class VMD(Decomposer):
 
         # 工具惰性取用: FFT 走 Utils.FFT 分发器 (后端由 Base.ConstDefine.FFT_BACKEND
         # 决定), 本模块不直接调 np.fft; vmdpy 分支的第三方库按需经 import cache 取。
+        # get_fft() 返回的是 Utils.FFT **模块** (与其他 getter 一致), 模块内唯一
+        # 公开名是 fft 类 (全静态方法), 故变换统一写作 ``self.fft.fft.<op>(...)``。
         self.fft = get_fft()
         # 端点镜像统一走 Utils.Mirror (整条信号语义, 与极值镜像 mirror_extrema 区分)
         self.mirror = get_mirror().mirror_signal
@@ -442,7 +444,7 @@ class VMD(Decomposer):
 
         # u_hat 诊断谱是 K·N 复数: 大数组下不再附加计算 (见 VMD_UHAT_INFO_LIMIT)。
         if K * N * 16 <= VMD_UHAT_INFO_LIMIT:
-            u_hat_info = self.fft.fftshift(self.fft.fft(modes, axis=1), axes=1).T
+            u_hat_info = self.fft.fft.fftshift(self.fft.fft.fft(modes, axis=1), axes=1).T
         else:
             u_hat_info = None
 
@@ -451,7 +453,7 @@ class VMD(Decomposer):
             "omega_hz": omega * self.fs,
             "omega_history": omega_history[:n_iter].copy(),
             "u_hat": u_hat_info,
-            "fft_backend": self.fft.resolve_backend(None, int(2 * N * 8)),
+            "fft_backend": self.fft.fft.resolve_backend(None, int(2 * N * 8)),
             "n_iter": n_iter,
             "converged": converged,
             "init_mod": init_used,
@@ -568,7 +570,7 @@ class VMD(Decomposer):
         freqs = np.arange(N, dtype=np.float64) / T_len
         f_mirr = self.mirror(f)
         # fftshift(fft(f_mirr))[T//2:] 等价于 rfft 的前 N 个 bin (Nyquist 被丢弃)
-        f_hat_plus = self.fft.rfft(f_mirr)[:N]
+        f_hat_plus = self.fft.fft.rfft(f_mirr)[:N]
         del f_mirr
 
         init_used = self.init_mod
@@ -642,7 +644,7 @@ class VMD(Decomposer):
 
         half = np.zeros((K, N + 1), dtype=np.complex128)
         half[:, :N] = u_hat       # 单边谱不含 Nyquist 分量 (被单边化丢弃)
-        full = self.fft.irfft(half, n=T_len, axis=1)      # (K, 2N)
+        full = self.fft.fft.irfft(half, n=T_len, axis=1)      # (K, 2N)
         left = N // 2
         modes = np.ascontiguousarray(full[:, left:left + N])   # (K, N) float64
         return modes, omega, omega_history, n_iter, converged, init_used
@@ -676,7 +678,7 @@ class VMD(Decomposer):
         self.mirror(f, out=mirror, chunk_size=chunk_size)
 
         # --- 2) 单边谱: 全数组变换, 无法分块; 这是外存的"内存地板" -------- #
-        spec = self.fft.rfft(mirror)               # (N+1,) complex128, 常在内存
+        spec = self.fft.fft.rfft(mirror)               # (N+1,) complex128, 常在内存
         if out_of_core:
             drop_memmap(mirror)
             spec_store = temp_memmap((N,), np.complex128)
@@ -786,7 +788,7 @@ class VMD(Decomposer):
         for k in range(K):
             half[:N] = u_hat[k]
             half[N] = 0.0                    # 单边谱不含 Nyquist 分量
-            full = self.fft.irfft(half, n=T_len)
+            full = self.fft.fft.irfft(half, n=T_len)
             modes[k] = full[left:left + N]
 
         # 外存工作区用尽即释放 (关句柄 + 删文件), 不留给进程退出时的清理兜底。

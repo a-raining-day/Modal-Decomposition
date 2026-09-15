@@ -22,6 +22,26 @@ from setuptools.command.build_ext import build_ext as _build_ext
 
 _FHT_DIR = "src/Modal_Decomposition/Utils/_Hilbert"
 _FHT_C_DIR = _FHT_DIR + "/_C/_fht"
+_SLEPIAN_C_DIR = "src/Modal_Decomposition/Utils/_Slepian/_C"
+
+
+def _slepian_extension() -> Extension:
+    """_slepian_native: Slepian(DPSS) 的 C 核心 (三对角 + 对称折半 + 二分/反迭代)。
+
+    纯 C (不引用 Python API), 由 ``Utils/_Slepian/C.py`` 用 ctypes 装载; 找不到时
+    ``Utils.Slepian`` 自动降级到 numpy 后端, 故同样是可选加速而非必需依赖。
+    MSVC 需 ``/utf-8``: 源码注释含中文, 否则按本地代码页(如 GBK)解析会产生告警。
+    """
+    if sys.platform == "win32":
+        compile_args = ["/O2", "/utf-8"]
+    else:
+        compile_args = ["-O3", "-std=c99"]
+    return Extension(
+        "Modal_Decomposition.Utils._Slepian._C._slepian_native",
+        sources=[_SLEPIAN_C_DIR + "/slepian_core.c"],
+        include_dirs=[_SLEPIAN_C_DIR],
+        extra_compile_args=compile_args,
+    )
 
 
 def _native_extension() -> Extension:
@@ -66,6 +86,6 @@ class _LazyCythonBuildExt(_build_ext):
 
 
 setup(
-    ext_modules=[_native_extension()],
+    ext_modules=[_native_extension(), _slepian_extension()],
     cmdclass={"build_ext": _LazyCythonBuildExt},
 )

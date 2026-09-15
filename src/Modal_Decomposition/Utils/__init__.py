@@ -62,6 +62,7 @@ __all__ = [
     "get_mirror",
     "get_fft",
     "fft",
+    "get_slepian",
 ]
 
 # (cache 键, 描述) —— Utils 全部工具模块的惰性注册目录。
@@ -111,6 +112,10 @@ _UTILS_MODULES = {
     "FFT": (
         "Modal_Decomposition.Utils.FFT",
         "Utils.FFT: FFT 后端分发 (numpy/scipy/pyfftw/tiled/cupy, 大数组按 BIG_ARRAY 分流)",
+    ),
+    "Slepian": (
+        "Modal_Decomposition.Utils.Slepian",
+        "Utils.Slepian: Slepian(DPSS) 序列生成统一入口 (numpy/scipy/C 三后端)",
     ),
 }
 
@@ -237,18 +242,33 @@ def get_mirror():
     return _get_cached_module("Mirror", key, desc)
 
 
+def get_slepian():
+    """
+    Return the Slepian module (``Utils.Slepian``) via the import cache.
+
+    对外表现为生成 Slepian(DPSS) 序列的统一入口 (``slepian(...)``, 三后端
+    numpy/scipy/C); 首次访问时惰性 import 并注册 (键
+    ``"Modal_Decomposition.Utils.Slepian"``)。
+    """
+    key, desc = _UTILS_MODULES["Slepian"]
+    return _get_cached_module("Slepian", key, desc)
+
+
 def get_fft():
     """
-    Return the FFT tool **class** (``Utils.FFT.fft``) via the import cache.
+    Return the FFT **module** (``Utils.FFT``) via the import cache.
 
-    首次访问时惰性 import 并注册模块 (键 ``"Modal_Decomposition.Utils.FFT"``);
-    返回值是类本身, 全部方法都是静态方法, 用法统一为 ``get_fft().rfft(x)`` /
-    ``fft.rfft(x)`` (``fft`` 亦可直接从 ``Modal_Decomposition.Utils`` 导入)。
+    与其他 getter 一致, 首次访问时惰性 import 并注册模块 (键
+    ``"Modal_Decomposition.Utils.FFT"``), 返回的是模块本身, 不是模块内的
+    ``fft`` 类。该模块只公开一个名字: ``fft`` 类 (全部方法为静态方法), 故
+    取用需穿过模块, 用法统一为 ``get_fft().fft.rfft(x)`` /
+    ``get_fft().fft.fft(x)`` (``fft.fft(x)`` 亦可直接从
+    ``Modal_Decomposition.Utils`` 导入该类后调用)。
     后端库 (``scipy.fft`` / ``pyfftw`` / ``cupy``) 仍由 ``Utils.FFT`` 内部经
     ``cache.import_module`` 按分支惰性把守。
     """
     key, desc = _UTILS_MODULES["FFT"]
-    return _get_cached_module("FFT", key, desc).fft
+    return _get_cached_module("FFT", key, desc)
 
 
 

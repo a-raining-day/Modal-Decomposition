@@ -41,7 +41,7 @@ EMD 已由自研实现转正: 本模块取代原 PyEMD 包装版, 注册键 ``"E
 
 返回契约
 --------
-``DecompositionResult`` (IMFs (K,N), Res, info, config), 与全库一致:
+``DecompositionResult`` (IMFs (K,num_imfs), Res, info, config), 与全库一致:
 - dtype: float32/float64 全程保持原精度; float16 与整数/布尔输入提升为
   float64 计算;
 - 重构精确: ``IMFs.sum(axis=0) + Res == S`` (残差是逐次减法余量)。
@@ -296,7 +296,7 @@ class EMD(Decomposer):
         """
         Decompose the signal into IMFs and a residual (native sifting).
 
-        Returns a ``DecompositionResult`` with ``IMFs`` of shape (K, N) and
+        Returns a ``DecompositionResult`` with ``IMFs`` of shape (K, num_imfs) and
         the exact reconstruction ``sum(IMFs, axis=0) + Res == S``.
         """
         S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
@@ -393,7 +393,7 @@ class EMD(Decomposer):
         return abs(zc - (m_idx.size + n_idx.size)) <= 1
 
     def _envelope(self, positions, values, grid) -> np.ndarray:
-        """在索引网格 [0, N) 上按镜像后的极值插值包络 (回投工作 dtype)。"""
+        """在索引网格 [0, num_imfs) 上按镜像后的极值插值包络 (回投工作 dtype)。"""
         if self.spline_kind == "linear":
             out = np.interp(grid, positions, values)
         else:

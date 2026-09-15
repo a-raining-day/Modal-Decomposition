@@ -1,6 +1,8 @@
 # Pinned build/development environment for Modal-Decomposition.
 # Runtime dependencies mirror pyproject.toml [project].dependencies;
 # historical unused entries (einops/certifi/tqdm/typing_extensions/...) removed.
+# ewtpy is NOT a runtime dependency: it is an optional extra used only by the
+# EWTpy entry (and by the comparison benchmark / adapter tests).
 
 build==1.4.1
 numpy==2.2.6

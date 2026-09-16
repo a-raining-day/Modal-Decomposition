@@ -1,0 +1,1035 @@
+{
+  "impls": [
+    "MD-VMD",
+    "vmdpy",
+    "PySDKit"
+  ],
+  "parity": {
+    "alpha": 2000,
+    "tau": 0.0,
+    "DC": false,
+    "init": "uniform",
+    "tol": 1e-06,
+    "max_iter": 500,
+    "K": {
+      "A": 3,
+      "B": 3,
+      "C": 4
+    }
+  },
+  "median_wall_s": [
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 256,
+      "median_s": 0.001478,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 256,
+      "median_s": 0.001892,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 256,
+      "median_s": 0.032971,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 1024,
+      "median_s": 0.002444,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 1024,
+      "median_s": 0.006584,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 1024,
+      "median_s": 0.078158,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 4096,
+      "median_s": 0.011359,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 4096,
+      "median_s": 0.052899,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 4096,
+      "median_s": 0.252267,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 16384,
+      "median_s": 0.729493,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 16384,
+      "median_s": 3.107137,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 16384,
+      "median_s": 4.370732,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 65536,
+      "median_s": 2.523218,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 65536,
+      "median_s": 19.573001,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 65536,
+      "median_s": 34.609211,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 256,
+      "median_s": 0.075376,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 256,
+      "median_s": 0.109155,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 256,
+      "median_s": 0.106904,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 1024,
+      "median_s": 0.004825,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 1024,
+      "median_s": 0.00988,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 1024,
+      "median_s": 0.227459,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 4096,
+      "median_s": 0.009503,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 4096,
+      "median_s": 0.023871,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 4096,
+      "median_s": 0.614475,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 16384,
+      "median_s": 0.066322,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 16384,
+      "median_s": 0.184703,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 16384,
+      "median_s": 4.138039,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 65536,
+      "median_s": 0.169133,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 65536,
+      "median_s": 1.117674,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 65536,
+      "median_s": 25.902799,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 256,
+      "median_s": 0.00613,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 256,
+      "median_s": 0.013099,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 256,
+      "median_s": 0.173031,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 1024,
+      "median_s": 0.036768,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 1024,
+      "median_s": 0.047492,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 1024,
+      "median_s": 0.287049,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 4096,
+      "median_s": 0.153496,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 4096,
+      "median_s": 0.644647,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 4096,
+      "median_s": 0.875535,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 16384,
+      "median_s": 1.871102,
+      "repeats": 3
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 16384,
+      "median_s": 5.807892,
+      "repeats": 3
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 16384,
+      "median_s": 6.519795,
+      "repeats": 3
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 65536,
+      "median_s": null,
+      "repeats": 0
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 65536,
+      "median_s": null,
+      "repeats": 0
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 65536,
+      "median_s": null,
+      "repeats": 0
+    }
+  ],
+  "metrics": [
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 256,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.3877787807814457e-17,
+      "orthogonality_index": 0.06355926899344469,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9913496331338262,
+          "best_nrmse": 0.1347978705152543
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9846671426669046,
+          "best_nrmse": 0.17444667638350245
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 256,
+      "n_rows": 4,
+      "recon_max_abs_err": 5.551115123125783e-17,
+      "orthogonality_index": 0.06355752021285677,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9913496618819386,
+          "best_nrmse": 0.1347976530728296
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9846671837302087,
+          "best_nrmse": 0.17444644463511721
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 256,
+      "n_rows": 4,
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.06355998876323561,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.991349563959077,
+          "best_nrmse": 0.13479840038535887
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9846670676899553,
+          "best_nrmse": 0.17444709948013812
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 1024,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.015147896242205555,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9975014192198638,
+          "best_nrmse": 0.07064721231052563
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9945960167636523,
+          "best_nrmse": 0.10385074203726387
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 1024,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.01514798733178078,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.997501418085737,
+          "best_nrmse": 0.0706472283157337
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.994596018033389,
+          "best_nrmse": 0.10385072988477723
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 1024,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.015146717072012922,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9975014317111695,
+          "best_nrmse": 0.07064703600771027
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9945960005262929,
+          "best_nrmse": 0.10385089747736694
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 4096,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.00791757173316674,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.998838383092601,
+          "best_nrmse": 0.04822899716201625
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9967297830508428,
+          "best_nrmse": 0.08080693290935524
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 4096,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.00791759810740001,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9988383829007887,
+          "best_nrmse": 0.04822900114876356
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9967297853506458,
+          "best_nrmse": 0.08080690454208928
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 4096,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.007917040090435545,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9988383843368008,
+          "best_nrmse": 0.04822897122041751
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9967297517048358,
+          "best_nrmse": 0.08080731955060796
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 16384,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.004835846786114288,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9992815448945545,
+          "best_nrmse": 0.03790200219597448
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9972043618093779,
+          "best_nrmse": 0.07472256978173797
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 16384,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.004835880833286827,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9992815447100106,
+          "best_nrmse": 0.0379020070639561
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9972043569757114,
+          "best_nrmse": 0.0747226342890052
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 16384,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.004835215746613287,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9992815483374018,
+          "best_nrmse": 0.037901911379083164
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9972044514829858,
+          "best_nrmse": 0.07472137304034253
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "A",
+      "n": 65536,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.004520883656117186,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9993335566957194,
+          "best_nrmse": 0.03650374543421618
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9973056297560972,
+          "best_nrmse": 0.07335857822888538
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "A",
+      "n": 65536,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.004520893688912966,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9993335566341109,
+          "best_nrmse": 0.03650374712111939
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9973056288005219,
+          "best_nrmse": 0.07335859121987696
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "A",
+      "n": 65536,
+      "n_rows": 4,
+      "recon_max_abs_err": 2.7755575615628914e-17,
+      "orthogonality_index": 0.004520507076903433,
+      "mode_recovery": {
+        "tone_37hz": {
+          "best_abs_corr": 0.9993335590232769,
+          "best_nrmse": 0.036503681703258274
+        },
+        "tone_113hz": {
+          "best_abs_corr": 0.9973056661493039,
+          "best_nrmse": 0.07335808346361607
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 256,
+      "n_rows": 4,
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.1541348603360075,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.988758636588074,
+          "best_nrmse": 0.16935261949433228
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.954527385491864,
+          "best_nrmse": 0.29827770095453127
+        },
+        "trend": {
+          "best_abs_corr": 0.5813421789282637,
+          "best_nrmse": 0.5600504555366427
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 256,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.3877787807814457e-17,
+      "orthogonality_index": 0.15398314115391962,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9887587140674587,
+          "best_nrmse": 0.1693525511134715
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9550020505779646,
+          "best_nrmse": 0.29675310639481595
+        },
+        "trend": {
+          "best_abs_corr": 0.581348024741069,
+          "best_nrmse": 0.5600460393514523
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 256,
+      "n_rows": 4,
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.1539038056557932,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9887587527966355,
+          "best_nrmse": 0.1693525170784416
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9552316176376069,
+          "best_nrmse": 0.29601263706255987
+        },
+        "trend": {
+          "best_abs_corr": 0.5813509719279683,
+          "best_nrmse": 0.5600438125280176
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 1024,
+      "n_rows": 4,
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.054633231711298885,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9960207057373314,
+          "best_nrmse": 0.08915723962153312
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9959801403840964,
+          "best_nrmse": 0.08957481942961094
+        },
+        "trend": {
+          "best_abs_corr": 0.9368187800211517,
+          "best_nrmse": 0.23328870707561997
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 1024,
+      "n_rows": 4,
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.05462701181225906,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9960213498544249,
+          "best_nrmse": 0.08914994615895185
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9959801499136236,
+          "best_nrmse": 0.08957471208614078
+        },
+        "trend": {
+          "best_abs_corr": 0.9368357048769366,
+          "best_nrmse": 0.23325864091808723
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 1024,
+      "n_rows": 4,
+      "recon_max_abs_err": 0.0,
+      "orthogonality_index": 0.0546448712927623,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9960195946920432,
+          "best_nrmse": 0.08916973816260058
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9959801226491423,
+          "best_nrmse": 0.08957501786841636
+        },
+        "trend": {
+          "best_abs_corr": 0.9367898615884659,
+          "best_nrmse": 0.2333400829149803
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 4096,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.05089410432808125,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9981033662237166,
+          "best_nrmse": 0.06156422236967093
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9989765310382046,
+          "best_nrmse": 0.045248072596192
+        },
+        "trend": {
+          "best_abs_corr": 0.9738150062063604,
+          "best_nrmse": 0.15177608297121026
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 4096,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.05088930981702092,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9981038360898865,
+          "best_nrmse": 0.061556631863867825
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9989765308924354,
+          "best_nrmse": 0.045248067029207355
+        },
+        "trend": {
+          "best_abs_corr": 0.9738211484042464,
+          "best_nrmse": 0.15175822435498593
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 4096,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.050903027255654834,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9981026744407848,
+          "best_nrmse": 0.061575413821865294
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9989765314576037,
+          "best_nrmse": 0.045248070676173334
+        },
+        "trend": {
+          "best_abs_corr": 0.9738056678251011,
+          "best_nrmse": 0.15180322233372115
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 16384,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.04584013509751559,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9994627999383806,
+          "best_nrmse": 0.03277880643808194
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9997910946897252,
+          "best_nrmse": 0.02043939594696956
+        },
+        "trend": {
+          "best_abs_corr": 0.9927956259736719,
+          "best_nrmse": 0.0800124638328344
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 16384,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.045837586075172375,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9994629217929707,
+          "best_nrmse": 0.032775069680191345
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9997910945984737,
+          "best_nrmse": 0.020439400078468745
+        },
+        "trend": {
+          "best_abs_corr": 0.9927972040963697,
+          "best_nrmse": 0.08000366728974534
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 16384,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.04584449594061436,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9994626308043031,
+          "best_nrmse": 0.032783981243345174
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9997910947775049,
+          "best_nrmse": 0.020439391939457638
+        },
+        "trend": {
+          "best_abs_corr": 0.992793351296662,
+          "best_nrmse": 0.08002514024001939
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "B",
+      "n": 65536,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.04452257677318373,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9995945875148385,
+          "best_nrmse": 0.028472171239342817
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9999464712179754,
+          "best_nrmse": 0.010346888764034204
+        },
+        "trend": {
+          "best_abs_corr": 0.9947642552975712,
+          "best_nrmse": 0.0682720023060394
+        }
+      }
+    },
+    {
+      "impl": "vmdpy",
+      "case": "B",
+      "n": 65536,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.04452105924424211,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9995946477931276,
+          "best_nrmse": 0.028470053702745933
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9999464711232106,
+          "best_nrmse": 0.01034689751386986
+        },
+        "trend": {
+          "best_abs_corr": 0.9947650292795001,
+          "best_nrmse": 0.06826694003856083
+        }
+      }
+    },
+    {
+      "impl": "PySDKit",
+      "case": "B",
+      "n": 65536,
+      "n_rows": 4,
+      "recon_max_abs_err": 1.734723475976807e-18,
+      "orthogonality_index": 0.04452502397371824,
+      "mode_recovery": {
+        "amfm": {
+          "best_abs_corr": 0.9995945045961961,
+          "best_nrmse": 0.028475083240606474
+        },
+        "tone_89hz": {
+          "best_abs_corr": 0.9999464713467335,
+          "best_nrmse": 0.010346876673016777
+        },
+        "trend": {
+          "best_abs_corr": 0.9947631595437237,
+          "best_nrmse": 0.06827916835464785
+        }
+      }
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 256,
+      "n_rows": 5,
+      "recon_max_abs_err": 4.440892098500626e-16,
+      "orthogonality_index": 0.48529172455278935
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 256,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.48528754557500214
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 256,
+      "n_rows": 5,
+      "recon_max_abs_err": 4.440892098500626e-16,
+      "orthogonality_index": 0.48527968651656433
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 1024,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.5503855462778947
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 1024,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.5503896202040723
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 1024,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.5504212774019934
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 4096,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.5666781055594576
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 4096,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.5664254493232612
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 4096,
+      "n_rows": 5,
+      "recon_max_abs_err": 2.220446049250313e-16,
+      "orthogonality_index": 0.5664382285673217
+    },
+    {
+      "impl": "MD-VMD",
+      "case": "C",
+      "n": 16384,
+      "n_rows": 5,
+      "recon_max_abs_err": 4.440892098500626e-16,
+      "orthogonality_index": 0.5959492796622725
+    },
+    {
+      "impl": "vmdpy",
+      "case": "C",
+      "n": 16384,
+      "n_rows": 5,
+      "recon_max_abs_err": 4.440892098500626e-16,
+      "orthogonality_index": 0.595945059855649
+    },
+    {
+      "impl": "PySDKit",
+      "case": "C",
+      "n": 16384,
+      "n_rows": 5,
+      "recon_max_abs_err": 4.440892098500626e-16,
+      "orthogonality_index": 0.5959439745718124
+    }
+  ]
+}

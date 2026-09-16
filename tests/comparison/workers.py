@@ -39,20 +39,20 @@ import numpy as np
 IMPL_ORDER = ["MD-EMD", "PyEMD", "PySDKit"]
 
 # ---------------------------------------------------------------------------
-# VMD (second representative method, same three-column layout):
-#   MD-VMD  = Modal_Decomposition.Class.VMD (facade over the vmdpy engine)
-#   vmdpy   = vmdpy.VMD direct (the engine inside MD-VMD; baseline)
+# VMD (three-column layout):
+#   MD-VMD  = Modal_Decomposition.Class.VMD (native ADMM, no vmdpy dependency)
+#   vmdpy   = vmdpy.VMD direct (the historical engine behind MD-VMD; baseline)
 #   PySDKit = pysdkit.VMD (independent port of the vmdpy ADMM solver)
-# Parity config for the comparison: alpha=2000, tau=0, DC=0, uniform init,
+# Parity config for the comparison: alpha=2000, tau=0, DC=False, uniform init,
 # tol=1e-6 (vmdpy typical / PySDKit default), max_iter=500 (both engines).
 # ---------------------------------------------------------------------------
 VMD_IMPL_ORDER = ["MD-VMD", "vmdpy", "PySDKit"]
 
 VMD_ENGINE_NOTES = {
-    "MD-VMD": "Modal_Decomposition.VMD.decompose -> vmdpy.VMD (ADMM solver)",
-    "vmdpy": "vmdpy.VMD direct - the engine shared with MD-VMD",
-    "PySDKit": "pysdkit.VMD.fit_transform - independent port of vmdpy "
-               "(ref/pysdkit/_vmd/vmd_c.py)",
+    "MD-VMD": "Modal_Decomposition.VMD.decompose - native ADMM solver "
+              "(since 2026-09; formerly a vmdpy wrapper)",
+    "vmdpy": "vmdpy.VMD direct - the engine MD-VMD used before the native port",
+    "PySDKit": "pysdkit.VMD.fit_transform - independent port of vmdpy",
 }
 
 # Number of modes per benchmark case (see signals.py).
@@ -179,25 +179,46 @@ def run_stack(impl: str, S: np.ndarray, max_imf: int = -1) -> np.ndarray:
 
 def run_vmd_stack(impl: str, S: np.ndarray, K: int = 3, tol: float = 1e-6) -> np.ndarray:
     """
-    Decompose ``S`` with VMD implementation ``impl`` and return the mode
-    stack (rows = K modes, no residual row).
+    Decompose ``S`` with VMD implementation ``impl`` and return the component
+    stack (rows = components, last row = residue, so the three columns stay
+    comparable under the shared quality metrics).
 
-    All three columns use the same ADMM configuration (alpha=2000, tau=0,
-    DC=0, uniform frequency init, tol=1e-6, max_iter=500).
+    Parity configuration for all three columns: ``alpha=2000``, ``tau=0``,
+    uniform frequency init, ``DC=False``, ``tol=1e-6``, ``max_iter=500``.
+
+    Notes
+    -----
+    The MD column uses the *current* native parameter names
+    (``num_imf`` / ``init_mod`` / ``epsilon``); the pre-refactor names
+    (``K`` / ``init`` / ``tol``) were removed and now raise ``TypeError``,
+    which is why this function had to be updated when VMD was reimplemented
+    natively — the old spelling silently made the whole comparison column
+    fail.
+
+    VMD has no residual concept of its own: the residue is taken as
+    ``S - sum(modes)`` for every column so the reconstruction/orthogonality
+    metrics mean the same thing across implementations.
     """
     S = np.asarray(S, dtype=np.float64)
 
     if impl == "MD-VMD":
         import Modal_Decomposition as _MD
         result = _MD.Class.VMD(
-            alpha=2000, tau=0.0, K=int(K), DC=0, init=1, tol=tol
+            num_imf=int(K), alpha=2000.0, tau=0.0, epsilon=tol,
+            DC=False, init_mod="uniform", n=500,
         ).decompose(S)
-        return np.ascontiguousarray(np.asarray(result.IMFs, dtype=np.float64))
+        modes = np.asarray(result.IMFs, dtype=np.float64)
+        return np.ascontiguousarray(
+            np.vstack([modes, (S - modes.sum(axis=0)).reshape(1, -1)])
+        )
 
     if impl == "vmdpy":
         from vmdpy import VMD as _vmdpy
-        u, _, _ = _vmdpy(S, 2000, 0.0, int(K), 0, 1, tol)
-        return np.ascontiguousarray(np.asarray(u, dtype=np.float64))
+        u, _, _ = _vmdpy(S, 2000.0, 0.0, int(K), 0, 1, tol)
+        modes = np.asarray(u, dtype=np.float64)
+        return np.ascontiguousarray(
+            np.vstack([modes, (S - modes.sum(axis=0)).reshape(1, -1)])
+        )
 
     # PySDKit
     import pysdkit as _pysdkit
@@ -205,7 +226,10 @@ def run_vmd_stack(impl: str, S: np.ndarray, K: int = 3, tol: float = 1e-6) -> np
         alpha=2000, K=int(K), tau=0.0, init="uniform",
         DC=False, max_iter=500, tol=tol,
     )
-    return np.ascontiguousarray(np.asarray(vmd.fit_transform(S), dtype=np.float64))
+    modes = np.asarray(vmd.fit_transform(S), dtype=np.float64)
+    return np.ascontiguousarray(
+        np.vstack([modes, (S - modes.sum(axis=0)).reshape(1, -1)])
+    )
 
 
 def run_lmd_stack(impl: str, S: np.ndarray, max_pf: int = 5) -> np.ndarray:

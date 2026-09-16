@@ -20,6 +20,16 @@
 
 ## 1. VMD（三列: MD-VMD / vmdpy / PySDKit）
 
+> **⏳ 本节数字为原生 VMD 重构之前的旧口径，已过时。**
+> 当时 `run_vmd_stack` 里 MD 列用的是 VMD 重构前的废弃参数名
+> （`alpha/tau/K/DC/init/tol`），现行 `VMD` 只认 `num_imf/init_mod/epsilon`，
+> 因此**本节无法用现行脚本复现**；且当时 MD-VMD 仍是 vmdpy 的包装，
+> 本节"MD-VMD 与 vmdpy 差异只反映包装开销"的前提已不成立（现为原生 ADMM）。
+> 现行三方数字见 **`docs/VMD_Three_Way_Comparison_Report.md`**
+> （`results/vmd_pysdkit/`，3 次重复中位，脚本已修正）。
+> 本节保留作为重构前的历史对照；其中关于 **PySDKit `store_history`** 的
+> 归因（见下方"要点"）仍然有效，并已被新报告独立复现。
+
 **Parity 配置**（三列一致）: `alpha=2000, tau=0, DC=0, uniform init, tol=1e-6,
 max_iter=500`；模式数 `K`: case A=3、B=3、C=4。MD-VMD 是 `vmdpy` 引擎的库内
 facade，所以 MD-VMD 与 vmdpy 的差异只反映包装开销。
@@ -56,8 +66,12 @@ facade，所以 MD-VMD 与 vmdpy 的差异只反映包装开销。
 * **PySDKit 默认路径慢 5–24×**（B 系列最明显）。原因已定位在其源码:
   `store_history=True`（默认）从不重置收敛累加器，ADMM 因此总是跑满 500 次
   迭代；切到 `store_history=False` 时与 vmdpy 同速（B/4096: 0.008 s vs
-  0.248 s），模式数值不变。**可行动项: 使用 PySDKit VMD 时显式关掉
+  0.248 s）。**可行动项: 使用 PySDKit VMD 时显式关掉
   `store_history`**（或换 vmdpy/MD-VMD）。
+  > **修正（2026-09，见 `docs/VMD_Three_Way_Comparison_Report.md` §4.4）**：
+  > 上句"模式数值不变"**不准确**。实测两种设置的模态最大差为
+  > **3.7e-05 ~ 1.2e-04**，因为默认路径跑到 498 步（未收敛）、
+  > 关闭后 19 步即收敛退出，**停机点不同**故落点不同。
 * C（噪声）上三方都难以提前收敛，差距收敛到 1.0–1.5×。
 * 注意: VMD 的 `recon`（Σmodes − S）本就非零（A 0.50、B 0.35、C 2.26）——
   VMD 是带通分解，不含残差行；该列不是误差指标。

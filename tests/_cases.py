@@ -3,8 +3,8 @@ Shared method list and minimal runtime parameter sets for the test suite.
 """
 
 METHODS = [
-    "CEEFD", "CEEMD", "CEEMDAN", "EEMD", "EFD", "EMD", "EWT", "EWTpy", "FMD",
-    "ICEEMDAN", "LMD", "MEMD", "RPSEMD", "SSA", "SVMD", "VMD",
+    "CEEFD", "CEEMD", "CEEMDAN", "CEEMDAN", "EEMD", "EEMD", "EFD", "EMD",
+    "EWT", "EWTpy", "FMD", "ICEEMDAN", "LMD", "MEMD", "RPSEMD", "SSA", "SVMD", "VMD",
 ]
 
 # Minimal parameters keeping the suite fast; random methods are seeded.
@@ -12,6 +12,8 @@ CASES = {
     "CEEFD": {},
     "CEEMD": {"N_whitenoise": 5, "seed": 0},
     "CEEMDAN": {"trials": 5, "seed": 0},
+    "CEEMDAN": {"trials": 5, "seed": 0},
+    "EEMD": {"trials": 5, "seed": 0},
     "EEMD": {"trials": 5, "seed": 0},
     "EFD": {},
     "EMD": {},

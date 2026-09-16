@@ -69,6 +69,7 @@ from ..Base.ConstDefine import (
     FFT_THREAD_MIN_ELEMS,
     FFT_TILED_MIN_ELEMS,
 )
+from .Memory import resolve_workers
 
 __all__ = ["fft"]
 
@@ -269,13 +270,16 @@ class fft:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _threads_for(nbytes: int, workers: Optional[int]) -> int:
-        """``workers`` → 线程数: ``None`` 时大数组用满核, 小数组单线程。"""
-        total = max(1, int(os.cpu_count() or 1))
-        if workers is None:
-            return total if nbytes >= FFT_THREAD_MIN_ELEMS * 8 else 1
-        if int(workers) == -1:
-            return total
-        return max(1, int(workers))
+        """``workers`` → 线程数 (统一走 ``Utils.Memory.resolve_workers``)。
+
+        - ``workers=None``: 默认策略 —— 小数组单线程 (线程开销盖过收益),
+          大数组用默认核数 ``CPU_DEFAULT_RATIO`` × 可用核 (默认 **不占满**);
+        - ``workers=-1``: 用满当前可用核;
+        - ``workers=N``: 恰好 N 个线程 (上限为可用核数)。
+        """
+        if int(nbytes) < FFT_THREAD_MIN_ELEMS * 8:
+            return 1
+        return resolve_workers(workers)
 
     @staticmethod
     def _run_numpy(op: str, a: np.ndarray, **kw):

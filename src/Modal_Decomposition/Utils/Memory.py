@@ -41,8 +41,11 @@ References
 实测报告: ``docs/Memory_Detection_and_FFT_Backend_Report.md``
 """
 
+import os
 import time
 from typing import Optional
+
+import numpy as np
 
 try:
     import psutil
@@ -68,6 +71,10 @@ __all__ = [
     "get_memory_snapshot",
     "memory_budget",
     "format_bytes",
+    "cpu_total",
+    "resolve_workers",
+    "set_cpu_default_ratio",
+    "get_cpu_policy",
 ]
 
 # Process-wide policy state. Exactly one strategy is active at any time.
@@ -81,6 +88,11 @@ MEMORY_RESERVE_RATIO: float = 0.25
 
 #: 可提交余量中最多可用的比例 (提交配额也不该吃干, 否则换页会先拖垮整机)。
 COMMIT_RATIO_LIMIT: float = 0.75
+
+#: 默认并行占用比例 (CPU 份额)。**默认不得吃满全部核心**: 首次使用本库的调用
+#: 若默认占满 CPU, 会把用户机器上其它工作一并拖慢。全库所有并行/多线程取值
+#: (EEMD 的进程数、Utils.FFT 的 workers) 统一引用本常量, 不再各自书写魔数。
+CPU_DEFAULT_RATIO: float = 2.0 / 3.0
 
 # 短 TTL 快照缓存: 一次取齐物理/提交/进程信息, 避免每次判定都调多次 psutil。
 # TTL 由 1.0s 收紧到 0.25s —— 大数组分配期间内存变化很快, 1s 的快照会明显过期。
@@ -101,6 +113,123 @@ def format_bytes(n: Optional[int]) -> str:
             return "%.2f %s" % (x, unit)
         x /= 1024.0
     return "%.2f TB" % x
+
+
+# --------------------------------------------------------------------------- #
+# CPU / 并行策略 (与内存策略分开: 前者定"用多少核", 后者定"放不放进内存")
+# --------------------------------------------------------------------------- #
+def cpu_total() -> int:
+    """
+    本机可用逻辑 CPU 数 (至少 1)。
+
+    优先用 ``os.process_cpu_count`` (Python>=3.13, 已去掉不可用核), 退到
+    ``os.cpu_count()``; 两者都拿不到时返回 1。
+    """
+    getter = getattr(os, "process_cpu_count", None)
+    n = None
+    if getter is not None:
+        try:
+            n = getter()
+        except Exception:
+            n = None
+    if not n:
+        n = os.cpu_count()
+    return max(1, int(n or 1))
+
+
+def set_cpu_default_ratio(ratio: float) -> None:
+    """
+    设置默认 CPU 占用比例 (全库并行/多线程的统一默认值)。
+
+    Parameters
+    ----------
+    ratio : float
+        ``(0, 1]`` 之间的比例。默认 ``CPU_DEFAULT_RATIO`` = 2/3 —— 默认**不占满**
+        核心, 以免首次使用的调用把用户机器拖慢。
+
+    Raises
+    ------
+    ValueError
+        比例越界。
+    """
+    global CPU_DEFAULT_RATIO
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)):
+        raise ValueError(f"ratio must be a number in (0, 1], got {ratio!r}")
+    if not (0.0 < float(ratio) <= 1.0):
+        raise ValueError(f"ratio must be in (0, 1], got {ratio!r}")
+    CPU_DEFAULT_RATIO = float(ratio)
+
+
+def get_cpu_policy() -> dict:
+    """返回 CPU 策略的只读视图 (总核数 + 默认占用比例 + 解析后的默认核数)。"""
+    total = cpu_total()
+    return {
+        "cpu_total": total,
+        "default_ratio": CPU_DEFAULT_RATIO,
+        "default_workers": _workers_from_ratio(total, CPU_DEFAULT_RATIO),
+    }
+
+
+def _workers_from_ratio(total: int, ratio: float) -> int:
+    """按比例换算核数: 向下取整, 至少 1 (但总核为 1 时就用 1)。"""
+    if total <= 1:
+        return 1
+    return max(1, min(total, int(total * float(ratio))))
+
+
+def resolve_workers(workers=None, cpu_ratio=None) -> int:
+    """
+    把 ``workers`` / ``cpu_ratio`` 解析成实际核数 (全库并行取值的单一入口)。
+
+    Parameters
+    ----------
+    workers : int | None
+        显式核数。``None`` = 未指定; ``-1`` = 用当前可用核数; 正数 = 该核数。
+        不接受 ``0`` 或 ``< -1``。
+    cpu_ratio : float | None
+        按可用核数的比例取核数 (``(0, 1]``), 向下取整、至少 1。
+
+    Returns
+    -------
+    int
+        始终 ``>= 1`` 的核数。
+
+    Raises
+    ------
+    ValueError
+        ``workers`` 与 ``cpu_ratio`` 同时给出 (两者互斥), 或取值越界。
+
+    Notes
+    -----
+    ``resolve_workers()`` (两者都不给) 返回默认策略值 ``cpu_total()`` ×
+    ``CPU_DEFAULT_RATIO`` —— 默认不占满全部核心。
+    """
+    if workers is not None and cpu_ratio is not None:
+        raise ValueError(
+            "workers and cpu_ratio are mutually exclusive; pass only one of them "
+            f"(got workers={workers!r}, cpu_ratio={cpu_ratio!r})"
+        )
+
+    total = cpu_total()
+
+    if cpu_ratio is not None:
+        if isinstance(cpu_ratio, bool) or not isinstance(cpu_ratio, (int, float)):
+            raise ValueError(f"cpu_ratio must be a number in (0, 1], got {cpu_ratio!r}")
+        if not (0.0 < float(cpu_ratio) <= 1.0):
+            raise ValueError(f"cpu_ratio must be in (0, 1], got {cpu_ratio!r}")
+        return _workers_from_ratio(total, float(cpu_ratio))
+
+    if workers is None:
+        return _workers_from_ratio(total, CPU_DEFAULT_RATIO)
+
+    if isinstance(workers, bool) or not isinstance(workers, (int, np.integer)):
+        raise ValueError(f"workers must be an int, -1 or None, got {workers!r}")
+    workers = int(workers)
+    if workers == -1:
+        return total
+    if workers < 1:
+        raise ValueError(f"workers must be >= 1, -1 or None, got {workers!r}")
+    return max(1, min(total, workers))
 
 
 def get_memory_snapshot(force: bool = False) -> dict:

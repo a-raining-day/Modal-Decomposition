@@ -4,5 +4,6 @@
 # encoding on some platforms (e.g. GBK on Windows).
 include LICENSE
 include README.md
-recursive-include src/Modal_Decomposition/Utils/Hilbert/_C *
-include src/Modal_Decomposition/Utils/Hilbert/_fht_native.pyx
+recursive-include src/Modal_Decomposition/Utils/_Hilbert/_C *
+include src/Modal_Decomposition/Utils/_Hilbert/_fht_native.pyx
+recursive-include src/Modal_Decomposition/Utils/_Slepian/_C *.c *.h

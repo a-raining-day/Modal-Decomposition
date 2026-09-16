@@ -44,7 +44,14 @@ EMD 已由自研实现转正: 本模块取代原 PyEMD 包装版, 注册键 ``"E
 ``DecompositionResult`` (IMFs (K,num_imfs), Res, info, config), 与全库一致:
 - dtype: float32/float64 全程保持原精度; float16 与整数/布尔输入提升为
   float64 计算;
-- 重构精确: ``IMFs.sum(axis=0) + Res == S`` (残差是逐次减法余量)。
+- 重构精确: ``IMFs.sum(axis=0) + Res == S`` (残差是逐次减法余量);
+- ``info``: ``{"iterations": [...], "final_sd": [...]}``, 逐 IMF 一一对应。
+  ``final_sd[k]`` 是该阶最后一个 sift 迭代的 Cauchy 量
+  ``sum(m^2)/sum(h_prev^2)``; 若该阶**一次 sift 都没做完**就退出 (实测可达
+  路径: 极小幅度信号的自点积在 float64 下下溢为 0), 则该位置为
+  ``float("nan")`` —— 表示"无 SD 可报", 与"收敛到 0"区分开。
+  常量 / 单调 / 全零信号在 ``decompose`` 外层即被拦下, 不产生 IMF,
+  ``final_sd`` 为空列表。
 
 References
 ----------
@@ -344,7 +351,16 @@ class EMD(Decomposer):
     # 筛分内循环 (首次迭代复用 decompose 预检过的极值, 省一次全数组扫描)
     # ------------------------------------------------------------------ #
     def _sift(self, h, up_idx, dn_idx, grid):
-        last_sd = 0.0
+        # last_sd 初值取 NaN 而非 0.0: 存在**一次 sift 都没做完**就退出的路径,
+        # 此时不存在任何 SD 可报。实测可达的那一条是 ``prev_energy == 0.0``:
+        # 极小幅度信号 (如 1e-300 量级) 的自点积在 float64 下下溢为 0, 于是首轮
+        # 就 break, iters 保持 0。旧实现以 0.0 作初值, 此时 info["final_sd"]
+        # 会谎报"完美收敛到 0", 而 0.0 又小于任何合法 sd_thr, 与真正收敛无法区分。
+        # NaN 表示"无 SD 可报", 与 iters == 0 严格对应。
+        #
+        # 注意: 常量 / 单调 / 全零信号**不会**走到这里 —— 它们在 decompose 的外层
+        # 循环就被 is_monotonic 拦下, ``_sift`` 根本不执行 (故 final_sd 为空列表)。
+        last_sd = float("nan")
         iters = 0
 
         for it in range(self.max_iter):
@@ -363,7 +379,7 @@ class EMD(Decomposer):
             # Cauchy 型判据: sd = sum(mean^2) / sum(h_prev^2)。
             prev_energy = float(np.dot(h, h))
             if prev_energy == 0.0:
-                break  # 全零: 已收敛
+                break  # 全零: 无需再筛, 无 SD
 
             h_new = h - mean
             last_sd = float(np.dot(mean, mean)) / prev_energy

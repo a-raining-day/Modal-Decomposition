@@ -13,6 +13,7 @@
 | EMD × PyEMD 十二问逐点对照（E-A…E-H） | `comparison/bench_emd_vs_pyemd_alignment.py` | `comparison/results/emd_vs_pyemd_alignment_raw.json` | `docs/EMD_vs_PyEMD_Detailed_Comparison.md` |
 | 三方验证网格（MD/PyEMD/PySDKit × A/B/C × 256–65536） | `comparison/bench_emd_validation.py` + `comparison/refresh_emd_validation_md.py` | `comparison/results/emd_validation_raw.json` | `docs/EMD_Validation_and_Comparison_Report.md` |
 | 原生 vs `EMD_new` 性能 + 参数扫描 | `comparison/bench_emd_new.py` | 直接产出 docs 两份 | `docs/EMD_vs_EMD_new_Performance_Report.md`、`docs/EMD_new_Parameter_Sweep_Report.md` |
+| EEMD 原生 vs PyEMD 包装（trials / 长度 / noise_width 扫描） | `comparison/bench_eemd_native.py` | `comparison/results/eemd_native_raw.json` | `docs/EEMD_Native_vs_PyEMD_Report.md` |
 | 计时·质量三方（原生引擎，现行默认） | `comparison/bench_timing.py --method EMD` | `comparison/results/emd/{timing_raw.csv,timing_metrics.json}` | `docs/EMD_Timing_Memory_Quality_Report.md` |
 | 大数据内存轴（三方 RSS，1MB–1GB × increasing/random） | `comparison/bench_memory.py`（**2026-09-10 原生引擎重跑**） | `comparison/results/memory/*.{json,csv}`（旧数据归档于 `_legacy_pyemd_wrapper/memory/`） | `docs/EMD_Large_Signal_Memory_Report.md`（重跑版） |
 | 大数据内存矩阵（dtype × 长度 × pattern × chunk 策略） | `test_memory/run_matrix.py`、`test_memory/test_emd_memory.py`（**2026-09-10 原生引擎重跑**） | `test_memory/result_for_each_decomposition/EMD.{json,csv}`（旧数据归档为 `EMD_legacy_pyemd_wrapper.*`） | 同上 |
@@ -21,7 +22,8 @@
 
 | 主题 | 实验脚本 | 原始产物 | docs 报告 |
 |---|---|---|---|
-| VMD（MD-VMD / vmdpy / PySDKit 三列，parity 参数） | `comparison/bench_timing.py --method VMD`、`comparison/summarize_vmd.py` | `comparison/results/vmd/*` | `docs/Decomposition_Methods_Timing_Report.md` |
+| VMD（MD-VMD / vmdpy / PySDKit 三列，parity 参数） | `comparison/bench_timing.py --method VMD`、`comparison/summarize_vmd.py` | `comparison/results/vmd/*` | `docs/Decomposition_Methods_Timing_Report.md`（**VMD §1 为原生重构前**：脚本当时用的是已废弃参数名，见下行） |
+| **VMD 三方重测**（原生实现 vs vmdpy vs PySDKit，3 次重复中位 + 首次 PySDKit 质量列） | `comparison/bench_timing.py --method VMD`、`comparison/summarize_vmd_pysdkit.py` | `comparison/results/vmd_pysdkit/*`、`docs/VMD_Native_vs_vmdpy_vs_PySDKit_Results.json` | `docs/VMD_Three_Way_Comparison_Report.md` |
 | LMD（Hilbert-scipy / midpoint / Hilbert-FHT / PySDKit 四列） | `comparison/bench_timing.py --method LMD`、`comparison/summarize_lmd.py` | `comparison/results/lmd_fixed/*` | 同上 |
 | FMD（MD-FMD / PySDKit-FMD） | `comparison/bench_timing.py --method FMD` | `comparison/results/fmd/*` | 同上 |
 | EFD（MD-EFD / PySDKit-EFD） | `comparison/bench_timing.py --method EFD` | `comparison/results/efd_fixed/*` | 同上 |

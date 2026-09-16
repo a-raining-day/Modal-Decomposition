@@ -65,12 +65,24 @@ Requires **Python >= 3.10**.
 |-------------|-----------------------------------------------------|
 | numpy       | core arrays and vectorized kernels                 |
 | scipy       | splines, envelope / Hilbert, filtering, peaks, FFT |
-| EMD-signal (PyEMD) | EMD, EEMD, CEEMDAN (and ensemble chains)  |
-| ewtpy       | *optional*: only the `EWTpy` entry                 |
-| vmdpy       | VMD                                               |
+| EMD-signal (PyEMD) | **EEMD and CEEMDAN only** — the last remaining third-party decomposition dependency |
 | psutil      | available-memory reading for the memmap policy     |
 
 > Please install `EMD-signal`, not `PyEMD` (the latter is an unrelated older package).
+
+**PyEMD is the only third-party decomposition backend left.** Every other
+method — `EMD`, `CEEMD`, `ICEEMDAN`, `RPSEMD`, `VMD`, `EWT`, `LMD`, `FMD`,
+`EFD`, `CEEFD`, `SSA`, `SVMD`, `MEMD` — is implemented inside this library and
+needs nothing beyond numpy/scipy. Only `EEMD` and `CEEMDAN` still delegate to
+PyEMD, and **that dependency is being removed**: the `0.3.x` line exists
+precisely to finish porting those two remaining branches, after which the
+library stands on its own (see [Roadmap](#roadmap)).
+
+`vmdpy` and `ewtpy` are **not** required: the native `VMD` / `EWT` replace them
+entirely. `vmdpy` survives only as an optional parity-check backend
+(`Class.VMD(vmdpy=True)`) and `EWTpy` / `ewtpy` only as an optional
+reference-implementation adapter. Both are imported lazily, so neither is a
+runtime dependency.
 
 `EWT` (Empirical Wavelet Transform) is implemented **inside this library** and
 needs no third-party package. The ewtpy-backed variant `EWTpy` is **optional**:
@@ -84,6 +96,9 @@ Optional extras (not required at runtime): `[dev]` (pytest, black) and
 `[plot]` (matplotlib). `numba` may be installed to activate the optional
 `"numba"` backend of `Utils.Peaks` / `SVMD`; everything degrades gracefully
 without it.
+
+Accessing any method other than `EEMD` / `CEEMDAN` therefore never triggers a
+PyEMD import at all — `EMD` in particular is the native sifting engine.
 
 ## Quick Start
 
@@ -178,18 +193,54 @@ src/Modal_Decomposition/
 ├── __init__.py      Class / Function namespaces + global API
 ├── <METHOD>.py      1 Config dataclass + 1 Decomposer per method
 ├── EMD.py           native EMD engine (PyEMD-free; original EMD_new,
-│                    registered as the public "EMD")
+│                    registered as the public "EMD"). Only EEMD / CEEMDAN
+│                    still reach PyEMD; the 0.3.x line removes that too
 ├── _Registry.py     class registry (registration at import time)
 ├── Base/            Decomposer ABC, DecompositionResult, Config,
 │                    import Cache, metadata tables, size constants
 └── Utils/           Check / Chunk / Peaks / Mirror / Spline / Envelope /
-                     Hilbert / Monotonicity / Memory / Seed
-                     (+ _Hilbert FHT backends)
+                     Hilbert / Monotonicity / Memory / Seed / FFT / Slepian
+                     (+ _Hilbert FHT and _Slepian C backends)
 tests/               pytest suite + benchmarking harnesses (comparison/,
                      ssa/, test_memory/) against PyEMD and PySDKit
 ```
 
+## Roadmap
+
+**`0.3.0` is the current release.** PyEMD is the only third-party
+decomposition backend still in use, and it is on the way out; the version
+plan splits the remaining work into two lines:
+
+| Line | Scope |
+|------|-------|
+| **`0.3.x`** | **Finish removing PyEMD.** Port the two remaining PyEMD-backed branches (`EEMD`, `CEEMDAN`) onto the native engine, so the whole package runs on numpy/scipy alone. Nothing else is planned for this line — bug fixups are deliberately deferred. |
+| **`0.4.0`** | **First fully self-developed release.** With every method native, this line takes on the remaining bug fixups and correctness work across the library. |
+
 ## Changelog
+
+### 0.3.0
+
+- **Version line opened.** PyEMD is now the *only* third-party decomposition
+  dependency: `EEMD` and `CEEMDAN` are the sole methods still backed by it,
+  and removing that dependency is the entire scope of the `0.3.x` line.
+  Everything else — `EMD`, `CEEMD`, `ICEEMDAN`, `RPSEMD`, `VMD`, `EWT`,
+  `LMD`, `FMD`, `EFD`, `CEEFD`, `SSA`, `SVMD`, `MEMD` — is already native.
+- `vmdpy` and `ewtpy` are demoted to optional parity-check / reference
+  backends (`Class.VMD(vmdpy=True)`, `Class.EWTpy`), no longer runtime
+  dependencies of `VMD` / `EWT`.
+- `EWT` is fully re-implemented in-library (boundary detection, filter bank,
+  transform and inverse) and no longer requires `ewtpy`; the `Operator`
+  package supplies the Daubechies transition functions.
+- New `Utils.Slepian` (DPSS / Slepian sequences) with three backends —
+  `scipy` (default), `C` (self-contained compiled core, loaded via `ctypes`)
+  and `numpy` — plus a bounded process-wide LRU cache; used by the EWT
+  `pre_deal="Slepian-Optimize"` multitaper branch.
+- `Utils.FFT` gained a backend dispatcher (`numpy` / `scipy` / `pyfftw` /
+  `tiled` / `cupy`, with `auto` splitting on `BIG_ARRAY`); all backends
+  remain optional and fall back to numpy.
+- **Remaining work for this line:** port `EEMD` / `CEEMDAN` off PyEMD
+  (tracked as the `0.3.x` scope above). Bug fixups are out of scope until
+  `0.4.0`.
 
 ### 0.2.1
 

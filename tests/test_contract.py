@@ -60,7 +60,7 @@ def test_config_snapshot(method, signal):
     assert isinstance(data, dict)
     if method == "SSA":
         assert data["window_size"] == signal.size // 3
-    if method in ("CEEMD", "CEEMDAN", "EEMD", "FMD", "ICEEMDAN"):
+    if method in ("CEEMD", "CEEMDAN", "EEMD", "EEMD", "FMD", "ICEEMDAN"):
         assert data["seed"] == 0
 
 

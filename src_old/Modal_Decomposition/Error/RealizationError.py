@@ -1,2 +1,0 @@
-class RealizationError(Exception):
-    pass

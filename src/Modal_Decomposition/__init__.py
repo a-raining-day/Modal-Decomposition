@@ -32,7 +32,6 @@ from . import \
     EFD,
     EMD,
     EWT,
-    EWTpy,
     FMD,
     ICEEMDAN,
     LMD,
@@ -75,19 +74,13 @@ __url__ = "https://github.com/a-raining-day/Modal-Decomposition"
 __description__ = "A comprehensive modal decomposition library"
 
 
-class _Namespace:
+class Namespace:
     """
     Read-only namespace over a registry snapshot.
     """
 
     def __init__(self, entries):
         self.__dict__.update(entries)
-
-    def __dir__(self):
-        return sorted(set(super().__dir__()) | set(self.__dict__))
-
-    def __repr__(self):
-        return f"<Namespace {sorted(self.__dict__)}>"
 
 
 def _compose_doc(name: str, cls: type) -> str:
@@ -168,7 +161,7 @@ def _make_facade(name: str, cls: type):
     return facade
 
 
-Class = _Namespace(dict(sorted(_ClassRegistry.items())))
-Function = _Namespace(
+Class = Namespace(_ClassRegistry.items())
+Function = Namespace(
     {k: _make_facade(k, v) for k, v in sorted(_ClassRegistry.items())}
-)
+)  # Function 需要重写，先实例化类，再调用.decompose。参数则是.decompose的在前，其他的在后

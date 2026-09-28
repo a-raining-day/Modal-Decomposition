@@ -33,6 +33,7 @@ def register_class(name: str):
             )
         if name in _ClassRegistry:
             raise ValueError(f"Duplicate registration for {name!r}")
+
         _ClassRegistry[name] = cls
         return cls
 

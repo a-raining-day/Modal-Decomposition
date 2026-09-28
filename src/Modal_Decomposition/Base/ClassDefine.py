@@ -2,6 +2,9 @@
 Core contracts: the decomposition result type and the decomposer base class.
 """
 
+import copy
+import inspect
+import warnings
 import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -9,7 +12,7 @@ from typing import Any, ClassVar
 
 from .ConfigDefine import Config
 from .TextDefine import Name, Reference
-from .PathDefine import TEMP_DIR
+from ..Error import PreError
 
 __all__ = ["DecompositionResult", "Decomposer"]
 
@@ -73,6 +76,10 @@ class Decomposer(ABC):
 
     name: ClassVar[str]
 
+    def __init__(self):
+        self.__snapshot = None
+        self.__config_construct_success = False
+
     @abstractmethod
     def decompose(self, S, T=None) -> DecompositionResult:
         """
@@ -91,22 +98,32 @@ class Decomposer(ABC):
             Unified decomposition result.
         """
 
-    def __call__(self, S, T=None) -> DecompositionResult:
+    @abstractmethod
+    def param_check(self) -> None:
         """
-        Alias for ``decompose``.
+        Check the parameters of the init. If the init method has problem, it will raise or warning.
+        :return:
         """
-        return self.decompose(S, T)
 
-    def chunk(self, S: np.ndarray, chunk_size: int) -> np.ndarray:
-        _dtype = S.dtype
+    def config_construct_start(self) -> None:
+        internal = {"_Decomposer__snapshot", "_Decomposer__config_construct_success"}
 
-        L = S.shape[0]
-        chunk_num = L // chunk_size
-        if L % chunk_size != 0:
-            last = True
-            last_len = L - chunk_num * chunk_size
+        self.__snapshot = set(vars(self)) - internal
+        self.__config_construct_success = True
 
+    def config_construct_end(self) -> dict:
+        if (not self.__config_construct_success) or (self.__snapshot is None):
+            raise PreError(
+                "the pre-config isn't constructed yet, use `config_construct_start` at the beginning of __init__"
+            )
 
+        missing = [k for k in self.__snapshot if not hasattr(self, k)]
+        if missing:
+            raise PreError(
+                f"the following config keys were recorded at __init__, but are not set as attributes on self: {missing}"
+            )
+
+        return {k: getattr(self, k) for k in self.__snapshot}
 
     @property
     def full_name(self) -> str:

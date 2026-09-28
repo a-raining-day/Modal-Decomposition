@@ -2,6 +2,12 @@
 Error subpackage.
 """
 
-from .RealizationError import RealizationError
+class RealizationError(Exception):
+    """
+    Raised when a declared capability is not yet implemented.
+    """
 
-__all__ = ["RealizationError"]
+class PreError(Exception):
+    """
+    Raised error when the preposition is incomplete.
+    """

@@ -5,100 +5,103 @@ Global seed state plus resolution of effective per-method seeds. Global
 seed overrides a non-None local seed and emits a UserWarning.
 """
 
-import operator
-import warnings
+import threading
+import contextlib
+from warnings import warn
+from typing import Generator
 
-__all__ = ["set_seed", "get_seed", "resolve_seed"]
-
-_GLOBAL_SEED = None
+__all__ = ["Seed", "set_seed", "get_seed"]
 
 
-def _coerce_seed(seed) -> int | None:
+class Seed:
     """
-    Validate a seed value.
-
-    Parameters
-    ----------
-    seed : int | None
-        Seed candidate.
-
-    Returns
-    -------
-    int | None
-        The validated integer seed or None.
-
-    Raises
-    ------
-    TypeError
-        On bool or non-integer values.
-    ValueError
-        On negative values.
+    全局仅该唯一类可以设置全局种子，该种子对全局覆盖且唯一
+    但是提供临时上下文设置种子
     """
-    if seed is None:
-        return None
-    if isinstance(seed, bool):
-        raise TypeError("seed must be an int or None, got bool")
-    try:
-        value = operator.index(seed)
-    except TypeError:
-        raise TypeError(f"seed must be an int or None, got {type(seed).__name__}")
-    if value < 0:
-        raise ValueError(f"seed must be non-negative, got {value}")
-    return value
+    GLOBAL_SEED = 42
+
+    _lock = threading.Lock()
+    _locked = False
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    @property
+    def status(self) -> bool:
+        with self._lock:
+            return self._locked
+
+    @staticmethod
+    def validate(seed: int) -> int:
+        if not isinstance(seed, int):
+            raise TypeError(f"seed must be int, got {type(seed)}")
+
+        try:
+            value = seed.__index__()
+        except TypeError:
+            raise TypeError(f"seed must be an int or None, got {type(seed).__name__}")
+
+        if value < 0:
+            raise ValueError(f"seed must be non-negative, got {value}")
+
+        return value
+
+    @classmethod
+    def set(cls, seed: int, lock: bool=False, verbose: bool=False) -> int:
+        """
+        Set the seed.
+        :param seed: int of your seed.
+        :param lock: if True, the global seed will be locked, cannot be modified.
+        :param verbose: if True, warn won't remain silent.
+        :return:
+        """
+        with cls._lock:
+            seed = cls.validate(seed)
+
+            if cls._locked:
+                raise ValueError("GLOBAL_SEED is locked and cannot be modified.")
+
+            if cls.GLOBAL_SEED is not None and verbose:
+                warn("Overriding existing GLOBAL_SEED.")
+
+            cls.GLOBAL_SEED = seed
+            if lock:
+                cls._locked = True
+
+            return cls.GLOBAL_SEED
+
+    @classmethod
+    def get(cls) -> int:
+        with cls._lock:
+            return cls.GLOBAL_SEED
+
+    @property
+    def value(self):
+        return self.get()
+
+    @staticmethod
+    @contextlib.contextmanager
+    def temporary_seed(seed: int) -> Generator[None, None, None]:
+        """
+        在多线程并发时，该窗口会带来隐式的复现性破坏。虽然实现了，但是不建议使用
+        :param seed:
+        :return:
+        """
+        old_seed = Seed().GLOBAL_SEED
+        old_locked = Seed()._locked
+
+        Seed()._locked = False
+        Seed().set(seed)
+        try:
+            yield
+        finally:
+            Seed().GLOBAL_SEED = old_seed
+            Seed()._locked = old_locked
 
 
-def set_seed(seed) -> None:
-    """
-    Set the process-level global seed.
-
-    The global seed, when not None, overrides any non-None local seed of a
-    decomposition method. Call before starting decompositions; changing it
-    during a run is not thread-safe.
-
-    Parameters
-    ----------
-    seed : int | None
-        Non-negative integer, or None to clear the global seed.
-    """
-    global _GLOBAL_SEED
-    _GLOBAL_SEED = _coerce_seed(seed)
-
-
-def get_seed() -> int | None:
-    """
-    Return the current global seed, or None when unset.
-    """
-    return _GLOBAL_SEED
-
-
-def resolve_seed(local_seed, method: str) -> tuple[int | None, bool]:
-    """
-    Resolve the effective seed for a method.
-
-    Parameters
-    ----------
-    local_seed : int | None
-        The method's local seed parameter.
-    method : str
-        Method name used in the override warning.
-
-    Returns
-    -------
-    tuple[int | None, bool]
-        (effective_seed, overridden). ``overridden`` is True when a non-None
-        local seed was replaced by the global seed.
-    """
-    local = _coerce_seed(local_seed)
-    global_seed = _GLOBAL_SEED
-
-    if global_seed is not None:
-        if local is not None:
-            warnings.warn(
-                f"global seed {global_seed} overrides local seed {local} for method {method}",
-                UserWarning,
-                stacklevel=2,
-            )
-            return global_seed, True
-        return global_seed, False
-
-    return local, False
+def validate_seed(seed) -> int | None: return Seed.validate(seed)
+def set_seed(seed: int, lock: bool=False, verbose: bool=False) -> int: return Seed.set(seed=seed, lock=lock, verbose=verbose)
+def get_seed() -> int: return Seed.get()

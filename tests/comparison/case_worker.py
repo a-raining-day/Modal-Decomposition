@@ -156,7 +156,7 @@ def main() -> int:
     except Exception:
         pass  # the real run reports genuine failures
 
-    # --- phase 2: decomposition (parent enforces the time budget) ---
+    # --- phase 2: decomposition (parent enforces the now budget) ---
     dec = Heartbeat(hb_path, interval_s=HB_INTERVAL_S)
     stack = None
     dec_error = None

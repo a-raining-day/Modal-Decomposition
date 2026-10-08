@@ -4,7 +4,7 @@ Summarize raw benchmark records into markdown tables + CSV summaries.
 Reads ``results/timing_raw.csv`` (+ ``results/timing_metrics.json``) and
 ``results/memory/*.json`` and writes:
 
-* ``results/summary_timing.md``  - median wall time per (case, n, impl),
+* ``results/summary_timing.md``  - median wall now per (case, n, impl),
   speedup ratios and quality metrics;
 * ``results/summary_memory.md``  - per-cell memory-grid status table;
 * ``results/timing_median.csv``  - machine-readable median table;
@@ -62,7 +62,7 @@ def summarize_timing() -> None:
              for impl in IMPLS]
 
     lines = ["# Timing summary (regular lengths)", "",
-             "Median wall time in seconds (3 repeats; same process/machine, "
+             "Median wall now in seconds (3 repeats; same process/machine, "
              "implementation order round-robined). Ratios: PyEMD / MD-EMD and "
              "PySDKit / MD-EMD (>1 = slower than MD-EMD, <1 = faster).",
              ""]

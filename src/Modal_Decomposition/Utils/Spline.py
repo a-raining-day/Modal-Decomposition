@@ -34,74 +34,30 @@ Cache 集成
 """
 
 import numpy as np
+from enum import Enum
 from typing import Any, Union, Literal
 
-from ..Base.ConstDefine import SPLINE_KIND, DEFAULT_NUMPY_TYPE
-from ..Base.Cache import Cache
+from ..Base import Cache
+from ..Define import DEFAULT_NUMPY_TYPE
 
 __all__ = [
     "Spline",
     "spline",
+    "SPLINE_KIND"
 ]
 
-def _validate(x, y, dtype=None) -> tuple[np.ndarray, np.ndarray]:
-    """
-    统一校验并规范化 ``(x, y)`` 节点对。
-
-    Returns
-    -------
-    (x64, y64)
-        float64、1-D、严格递增、无 NaN/Inf 的 ``x`` 及其对应 ``y``。
-        乱序 (但唯一) 的输入按 ``x`` 升序重排并发出 ``UserWarning``。
-
-    Raises
-    ------
-    ValueError
-        空/长度不一致/重复节点/非数值/含 NaN/Inf/维度错误/样本过少。
-    """
-
-    _dtype = dtype if dtype is not None else DEFAULT_NUMPY_TYPE
-
-    xa = np.asarray(x, dtype=_dtype)
-    ya = np.asarray(y, dtype=_dtype)
-
-    if xa.ndim != 1 or ya.ndim != 1:
-        raise ValueError(
-            f"Spline nodes must be 1-D, got x.ndim={xa.ndim}, y.ndim={ya.ndim}"
-        )
-    if xa.size < 2:
-        raise ValueError(f"Spline requires at least 2 nodes, got {xa.size}")
-    if xa.size != ya.size:
-        raise ValueError(
-            f"Length mismatch between x ({xa.size}) and y ({ya.size})"
-        )
-
-    try:
-        xdefault = np.asarray(xa, dtype=DEFAULT_NUMPY_TYPE)
-        ydefault = np.asarray(ya, dtype=DEFAULT_NUMPY_TYPE)
-    except (TypeError, ValueError):
-        raise ValueError("Spline nodes must be numeric (convertible to default numpy type)")
-
-    if not np.all(np.isfinite(xdefault)) or not np.all(np.isfinite(ydefault)):
-        raise ValueError("Spline nodes must be finite (no NaN/Inf)")
-
-    order = np.argsort(xdefault, kind="stable")
-    if not np.array_equal(xdefault[order], xdefault):
-        import warnings
-
-        warnings.warn(
-            "Spline x is not monotonically increasing; x/y are reordered by ascending x.",
-            UserWarning,
-            stacklevel=3,
-        )
-        xdefault = xdefault[order]
-        ydefault = ydefault[order]
-
-    if np.any(np.diff(xdefault) == 0):
-        raise ValueError("Spline requires strictly increasing x (duplicate nodes)")
-
-    return xdefault, ydefault
-
+SPLINE_KIND_ARGS = \
+Literal[
+    "UnivariateSpline",
+    "CubicSpline",
+    "PCHIP",
+    "Akima",
+]
+class SPLINE_KIND(Enum):
+    UnivariateSpline = "UnivariateSpline"
+    CubicSpline = "CubicSpline"
+    PHIP = "PCHIP"
+    Akima = "Akima"
 
 class Spline:
     """
@@ -156,24 +112,26 @@ class Spline:
         x,
         y,
         dtype=None,
-        spline_kind: Literal["UnivariateSpline", "CubicSpline", "PCHIP", "Akima"] = "UnivariateSpline",
+        spline_kind: SPLINE_KIND_ARGS | SPLINE_KIND = "UnivariateSpline",
         validate: bool = True,
         **kwargs: Any,
     ) -> None:
-        if spline_kind not in SPLINE_KIND:
+        try:
+            spline_kind: str | SPLINE_KIND = SPLINE_KIND(spline_kind)
+        except ValueError:
             raise ValueError(
-                f"Unknown spline_kind {spline_kind!r}; expected one of {SPLINE_KIND}"
+                f"Unknown spline_kind {spline_kind!r}; expected one of {SPLINE_KIND._member_names_}"
             )
 
         if validate:
-            xdefault, ydefault = _validate(x, y, dtype)
+            xdefault, ydefault = self._validate(x, y, dtype)
         else:
             # 热路径: 调用方保证节点合法 (严格递增 / 有限 / 长度一致)。
             xdefault = np.asarray(x, dtype=DEFAULT_NUMPY_TYPE)
             ydefault = np.asarray(y, dtype=DEFAULT_NUMPY_TYPE)
         n = xdefault.size
 
-        if spline_kind == "UnivariateSpline":
+        if spline_kind == SPLINE_KIND.UnivariateSpline:
             k = int(kwargs.get("k", 3))
             if k < 1:
                 raise ValueError(f"UnivariateSpline order k must be >= 1, got {k}")
@@ -194,10 +152,10 @@ class Spline:
             "CubicSpline": interp.CubicSpline,
             "PCHIP": interp.PchipInterpolator,
             "Akima": interp.Akima1DInterpolator,
-        }[spline_kind]
+        }[spline_kind.value]
         fitted = constructor(xdefault, ydefault, **kwargs)
 
-        self.backend: str = spline_kind
+        self.backend: str = spline_kind.value
         self.x_: np.ndarray = xdefault
         self.y_: np.ndarray = ydefault
         self.params: dict = dict(kwargs)
@@ -232,6 +190,65 @@ class Spline:
         raise AttributeError(
             f"{self.__class__.__name__!r} (spline_kind={self.backend!r}) has no attribute {item!r}"
         )
+
+    @staticmethod
+    def _validate(x, y, dtype=None) -> tuple[np.ndarray, np.ndarray]:
+        """
+        统一校验并规范化 ``(x, y)`` 节点对。
+
+        Returns
+        -------
+        (x64, y64)
+            float64、1-D、严格递增、无 NaN/Inf 的 ``x`` 及其对应 ``y``。
+            乱序 (但唯一) 的输入按 ``x`` 升序重排并发出 ``UserWarning``。
+
+        Raises
+        ------
+        ValueError
+            空/长度不一致/重复节点/非数值/含 NaN/Inf/维度错误/样本过少。
+        """
+
+        _dtype = dtype if dtype is not None else DEFAULT_NUMPY_TYPE
+
+        xa = np.asarray(x, dtype=_dtype)
+        ya = np.asarray(y, dtype=_dtype)
+
+        if xa.ndim != 1 or ya.ndim != 1:
+            raise ValueError(
+                f"Spline nodes must be 1-D, got x.ndim={xa.ndim}, y.ndim={ya.ndim}"
+            )
+        if xa.size < 2:
+            raise ValueError(f"Spline requires at least 2 nodes, got {xa.size}")
+        if xa.size != ya.size:
+            raise ValueError(
+                f"Length mismatch between x ({xa.size}) and y ({ya.size})"
+            )
+
+        try:
+            xdefault = np.asarray(xa, dtype=DEFAULT_NUMPY_TYPE)
+            ydefault = np.asarray(ya, dtype=DEFAULT_NUMPY_TYPE)
+        except (TypeError, ValueError):
+            raise ValueError("Spline nodes must be numeric (convertible to default numpy type)")
+
+        if not np.all(np.isfinite(xdefault)) or not np.all(np.isfinite(ydefault)):
+            raise ValueError("Spline nodes must be finite (no NaN/Inf)")
+
+        order = np.argsort(xdefault, kind="stable")
+        if not np.array_equal(xdefault[order], xdefault):
+            import warnings
+
+            warnings.warn(
+                "Spline x is not monotonically increasing; x/y are reordered by ascending x.",
+                UserWarning,
+                stacklevel=3,
+            )
+            xdefault = xdefault[order]
+            ydefault = ydefault[order]
+
+        if np.any(np.diff(xdefault) == 0):
+            raise ValueError("Spline requires strictly increasing x (duplicate nodes)")
+
+        return xdefault, ydefault
 
 def spline(
     x,
@@ -296,7 +313,7 @@ def spline(
     求值点 1e6, 全部后端均精确穿过节点。
 
     +------------------+----------------+-----------------+--------------+
-    | spline_kind          | fit @ 2k nodes | fit @ 20k nodes | eval (1e6 pt)|
+    | spline_kind      | fit @ 2k nodes | fit @ 20k nodes | eval (1e6 pt)|
     +==================+================+=================+==============+
     | UnivariateSpline | ~0.2 ms        | ~2.2 ms         | ~44.9 ms     |
     +------------------+----------------+-----------------+--------------+
@@ -307,8 +324,8 @@ def spline(
     | Akima            | ~0.1 ms        | ~1.0 ms         | ~6.4 ms      |
     +------------------+----------------+-----------------+--------------+
 
-    结论: 拟合耗时各后端基本同级 (0.1–2 ms 量级); **大量批量求值时
-    CubicSpline/PCHIP/Akima 约比 UnivariateSpline 快 ~7×** (FITPACK
+    结论: 拟合耗时各后端基本同级 (0.1–2 ms 量级);
+    **大量批量求值时CubicSpline/PCHIP/Akima 约比 UnivariateSpline 快 ~7x** (FITPACK
     splev 逐点开销更高)。默认取 UnivariateSpline 是设计取向 (接口/能力最全:
     平滑因子 s、权重 w、derivative/integral/roots), 追求纯插值性能时可显式选
     ``spline_kind="CubicSpline"`` (语义与默认 k=3/s=0 插值一致)。极端输入行为

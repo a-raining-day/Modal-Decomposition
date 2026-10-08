@@ -146,7 +146,7 @@ def time_analysis(
 
     result = {
         f"{func.__name__}": {
-            "time": to_sci_str_rounded(avg_time),   # 平均时间，科学计数法
+            "now": to_sci_str_rounded(avg_time),   # 平均时间，科学计数法
             "mode": mode,
             "byte_size": size_in_bytes,
             "data_type": data_type,
@@ -161,7 +161,7 @@ def test_is_monotonic():
     # is_monotonic
     """
     repeats times -> 10
-    byte size | data type | mod     | strict | chunk size | assign mod | mode | time (s)
+    byte size | data type | mod     | strict | chunk size | assign mod | mode | now (s)
 
     (before optimization: forced float64 upcast + np.diff)
     0.5 MB    | F16       | up      | False  | 1MB        | monotonic  | True | 1.0711e-3
@@ -212,4 +212,4 @@ def test_is_monotonic():
     print(f"\nresult for -> {name}")
     print(f"byte size = {result['byte_size']} | data type is {result['data_type']} | mod is {result['mod']}")
     print(f"the result is -> \\")
-    print(f"time is {result['time']}s | mode is {result['mode']}")
+    print(f"now is {result['now']}s | mode is {result['mode']}")

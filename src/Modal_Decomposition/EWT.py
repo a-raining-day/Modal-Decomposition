@@ -33,7 +33,7 @@ from typing import ClassVar, Literal, Sequence
 
 from .Base import Config, Decomposer, DecompositionResult
 from .Base.Cache import cache
-from .Base.ConstDefine import (
+from src.Modal_Decomposition.Define.ConstDefine import (
     BIG_ARRAY,
     CACHE_KEY,
     EWT_CHUNK_WORK_BYTES,
@@ -49,7 +49,7 @@ from .Utils import (
     get_slepian,
     get_spline,
 )
-from .Utils.Chunk import default_chunk_size, iter_chunks
+from .Utils.Chunk import chunk_size, iter_chunks
 from .Operator import empirical_wavelet_arr
 
 __all__ = ["EWT", "EWTConfig"]
@@ -431,7 +431,7 @@ class EWT(Decomposer):
             # base = EWT_CHUNK_WORK_BYTES / (临时量数 × 8 字节); 再交给内存策略
             # 按当前预算继续收缩 (`default_chunk_size` 的 extra_per_elem 与之同源)。
             base = max(1, EWT_CHUNK_WORK_BYTES // (_OPERATOR_TMP_ELEMS * np.dtype(np.float64).itemsize))
-            chunk_size = default_chunk_size(
+            chunk_size = chunk_size(
                 filter_bytes, base=min(base, n_bins), extra_per_elem=_OPERATOR_TMP_ELEMS
             )
             self.empirical_wave = None              # 大数组下不保留整张滤波器组

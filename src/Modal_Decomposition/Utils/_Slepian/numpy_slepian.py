@@ -59,7 +59,7 @@ Modify:
 
 import numpy as np
 
-from ...Base.ConstDefine import SLEPIAN_NUMPY_MAX_BYTES, DEFAULT_NUMPY_TYPE
+from src.Modal_Decomposition.Define.ConstDefine import SLEPIAN_NUMPY_MAX_BYTES, DEFAULT_NUMPY_TYPE
 
 __all__ = ["generate_slepian_numpy"]
 

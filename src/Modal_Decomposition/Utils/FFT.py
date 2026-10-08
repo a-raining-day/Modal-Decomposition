@@ -48,27 +48,24 @@ Modify:
 """
 
 import os
-import importlib.util
 import math
 import sys
 import warnings
-from typing import Optional
-
 import numpy as np
+import importlib.util
+from typing import Optional, Literal
 
-from ..Base.Cache import cache
-from ..Base.ConstDefine import (
+from ..Base import (
+    cache,
     BIG_ARRAY,
     CACHE_KEY,
-    FFT_BACKEND,
-    FFT_BACKEND_ALIAS,
     FFT_BACKEND_BIG,
-    FFT_BACKEND_LIST,
     FFT_BACKEND_SMALL,
     FFT_PIP_PACKAGE,
     FFT_THREAD_MIN_ELEMS,
     FFT_TILED_MIN_ELEMS,
 )
+
 from .Memory import resolve_workers
 
 __all__ = ["fft"]
@@ -86,7 +83,7 @@ class fft:
         fft.ifft(X); fft.rfft(x); fft.irfft(X, n=N)
         fft.fftshift(X); fft.ifftshift(X)
         fft.rfft(x, mod="pyfftw", workers=8)     # 单次指定后端
-        fft.resolve_backend(None, x.nbytes)      # 该体积会选中哪个后端
+        fft.resolve_backend(None, x.extras_bytes)      # 该体积会选中哪个后端
         fft.available_backends(); fft.describe()
 
     ``mod`` / ``workers`` / ``planner_effort`` 是**工具层**参数: ``workers`` 只对
@@ -97,22 +94,22 @@ class fft:
     # 变换
     # ------------------------------------------------------------------ #
     @staticmethod
-    def fft(a, mod=None, **kwargs) -> np.ndarray:
+    def fft(a, mod: Literal["auto", "numpy", "scipy", "pyfftw", "tiled", "cupy"] = "auto", **kwargs) -> np.ndarray:
         """复数 FFT (``axis`` / ``n`` 等参数透传)。"""
         return fft._dispatch("fft", a, mod=mod, **kwargs)
 
     @staticmethod
-    def ifft(a, mod=None, **kwargs) -> np.ndarray:
+    def ifft(a, mod: Literal["auto", "numpy", "scipy", "pyfftw", "tiled", "cupy"] = "auto", **kwargs) -> np.ndarray:
         """复数逆 FFT。"""
         return fft._dispatch("ifft", a, mod=mod, **kwargs)
 
     @staticmethod
-    def rfft(a, mod=None, **kwargs) -> np.ndarray:
+    def rfft(a, mod: Literal["auto", "numpy", "scipy", "pyfftw", "tiled", "cupy"] = "auto", **kwargs) -> np.ndarray:
         """实数 FFT (半谱, 长度 ``n//2+1``)。"""
         return fft._dispatch("rfft", a, mod=mod, **kwargs)
 
     @staticmethod
-    def irfft(a, mod=None, **kwargs) -> np.ndarray:
+    def irfft(a, mod: Literal["auto", "numpy", "scipy", "pyfftw", "tiled", "cupy"] = "auto", **kwargs) -> np.ndarray:
         """实数逆 FFT (``n`` 指定输出长度)。"""
         return fft._dispatch("irfft", a, mod=mod, **kwargs)
 
@@ -129,128 +126,62 @@ class fft:
         """``fftshift`` 的逆操作 (等价 ``np.fft.ifftshift``)。"""
         return np.fft.ifftshift(a, axes=axes)
 
-    # ------------------------------------------------------------------ #
-    # 后端解析与探测
-    # ------------------------------------------------------------------ #
     @staticmethod
-    def resolve_backend(mod=None, nbytes: int = 0) -> str:
+    def tiled_fft_1d(a: np.ndarray, inverse: bool, workers=None):
         """
-        解析生效后端名 (不会是 ``"auto"``)。
+        四步 (four-step) 分块 FFT: ``N = N1·N2``, 逐轴变换 + 旋转因子。
 
-        ``mod=None`` → 用 ``FFT_BACKEND``; ``"auto"`` 按体积分流
-        (``< BIG_ARRAY`` → ``FFT_BACKEND_SMALL``, 否则 ``FFT_BACKEND_BIG``)。
+        ``X[k2·N1 + k1] = FFT_{n2}[W_N^{n2·k1}·FFT_{n1}[a]]``: 用两次小尺寸变换完成
+        一次大长度变换, 峰值只多一个 ``(N1, N2)`` 中间量, 可在 memmap 上就地读写。
+        逆变换用 ``ifft(x) = conj(fft(conj(x)))/N`` 复用前向实现。长度不是合数或过短
+        时返回 ``None``, 由调用方回落直算。
         """
-        mod = FFT_BACKEND if mod is None else mod
-        name = fft._canonical(mod)
-        if name == "auto":
-            small = int(nbytes) < BIG_ARRAY
-            return fft._canonical(FFT_BACKEND_SMALL if small else FFT_BACKEND_BIG)
-        return name
+        n = int(a.shape[-1])
 
-    @staticmethod
-    def available_backends(probe: bool = False) -> dict:
-        """
-        各后端可用性: ``{后端名: True / False / "installed-not-probed" / 异常描述}``。
+        pair = None
+        if n >= 2:
+            for n1 in range(int(math.isqrt(n)), 1, -1):
+                if n % n1 == 0:
+                    pair = (n1, n // n1)
 
-        ``probe=False`` (默认) 只查 ``find_spec`` (不导入, 不会被 cupy 卡住);
-        ``probe=True`` 才真正尝试导入 (cupy 还会检查 GPU 可见性)。
-        """
-        out = {"numpy": True, "tiled": fft._scipy_installed()}
-        for name in ("scipy", "pyfftw", "cupy"):
-            if importlib.util.find_spec(name) is None:
-                out[name] = False
-                continue
-            if not probe:
-                out[name] = "installed-not-probed"
-                continue
-            try:
-                {"scipy": fft._load_scipy, "pyfftw": fft._load_pyfftw,
-                 "cupy": fft._load_cupy}[name]()
-                out[name] = True
-            except Exception as exc:
-                out[name] = "%s: %s" % (type(exc).__name__, str(exc)[:80])
-        return out
+        if pair is None or n < FFT_TILED_MIN_ELEMS:
+            return None
 
-    @staticmethod
-    def describe() -> str:
-        """一行概览: 默认后端 + 各分支可用性 (供日志/报告引用)。"""
-        avail = fft.available_backends()
-        parts = []
-        for name in FFT_BACKEND_LIST:
-            state = avail.get(name)
-            mark = "OK" if state is True else ("--" if state is False else str(state))
-            parts.append("%s=%s" % (name, mark))
-        return "fft default=%s small=%s big=%s (BIG_ARRAY=%.0fMB) | %s" % (
-            FFT_BACKEND, FFT_BACKEND_SMALL, FFT_BACKEND_BIG,
-            BIG_ARRAY / 1024 ** 2, ", ".join(parts),
-        )
+        n1, n2 = pair
+        sf = cache.import_module(CACHE_KEY["fft"]["scipy"])               # 逐轴变换用 scipy (可多线程)
+        th = fft._threads_for(n * a.dtype.itemsize, workers)
+        batch_shape = a.shape[:-1]
+
+        if inverse:
+            return np.conj(fft.tiled_fft_1d(np.conj(a), False, workers)) / n
+
+        work = np.array(a.reshape(batch_shape + (n1, n2)), copy=True)
+        if work.dtype.kind != "c":
+            work = work.astype(np.complex128)
+        work = sf.fft(work, axis=-2, workers=th)                # 沿 n1
+
+        k1 = np.arange(n1, dtype=np.float64)[:, None]
+        n2i = np.arange(n2, dtype=np.float64)[None, :]
+        work *= np.exp((-2j * np.pi / n) * (k1 * n2i))          # 旋转因子 W_N^{n2·k1}
+
+        work = sf.fft(work, axis=-1, workers=th)                # 沿 n2
+        out = np.ascontiguousarray(work.swapaxes(-1, -2))       # [k2,k1] 展平 = k2·N1+k1
+        return out.reshape(batch_shape + (n,))
 
     # ------------------------------------------------------------------ #
     # 内部: 后端库取用 (全部经 import cache)
     # ------------------------------------------------------------------ #
     @staticmethod
-    def _canonical(mod) -> str:
-        """别名 → canonical 后端名; 未知名字报错并列出可选项。"""
-        key = str(mod).strip().lower() if isinstance(mod, str) else mod
-        if key in FFT_BACKEND_ALIAS:
-            key = FFT_BACKEND_ALIAS[key]
-        if key not in FFT_BACKEND_LIST and key != "auto":
-            raise ValueError(
-                "unknown FFT backend %r; expected one of %s or 'auto'"
-                % (mod, list(FFT_BACKEND_LIST))
-            )
-        return key
-
-    @staticmethod
-    def _scipy_installed() -> bool:
-        return importlib.util.find_spec("scipy") is not None
-
-    @staticmethod
-    def _installed(name: str) -> bool:
-        """后端是否已安装 (只查 find_spec, 不导入)。"""
-        if name == "numpy":
-            return True
-        if name == "tiled":
-            return fft._scipy_installed()
-        return importlib.util.find_spec(name) is not None
-
-    @staticmethod
-    def _install_hint(backend: str) -> str:
-        """缺库报错文本 (含可直接照抄的安装命令)。"""
-        return (
-            "FFT backend %r 所需的库未安装; 请先安装:\n"
-            "    %s -m pip install %s"
-            % (backend, sys.executable, FFT_PIP_PACKAGE.get(backend, backend))
-        )
-
-    @staticmethod
-    def _load_scipy():
-        """取 ``scipy.fft``。"""
-        return cache.import_module(
-                CACHE_KEY["fft"]["scipy"],
-                description="scipy.fft: 多线程 / float32 FFT 后端 (Utils.FFT)",
-            )
-
-    @staticmethod
     def _load_pyfftw():
         """取 ``pyfftw.interfaces.numpy_fft`` 并启用其 wisdom 缓存 (plan 复用)。"""
-        pnf = cache.import_module(
-            CACHE_KEY["fft"]["pyfftw"],
-            description="pyfftw.interfaces.numpy_fft: FFTW 后端 (Utils.FFT)",
-        )
-        cache.import_module(
-            CACHE_KEY["fft"]["pyfftw_cache"],
-            description="pyfftw.interfaces.cache: FFTW plan 缓存开关 (Utils.FFT)",
-        ).enable()
+        pnf = cache.import_module(CACHE_KEY["fft"]["pyfftw"])
+        cache.import_module(CACHE_KEY["fft"]["pyfftw_cache"]).enable()
         return pnf
 
     @staticmethod
     def _load_cupy():
         """取 ``cupy`` 并确认有可见 GPU (仅显式请求时调用; 首次导入可能很慢)。"""
-        cp = cache.import_module(
-            CACHE_KEY["fft"]["cupy"],
-            description="cupy: GPU FFT 后端 (Utils.FFT, 仅显式请求)",
-        )
+        cp = cache.import_module(CACHE_KEY["fft"]["cupy"])
 
         try:
             count = cp.cuda.runtime.getDeviceCount()
@@ -265,9 +196,6 @@ class fft:
             )
         return cp
 
-    # ------------------------------------------------------------------ #
-    # 内部: 各分支实现
-    # ------------------------------------------------------------------ #
     @staticmethod
     def _threads_for(nbytes: int, workers: Optional[int]) -> int:
         """``workers`` → 线程数 (统一走 ``Utils.Memory.resolve_workers``)。
@@ -291,7 +219,7 @@ class fft:
 
     @staticmethod
     def _run_scipy(op: str, a: np.ndarray, workers=None, **kw):
-        sf = fft._load_scipy()
+        sf = cache.import_module(CACHE_KEY["fft"]["scipy"])
         n = int(a.size) * int(a.dtype.itemsize)
         return getattr(sf, op)(a, workers=fft._threads_for(n, workers), **kw)
 
@@ -312,52 +240,6 @@ class fft:
         return cp.asnumpy(out)                   # 设备 → 主机 (库契约: 返回主机数组)
 
     @staticmethod
-    def _factor_pair(n: int):
-        """给 ``n`` 找一个接近 ``sqrt(n)`` 的因子对; 素数返回 None。"""
-        if n < 2:
-            return None
-        for n1 in range(int(math.isqrt(n)), 1, -1):
-            if n % n1 == 0:
-                return n1, n // n1
-        return None
-
-    @staticmethod
-    def _tiled_fft_1d(a: np.ndarray, inverse: bool, workers=None):
-        """
-        四步 (four-step) 分块 FFT: ``N = N1·N2``, 逐轴变换 + 旋转因子。
-
-        ``X[k2·N1 + k1] = FFT_{n2}[W_N^{n2·k1}·FFT_{n1}[a]]``: 用两次小尺寸变换完成
-        一次大长度变换, 峰值只多一个 ``(N1, N2)`` 中间量, 可在 memmap 上就地读写。
-        逆变换用 ``ifft(x) = conj(fft(conj(x)))/N`` 复用前向实现。长度不是合数或过短
-        时返回 ``None``, 由调用方回落直算。
-        """
-        n = int(a.shape[-1])
-        pair = fft._factor_pair(n)
-        if pair is None or n < FFT_TILED_MIN_ELEMS:
-            return None
-
-        n1, n2 = pair
-        sf = fft._load_scipy()               # 逐轴变换用 scipy (可多线程)
-        th = fft._threads_for(n * a.dtype.itemsize, workers)
-        batch_shape = a.shape[:-1]
-
-        if inverse:
-            return np.conj(fft._tiled_fft_1d(np.conj(a), False, workers)) / n
-
-        work = np.array(a.reshape(batch_shape + (n1, n2)), copy=True)
-        if work.dtype.kind != "c":
-            work = work.astype(np.complex128)
-        work = sf.fft(work, axis=-2, workers=th)                # 沿 n1
-
-        k1 = np.arange(n1, dtype=np.float64)[:, None]
-        n2i = np.arange(n2, dtype=np.float64)[None, :]
-        work *= np.exp((-2j * np.pi / n) * (k1 * n2i))          # 旋转因子 W_N^{n2·k1}
-
-        work = sf.fft(work, axis=-1, workers=th)                # 沿 n2
-        out = np.ascontiguousarray(work.swapaxes(-1, -2))       # [k2,k1] 展平 = k2·N1+k1
-        return out.reshape(batch_shape + (n,))
-
-    @staticmethod
     def _run_tiled(op: str, a: np.ndarray, workers=None, **kw):
         """``tiled``: 仅复数 ``fft``/``ifft``; 其它情形返回 None 由调用方回落。
 
@@ -367,13 +249,13 @@ class fft:
         """
         if op not in ("fft", "ifft") or kw.get("n") is not None:
             return None
-        return fft._tiled_fft_1d(a, inverse=(op == "ifft"), workers=workers)
+        return fft.tiled_fft_1d(a, inverse=(op == "ifft"), workers=workers)
 
     # ------------------------------------------------------------------ #
     # 内部: 统一分发
     # ------------------------------------------------------------------ #
     @staticmethod
-    def _dispatch(op: str, a, mod=None, **kwargs):
+    def _dispatch(op: str, a, mod: Literal["auto", "numpy", "scipy", "pyfftw", "tiled", "cupy"] = "auto", **kwargs):
         """
         解析后端 → 该后端不支持此 op 时回落 → 执行。
 
@@ -382,41 +264,43 @@ class fft:
         """
         arr = np.asarray(a)
         nbytes = int(arr.size) * int(arr.dtype.itemsize)
-        name = fft.resolve_backend(mod, nbytes)
 
-        explicit = not (mod is None or fft._canonical(mod) == "auto")
-        if not explicit and name != "numpy" and not fft._installed(name):
+        if mod == "auto":
+            mod = FFT_BACKEND_SMALL if int(nbytes) < BIG_ARRAY else FFT_BACKEND_BIG
+
+        def installed(name: str) -> bool:
+            """后端是否已安装 (只查 find_spec, 不导入)。"""
+            if name == "numpy":
+                return True
+            if name == "tiled":
+                return importlib.util.find_spec("scipy") is not None
+            return importlib.util.find_spec(name) is not None
+
+        if not installed(mod):
             warnings.warn(
                 "FFT backend %r (来自 FFT_BACKEND 配置) 未安装, 本次降级为 numpy; "
                 "安装后可恢复: %s -m pip install %s"
-                % (name, sys.executable, FFT_PIP_PACKAGE.get(name, name)),
+                % (mod, sys.executable, FFT_PIP_PACKAGE.get(mod, mod)),
                 UserWarning,
                 stacklevel=3,
             )
-            name = "numpy"
+            mod = "numpy"
 
-        if name == "numpy":
-            return fft._run_numpy(op, arr, **kwargs)
-        if name == "scipy":
-            return fft._run_scipy(op, arr, **kwargs)
-        if name == "pyfftw":
-            return fft._run_pyfftw(op, arr, **kwargs)
-        if name == "cupy":
-            return fft._run_cupy(op, arr, **kwargs)
+        match mod:
+            case "numpy":
+                return fft._run_numpy(op, arr, **kwargs)
+            case "scipy":
+                return fft._run_scipy(op, arr, **kwargs)
+            case "pyfftw":
+                return fft._run_pyfftw(op, arr, **kwargs)
+            case "cupy":
+                return fft._run_cupy(op, arr, **kwargs)
+            case "tiled":
+                out = fft._run_tiled(op, arr, **kwargs)
+                if out is not None:
+                    return out
+                else:
+                    raise ValueError("the tiled is not supported for this input!")
+            case _:
+                raise ValueError(f"the mod of {mod} is not supported!")
 
-        out = fft._run_tiled(op, arr, **kwargs)      # tiled 不支持的情形 → None
-        if out is not None:
-            return out
-        if fft._scipy_installed():
-            keep = {k: v for k, v in kwargs.items() if k in ("workers",)}
-            return fft._run_scipy(op, arr, **keep)
-        drop = ("workers", "planner_effort")
-        return fft._run_numpy(op, arr, **{k: v for k, v in kwargs.items() if k not in drop})
-
-
-if __name__ == "__main__":       # pragma: no cover - 手动自检
-    print(fft.describe())
-    x = np.random.default_rng(0).standard_normal(1 << 16)
-    print("fft.fft   vs np.fft.fft  max|d| = %.2e" % np.abs(fft.fft(x) - np.fft.fft(x)).max())
-    print("fft.rfft scipy vs numpy  max|d| = %.2e"
-          % np.abs(fft.rfft(x, "numpy") - fft.rfft(x, "scipy")).max())

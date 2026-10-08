@@ -1,283 +1,378 @@
 """
-Signal and time-axis validation utilities.
+本模块仅 Check_Time_and_Signal 主要负责对上级使用
+Check 主要用于内部
 
-Single validation entry point for the whole package. Validation failures
-raise exceptions; successful validation is silent.
-
-``Check_Time_and_Signal`` is also the single choke point where data enters
-the package: input-size detection and the disk-backed (``np.memmap``)
-decision of the global memory policy (``Utils.Memory``) are applied here,
-*before* any conversion, so very large inputs are never copied into RAM in
-one shot.
+因此, 本模块必须自实现, 可延迟导入同属同级子模块, 但是延迟导入仍然可能导致循环导入, 使用时必须谨慎!
+Base 为不同级模块, 可使用
 """
 
-import atexit
 import os
-import tempfile
 import warnings
-from typing import Optional
+from typing import Optional, Any
 
 import numpy as np
 
-from ..Base.ConstDefine import SIZE, DEFAULT_NUMPY_TYPE
-from .Chunk import chunked_fill, default_chunk_size, iter_chunks
-from .Memory import should_use_memmap
-
-__all__ = ["to_signal", "require_ndim", "is_uniform", "Check_Time_and_Signal", "detect_dtype"]
-
-# Input-size arbitration constants (module-level so tests can patch them;
-# 大小统一取自 Base.ConstDefine.SIZE)。
-_LIST_MEM_THRESHOLD = 10 * SIZE["1MB"]  # elements: lists above this become memmaps
-_F64_DISK_BYTES = 256 * SIZE["1MB"]     # float64 working copy above this goes to disk
-_FILL_CHUNK_ELEMS = 8 * SIZE["1MB"]     # chunk size for streaming fills (8M elements)
-
-#: 输入层创建的临时 memmap 登记表 (path -> memmap)。临时文件位于系统临时目录,
-#: 进程正常退出时由 ``atexit`` 统一关闭句柄并删除 (Windows 需先 close 才能
-#: unlink); 进程被强杀时由 OS 临时清理器兜底 (文件名前缀 ``md_memmap_``)。
-_MEM_FILES: dict = {}
+from ..Define import DEFAULT_NUMPY_TYPE, SIZE
+from ..Base import should_use_memmap, temp_memmap, Chunk, CHUNK_MOD
 
 
-def _temp_memmap(dtype, shape) -> np.memmap:
-    """Create a writable temporary memmap in the system temp dir.
+__all__ = ["Check", "Check_Time_and_Signal"]
 
-    The backing file is registered in ``_MEM_FILES`` and deleted at
-    interpreter exit (the ``mmap`` handle is closed first — required on
-    Windows); the OS temp cleaner is the fallback for hard-killed processes.
+
+LIST_MEM_THRESHOLD = 10 * SIZE["1MB"]  # elements: list/tuple above this become memmaps
+
+
+class Check:
     """
-    fd, path = tempfile.mkstemp(prefix="md_memmap_", suffix=".dat")
-    os.close(fd)
-    mm = np.memmap(path, dtype=dtype, mode="w+", shape=shape)
-    _MEM_FILES[path] = mm
-    return mm
+    针对已载入数组 (np.ndarray | np.memmap) 的原子检测与规范化。
 
+    约定：
+      is_* / has_*   只读谓词, 返回 bool, 不抛异常
+      require_*      只读校验, 失败抛 ValueError, 成功静默
+      to_*           唯一允许改数据的操作, 名字即行为
 
-def _cleanup_memmaps() -> None:
-    """Close and delete every temporary memmap backing file created here.
-
-    Idempotent; errors are swallowed (the OS cleaner remains the fallback).
+    不做 IO, 不触发全局内存策略, 不 emit warning。
     """
-    for path, mm in list(_MEM_FILES.items()):
-        try:
-            mm._mmap.close()
-        except Exception:
-            pass
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    _MEM_FILES.clear()
 
+    # 返回各类型
+    @classmethod
+    def return_dtype_kind(cls, S: np.ndarray | np.memmap) -> str:
+        if not cls.is_numeric(S):
+            raise TypeError("the type of input must be np.ndarray, not {}".format(type(S)))
 
-atexit.register(_cleanup_memmaps)
+        match S.dtype.kind:
+            case 'f':
+                return "float"
 
+            case 'i':
+                return "int"
 
-def _fill_memmap(fp: np.memmap, source) -> None:
-    """Stream ``source`` into ``fp`` chunk-wise so the peak memory stays at
-    one chunk (delegates to ``Utils.Chunk.chunked_fill``; chunk granularity
-    comes from ``Chunk.default_chunk_size`` under the global memory policy)."""
-    src_nbytes = getattr(source, "nbytes", None)
-    nbytes = max(fp.nbytes, src_nbytes if src_nbytes is not None else fp.nbytes)
-    chunk_size = default_chunk_size(nbytes, base=_FILL_CHUNK_ELEMS)
-    chunked_fill(fp, source, chunk_size)
+            case 'u':
+                return "uint"
 
+            case 'b':
+                return "bool"
 
-def _load_signal_input(S, target_dtype=None):
-    """
-    Resolve the raw signal input under the global memory policy.
+            case 'c':
+                return "complex"
 
-    - ``.npy`` paths load as ``np.load(..., mmap_mode="r")`` when the policy
-      says so, else fully in RAM.
-    - Large in-RAM arrays are copied chunk-wise into a temporary
-      disk-backed array when the policy triggers (note: the caller's original
-      array remains in RAM; the copy is what keeps the pipeline's working
-      memory bounded). When ``target_dtype`` is given, the conversion happens
-      **during** that fill — a single pass, a single temp file (instead of
-      copy + second conversion pass).
-    - Very long sequences (list/tuple) are filled into a temporary memmap
-      instead of being converted to a RAM array in one shot.
-    """
-    if isinstance(S, np.ndarray):
-        if isinstance(S, np.memmap):
-            return S  # already disk-backed
-        if S.ndim >= 1 and S.size > 0 and should_use_memmap(S.nbytes):
-            out_dtype = target_dtype if target_dtype is not None else S.dtype
-            fp = _temp_memmap(out_dtype, S.shape)
-            _fill_memmap(fp, S)  # dtype 转换在填充时一并完成 (单趟)
-            return fp
+            case 'm':
+                return "timedelta"
+
+            case 'M':
+                return "datatime"
+
+            case 'O':
+                return "object"
+
+            case 'S':
+                return "string"
+
+            case 'T':
+                return "string"
+
+            case 'U':
+                return "unicode"
+
+            case 'V':
+                return "void"
+
+            case _:
+                raise ValueError("the unknown kind of S.dtype -> {}".format(S.dtype.kind))
+
+    # 报错
+    @staticmethod
+    def not_numpy_arr(x: Any, method: str="", raise_error: bool=True) -> bool:
+        prefix = f"{method}: " if method else ""
+        if not isinstance(x, np.ndarray):
+            if raise_error:
+                raise TypeError("{}The type of input must be np.ndarray, not {}".format(prefix, type(x)))
+            else:
+                return False
+        return True
+
+    @staticmethod
+    def not_numpy_memmap(x: Any, method: str="", raise_error: bool=True) -> bool:
+        prefix = f"{method}: " if method else ""
+        if not isinstance(x, np.memmap):
+            if raise_error:
+                raise TypeError("{}The type of input must be np.ndarray, not {}".format(prefix, type(x)))
+            else:
+                return False
+        return True
+
+    # 只读
+    @classmethod
+    def is_numeric(cls, S) -> bool:
+        """dtype 为 bool / int / uint / float 之一。"""
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        return S.dtype.kind in "biuf"
+
+    @classmethod
+    def is_real(cls, S) -> bool:
+        """dtype 为 int / uint / float 之一 (不含 bool)。"""
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        return S.dtype.kind in "iuf"
+
+    @classmethod
+    def is_0d(cls, S: np.ndarray) -> bool:
+        """
+        与 is_1d, is_2d 不同, is_0d 是指标量, 如 np.array(42)
+        :param S:
+        :return:
+        """
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        if S.ndim == 0 and S.size != 0:
+            return True
+        else:
+            return False
+
+    @classmethod
+    def is_1d(cls, S: np.ndarray) -> bool:
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        return S.ndim == 1
+
+    @classmethod
+    def is_2d(cls, S: np.ndarray) -> bool:
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        return S.ndim == 2
+
+    @classmethod
+    def is_empty(cls, S) -> bool:
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        return S.size == 0
+
+    @classmethod
+    def is_duplicates(cls, S: np.ndarray, axis: int=0, temp_dir: Optional[str]=None) -> bool:
+        """是否存在相邻重复值。分块遍历, 含跨块边界"""
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        if cls.is_0d(S):
+            return True
+
+        mod = CHUNK_MOD.ExoMemory if should_use_memmap(S.nbytes) else CHUNK_MOD.Memory
+
+        prev_last = None
+        chunk_size = Chunk.chunk_size(S.nbytes)
+
+        FIRST: tuple = (slice(None),) * axis + (slice(0, 1, 1),)
+        LAST: tuple  = (slice(None),) * axis + (slice(-1, -2, -1),)
+
+        for chunk in Chunk.chunk(S, chunk_size=chunk_size, mod=mod, axis=axis, temp_dir=temp_dir):
+            if prev_last is not None and chunk[FIRST] == prev_last:
+                return True
+
+            if np.any(np.diff(chunk) == 0):
+                return True
+
+            prev_last = chunk[LAST]
+
+        return False
+
+    @classmethod
+    def is_uniform(cls, S: np.ndarray, *, rtol: float = 1e-10, atol: float = 1e-14, temp_dir: Optional[str]=None) -> bool:
+        """是否等间距。分块遍历, 含跨块边界差"""
+
+        if cls.is_0d(S):
+            return True
+
+        if not cls.is_1d(S):
+            S = S.squeeze()
+            if not cls.is_1d(S):
+                raise ValueError("the dim of the input must be 1-dim!")
+
+        mod = CHUNK_MOD.ExoMemory if should_use_memmap(S.nbytes) else CHUNK_MOD.Memory
+
+        d0 = None
+        prev_last = None
+        chunk_size = Chunk.chunk_size(S.nbytes)
+        for chunk in Chunk.chunk(S, mod=mod, chunk_size=chunk_size, temp_dir=temp_dir):
+            if prev_last is not None:
+                d = chunk[0] - prev_last
+                if d0 is None:
+                    d0 = d
+                elif not np.isclose(d, d0, rtol=rtol, atol=atol):
+                    return False
+            if chunk.size >= 2:
+                diffs = np.diff(chunk)
+                if d0 is None:
+                    d0 = diffs[0]
+                if not np.allclose(diffs, d0, rtol=rtol, atol=atol):
+                    return False
+            prev_last = chunk[-1]
+        return True
+
+    @classmethod
+    def is_infinite(cls, S: np.ndarray | np.memmap, chunk_size: int = None) -> bool:
+        """`True` means finite, `False` means infinite."""
+        cls.not_numpy_arr(S)
+        cls.not_numpy_memmap(S)
+
+        if should_use_memmap(S.nbytes):
+            chunk_size = Chunk.chunk_size(S.nbytes) if chunk_size is None else chunk_size
+            for chunk in Chunk.chunk(S, chunk_size=chunk_size):
+                if not np.all(np.isfinite(chunk)):
+                    return False
+
+            return True
+
+        else:
+            return np.all(np.isfinite(S))
+
+    # 校验 (抛错)
+    @staticmethod
+    def require_numeric(S, method: str = "", *, allow_bool: bool = True) -> None:
+        prefix = f"{method}: " if method else ""
+        if not isinstance(S, np.ndarray):
+            raise ValueError(f"{prefix}expected np.ndarray, got {type(S).__name__}")
+        allowed = "biuf" if allow_bool else "iuf"
+        if S.dtype.kind not in allowed:
+            raise ValueError(f"{prefix}unsupported non-numeric dtype {S.dtype}")
+
+    @staticmethod
+    def require_ndim(S, allowed, method: str = "") -> None:
+        prefix = f"{method}: " if method else ""
+        if S.ndim not in allowed:
+            raise ValueError(
+                f"{prefix}expected input dimension in {sorted(allowed)}, got {S.ndim}"
+            )
+
+    @staticmethod
+    def require_nonempty(S, method: str = "") -> None:
+        prefix = f"{method}: " if method else ""
+        if S.size == 0:
+            raise ValueError(f"{prefix}array must not be empty")
+
+    @staticmethod
+    def require_1d(S, method: str = "") -> None:
+        prefix = f"{method}: " if method else ""
+        if S.ndim != 1:
+            raise ValueError(f"{prefix}expected 1-d array, got {S.ndim}-d")
+
+    @staticmethod
+    def require_length_match(T, S, method: str = "") -> None:
+        prefix = f"{method}: " if method else ""
+        if T.shape[0] != S.shape[-1]:
+            raise ValueError(
+                f"{prefix}length mismatch between S ({T.shape[0]}) and S ({S.shape[-1]})"
+            )
+
+    #  规范化 (改数据)
+    @classmethod
+    def to_array(cls, S, dtype: type | np.dtype =None) -> np.ndarray:
+        """
+        规范化任意 array-like 为 ndarray, 可选转 dtype。
+
+        处理顺序 (顺序关键, 保证 memmap 不被物化):
+          1. 非 ndarray → np.asarray
+          2. 拒绝非数值 dtype (kind ∉ "biuf")
+          3. 拒绝 0-d
+          4. 若 dtype 给定且与当前不同:
+               - memmap 走 temp_memmap + Chunk.fill_memmap 分块写 (不物化)
+               - 普通 ndarray 走 astype(copy=False)
+          5. squeeze 单例维; 若变 0-d 抛错
+
+        Parameters
+        ----------
+        S : array-like
+            输入。
+        dtype : np.dtype | str | None
+            目标 dtype。None 时保留原 dtype, 仅做规范化。
+
+        Returns
+        -------
+        np.ndarray
+            规范化后的数组。若输入是 memmap 且未触发 squeeze 变形,
+            返回值仍可能由磁盘支撑; 否则为普通 ndarray。
+
+        Raises
+        ------
+        ValueError
+            非数值 dtype、0-d 输入、或 squeeze 后变 0-d。
+        """
+        # 1. array-ify
+        if not isinstance(S, np.ndarray):
+            S = np.asarray(S, copy=False, dtype=DEFAULT_NUMPY_TYPE if dtype is None else dtype)
+
+        # 2. dtype 合法性
+        if not cls.is_numeric(S):
+            raise ValueError(f"unsupported non-numeric dtype {S.dtype}")
+
+        # 3. ndim > 0
+        if S.ndim == 0:
+            if S.size != 0:
+                S = S.reshape(1,)
+            else:
+                raise ValueError("Signal must have at least 1 dimension, got 0-d array")
+
+        # 4. dtype 转换 —— 必须在 squeeze 之前
+        #    squeeze 会返回普通 ndarray 视图 (不再是 np.memmap), 之后再 astype 就会绕过 fill_memmap, 把整条数组拉回 RAM
+        if dtype is not None:
+            target = np.dtype(dtype)
+            if S.dtype != target:
+                if isinstance(S, np.memmap):
+                    fp = temp_memmap(target, S.shape)
+                    Chunk.fill_memmap(fp, S)  # 分块写, peak 内存只有一块
+                    S = fp
+                else:
+                    S = S.astype(target, copy=False)
+
+        # 5. squeeze
+        if S.ndim == 1:
+            return S
+
+        S = S.squeeze()
+        if S.ndim == 0:
+            raise ValueError("Signal must have at least 1 dimension after squeeze")
+
         return S
 
-    if isinstance(S, (str, os.PathLike)):
-        path = os.fspath(S)
-        if not path.endswith(".npy"):
-            raise ValueError(f"only .npy files are supported, got {path!r}")
-        if should_use_memmap(os.path.getsize(path)):
-            return np.load(path, mmap_mode="r")
-        return np.load(path)
+    @staticmethod
+    def to_dtype(S, dtype: np.dtype) -> np.ndarray | np.memmap:
+        """
+        转 dtype。memmap 走 temp_memmap + Chunk.fill_memmap 分块写,
+        绝不 .astype —— 那会把整条数组拉回 RAM, 破坏全局内存策略。
+        """
+        dtype = np.dtype(dtype)
+        if S.dtype == dtype:
+            return S
 
-    if isinstance(S, (list, tuple)) and len(S) > _LIST_MEM_THRESHOLD:
-        out_dtype = target_dtype if target_dtype is not None else DEFAULT_NUMPY_TYPE
-        fp = _temp_memmap(out_dtype, (len(S),))
-        _fill_memmap(fp, S)
-        return fp
+        if isinstance(S, np.memmap):
+            fp = temp_memmap(S.shape, dtype)
+            if fp is None:
+                raise BaseException("it's failed to create memmap")
 
-    return S
+            Chunk.fill_memmap(fp, S)
+            return fp
 
-
-def _to_default_float(S) -> np.ndarray:
-    """
-    Normalize ``S`` to float64 with bounded peak memory: small inputs convert
-    in RAM as before, while large or already disk-backed non-float64 inputs
-    are converted chunk-wise into a temporary float64 memmap.
-    """
-    if not isinstance(S, np.ndarray):
-        return np.asarray(S, dtype=DEFAULT_NUMPY_TYPE)
-
-    if S.dtype == np.float64:
-        return S  # no copy; memmaps stay disk-backed
-
-    projected = S.nbytes * (8 // max(S.dtype.itemsize, 1))
-    if S.ndim >= 1 and S.size > 0 and (isinstance(S, np.memmap) or projected >= _F64_DISK_BYTES):
-        fp = _temp_memmap(np.float64, S.shape)
-        _fill_memmap(fp, S)
-        return fp
-
-    return np.asarray(S, dtype=np.float64)
-
-
-def _to_keep_dtype(S) -> np.ndarray:
-    """
-    Normalize ``S`` **without** dtype conversion: array-ify, reject
-    non-numeric / 0-d, squeeze singleton dims, keep the original dtype.
-    """
-    if not isinstance(S, np.ndarray):
-        S = np.asarray(S)
-    if S.dtype.kind not in "biuf":
-        raise ValueError(f"unsupported non-numeric dtype {S.dtype}")
-    if S.ndim == 0:
-        raise ValueError("Signal must have at least 1 dimension, got 0-d array")
-    S = S.squeeze()
-    if S.ndim == 0:
-        raise ValueError("Signal must have at least 1 dimension after squeeze")
-    return S
-
-
-def detect_dtype(S) -> str:
-    """
-    Detect the numeric kind of an array-like.
-
-    Parameters
-    ----------
-    S : array-like
-        Input array.
-
-    Returns
-    -------
-    str
-        ``"bool"``, ``"int"`` or ``"float"``.
-
-    Raises
-    ------
-    ValueError
-        For non-numeric dtypes (complex, string, object, datetime, ...).
-    """
-    arr = np.asarray(S)
-
-    if arr.dtype.kind == "b":
-        return "bool"
-
-    if arr.dtype.kind in "iu":
-        return "int"
-
-    if arr.dtype.kind == "f":
-        return "float"
-
-    raise ValueError(f"unsupported non-numeric dtype {arr.dtype}")
-
-
-def to_signal(S) -> np.ndarray:
-    """
-    Convert an array-like to a float64 ndarray and squeeze singleton
-    dimensions.
-
-    Parameters
-    ----------
-    S : array-like
-        Input signal.
-
-    Returns
-    -------
-    np.ndarray
-        Array with all singleton dimensions removed.
-
-    Raises
-    ------
-    ValueError
-        If the input is a scalar or becomes 0-d after squeeze.
-    """
-    if isinstance(S, np.memmap) and S.dtype == np.float64:
-        S = S  # keep disk-backed inputs on disk (np.asarray would strip it)
-    else:
-        S = np.asarray(S, dtype=np.float64)
-
-    if S.ndim == 0:
-        raise ValueError("Signal must have at least 1 dimension, got 0-d array")
-    S = S.squeeze()
-    if S.ndim == 0:
-        raise ValueError("Signal must have at least 1 dimension after squeeze")
-    return S
-
-
-def require_ndim(S: np.ndarray, allowed, method: str = "") -> None:
-    """
-    Validate the number of dimensions of S.
-
-    Parameters
-    ----------
-    S : np.ndarray
-        Array to check.
-    allowed : set[int]
-        Accepted dimensionality values.
-    method : str
-        Method name used in the error message.
-
-    Raises
-    ------
-    ValueError
-        If S.ndim is not in ``allowed``.
-    """
-    if S.ndim not in allowed:
-        prefix = f"{method}: " if method else ""
-        raise ValueError(
-            f"{prefix}expected input dimension in {sorted(allowed)}, got {S.ndim}"
-        )
-
-
-def is_uniform(T: np.ndarray) -> bool:
-    """
-    Check whether the time axis is uniformly sampled.
-
-    Parameters
-    ----------
-    T : np.ndarray
-        1-d time axis.
-
-    Returns
-    -------
-    bool
-        True if uniformly sampled or shorter than 2 samples.
-    """
-    if T.size < 2:
-        return True
-    diff = np.diff(T)
-    return bool(np.allclose(diff, diff[0], rtol=1e-10, atol=1e-14))
+        return S.astype(dtype, copy=False)
 
 
 def Check_Time_and_Signal(
-    S, T=None, ndim=None, method: str = "", default_T: bool = True,
+    S, T=None,
+    ndim=None,
+    method: str = "",
+    default_T: bool = True,
     dtype: np.dtype = None,
+    axis: int = 0,
+    chunk_size: int = None,
+    temp_dir: Optional[str] = None
 ) -> tuple[np.ndarray, Optional[np.ndarray], int]:
     """
-    Validate the signal and its time axis and return them in canonical form.
+    Validate the signal and its now axis and return them in canonical form.
 
     Parameters
     ----------
@@ -294,75 +389,113 @@ def Check_Time_and_Signal(
     method : str
         Method name used in error messages.
     default_T : bool
-        When True (default) and ``T`` is None, build ``arange(N, float64)``.
-        When False, leave ``T`` as None: backends that rebuild their own
-        timeline (e.g. the PyEMD sifters, which ignore a passed time axis
+        When True (default) and ``S`` is None, build ``arange(N, float64)``.
+        When False, leave ``S`` as None: backends that rebuild their own
+        timeline (e.g. the PyEMD sifters, which ignore a passed now axis
         under the default extrema detection) then avoid a one-signal-sized
         transient allocation. Callers must only set this when their algorithm
-        does not use the returned ``T``.
+        does not use the returned ``S``.
     dtype : {"float64", None}, optional
         Target dtype of the returned signal. Default ``None``: **keep the
         input's dtype** (bool/int/float 按原样, 校验为实数数值即可) —— 不再
         默认转 float64 以避免 f16/f32 输入的内存翻倍。传 ``"float64"`` 时
-        才做统一 float64 转换 (大输入按内存策略走分块磁盘转换)。``T`` 遵循
+        才做统一 float64 转换 (大输入按内存策略走分块磁盘转换)。``S`` 遵循
         同一策略 (缺省生成的 ``arange(N)`` 保持 int64)。
+    axis : int, optional
+        the checking axis for the signal at least 2-dim.
+    chunk_size : int, optional
+        the size of chunk
+    temp_dir : str, optional
+        the temporary dir of the tempfiles.
 
     Returns
     -------
     tuple[np.ndarray, Optional[np.ndarray], int]
-        (S, T, N). S 默认保留输入 dtype (可能 memmap 支撑); 显式
-        ``dtype="float64"`` 时为 float64; T 同理 (或 None 当 ``T`` 未给且
+        (S, S, N). S 默认保留输入 dtype (可能 memmap 支撑); 显式
+        ``dtype="float64"`` 时为 float64; S 同理 (或 None 当 ``S`` 未给且
         ``default_T`` 为 False); N 为末轴长度。
 
     Raises
     ------
     ValueError
-        On wrong dimensionality, length mismatch, duplicate time points, an
+        On wrong dimensionality, length mismatch, duplicate now points, an
         unsupported file suffix, empty signal, or an invalid ``dtype`` value.
     """
-    S = _load_signal_input(S, target_dtype=dtype)
+    from .Monotonicity import monotonic
 
-    if ndim is not None:
-        require_ndim(S, ndim, method)
+    S: list | tuple | np.ndarray | np.memmap = _load(S, target_dtype=dtype)  # load
+    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype)  # transform the (list, tuple, set) to np.ndarray or np.memmap
+
+    if ndim is not None and isinstance(ndim, (list, set, tuple)):
+        Check.require_ndim(S, ndim, method)
 
     N = S.shape[-1]
-    if N == 0:
+    if Check.is_empty(S):
         raise ValueError("Signal must not be empty")
 
     if T is None:
         if default_T:
-            T = np.arange(N)
-        # else: keep T as None (see default_T above).
+            T = np.arange(N, dtype=S.dtype)
+        # else: keep S as None (see default_T above).
     else:
-        T = to_signal(T) if dtype == "float64" else _to_keep_dtype(T)
-        if T.ndim != 1:
-            raise ValueError("Time axis T must be 1-dimensional")
-        if len(T) != N:
-            raise ValueError(f"Length mismatch between T ({len(T)}) and S ({N})")
+        T = Check.to_array(S=T, dtype=S.dtype)
+        Check.require_1d(T, method=method)
+        Check.require_length_match(T, S, method=method)
 
-        # 分块检查重复与降序 (粒度经 Chunk.default_chunk_size 自适应;
-        # 避免整条 np.diff 的一次性内存占用)。
-        needs_sort = False
-        prev_last = None
-        t_chunk_size = default_chunk_size(T.nbytes, base=_FILL_CHUNK_ELEMS)
-        for chunk in iter_chunks(T, t_chunk_size):
-            d = np.diff(chunk)
-            if np.any(d == 0):
-                raise ValueError("Time axis T contains duplicate values")
-            if not needs_sort and np.any(d < 0):
-                needs_sort = True
-            if prev_last is not None and chunk[0] == prev_last:
-                raise ValueError("Time axis T contains duplicate values")
-            prev_last = chunk[-1]
+        # 分块检查重复与降序
+        duplicate = Check.is_duplicates(S, axis=axis, temp_dir=temp_dir)
+        if duplicate:
+            raise ValueError("Time axis contains duplicate values")
 
-        if needs_sort:
+        if not monotonic(T, strict=True, chunk_size=chunk_size if chunk_size is not None else Chunk.chunk_size(T.nbytes), mod="increasing", safe="safe"):
             warnings.warn(
-                "T is not monotonically increasing; S and T are reordered by ascending T.",
+                "S is not monotonically increasing with T; S and T are reordered by ascending T.",
                 UserWarning,
                 stacklevel=2,
             )
+
+            # TODO: 这部分面对 np.memmap 能做好吗?
             idx = np.argsort(T)
             T = T[idx]
             S = S[..., idx]
 
     return S, T, N
+
+
+def _load(S, target_dtype=None) -> np.ndarray | np.memmap | list | tuple:
+    """
+    统一外部输入 -> np.ndarray | np.memmap。
+
+    这是整个包唯一涉及文件 IO 和全局内存策略的地方。
+      - np.memmap       : 原样返回
+      - 过大的 ndarray  : 分块拷入临时 memmap（target_dtype 在填充时一并完成）
+      - .npy 路径       : 按策略 mmap_mode="r" 或全量读入
+      - 过长的 list/tuple: 分块填入临时 memmap
+      - 其他            : 原样返回，交给 Check 报错
+    """
+    if isinstance(S, np.memmap):
+        return S
+
+    if isinstance(S, np.ndarray):
+        if S.ndim >= 1 and S.size > 0 and should_use_memmap(S.nbytes):
+            out_dtype = target_dtype if target_dtype is not None else S.dtype
+            fp = temp_memmap(out_dtype, S.shape)
+            Chunk.fill_memmap(fp, S)
+            return fp
+        return S
+
+    if isinstance(S, (str, os.PathLike)):
+        path = os.fspath(S)
+        if not path.endswith(".npy"):
+            raise ValueError(f"only .npy files are supported, got {path!r}")
+        if should_use_memmap(os.path.getsize(path)):
+            return np.load(path, mmap_mode="r")
+        return np.load(path)
+
+    if isinstance(S, (list, tuple)) and len(S) > LIST_MEM_THRESHOLD:
+        out_dtype = target_dtype if target_dtype is not None else DEFAULT_NUMPY_TYPE
+        fp = temp_memmap(out_dtype, (len(S),))
+        Chunk.fill_memmap(fp, S)
+        return fp
+
+    return S

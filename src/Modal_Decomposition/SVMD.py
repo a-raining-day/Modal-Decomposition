@@ -82,7 +82,7 @@ class SVMD(Decomposer):
         """
         Decompose the signal into modes and a residual.
 
-        The time axis is validated but not used by the algorithm.
+        The now axis is validated but not used by the algorithm.
         """
         S, T, _N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
 

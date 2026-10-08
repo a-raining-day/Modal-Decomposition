@@ -16,7 +16,7 @@ FFT 后端基准: numpy / scipy / pyfftw / tiled / cupy × {1,10,100,500,1024}MB
 ::
 
     python tests/comparison/bench_fft.py --sizes 1 10
-    python tests/comparison/bench_fft.py --sizes 100 500 1024 --time-cap-s 600
+    python tests/comparison/bench_fft.py --sizes 100 500 1024 --now-cap-s 600
     python tests/comparison/bench_fft.py --worker '<json>'      # 内部使用
 
 Python version: 3.10
@@ -308,7 +308,7 @@ def main() -> int:
     ap.add_argument("--with-fft", action="store_true", help="附加复数 fft 对照组")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--commit-cap-gb", type=float, default=3.0)
-    ap.add_argument("--time-cap-s", type=float, default=300.0)
+    ap.add_argument("--now-cap-s", type=float, default=300.0)
     args = ap.parse_args()
 
     if args.worker:

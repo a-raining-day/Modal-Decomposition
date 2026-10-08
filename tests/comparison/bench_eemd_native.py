@@ -46,7 +46,7 @@ RSS 峰值增量 / 行数 / 重构误差 / 行和误差 / Huang 正交指数 / �
 
 结果处理:
   * 每个格子跑在独立子进程 (``--worker`` + ``@@RESULT@@`` 单行 JSON 协议),
-    墙钟上限 ``--time-cap-s``; 每格完成即合并落盘, 中途中断也保留已完成部分;
+    墙钟上限 ``--now-cap-s``; 每格完成即合并落盘, 中途中断也保留已完成部分;
   * **渐进重跑**: 已 ``status=="ok"`` 的格子直接复用 (打印 ``[cached]``),
     只有失败的格子会被重试; 要强制重测用 ``--force``; 本轮计划见 ``--estimate``;
   * ``--budget-s`` 是闸门: 格子预估耗时会让本轮累计超出预算时被跳过并打印
@@ -313,7 +313,7 @@ def _measure_cell(args: dict) -> dict:
             dt = time.perf_counter() - t0
             ts.append(dt)
             if dt > 240.0 and reps > 1:
-                # 单次就出格: 别让整格撞上 --time-cap-s 而丢掉全部已测数据。
+                # 单次就出格: 别让整格撞上 --now-cap-s 而丢掉全部已测数据。
                 aborted = ("单次耗时 %.1fs 超过 240s 自中止阈值" % dt)
                 break
     ts_arr = np.asarray(ts, dtype=np.float64)
@@ -825,7 +825,7 @@ def main() -> int:
     ap.add_argument("--cases", nargs="*", default=["A", "B", "C"],
                     choices=["A", "B", "C"])
     ap.add_argument("--repeats", type=int, default=3, help="预热 1 次后的计时重复数")
-    ap.add_argument("--time-cap-s", type=float, default=420.0, help="单格墙钟上限")
+    ap.add_argument("--now-cap-s", type=float, default=420.0, help="单格墙钟上限")
     ap.add_argument("--budget-s", type=float, default=1800.0,
                     help="本轮预算 (仅作提示与中止闸门, 默认 30 min)")
     ap.add_argument("--no-rich", action="store_true", help="跳过 rich_info 诊断格")

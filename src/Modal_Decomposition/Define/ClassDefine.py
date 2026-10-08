@@ -2,17 +2,16 @@
 Core contracts: the decomposition result type and the decomposer base class.
 """
 
-import copy
-import inspect
-import warnings
+
 import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
+from ..Base import Global_Seed
 from .ConfigDefine import Config
 from .TextDefine import Name, Reference
-from ..Error import PreError
+from src.Modal_Decomposition.Error import PreError
 
 __all__ = ["DecompositionResult", "Decomposer"]
 
@@ -39,6 +38,7 @@ class DecompositionResult:
     Res: np.ndarray | None
     info: dict[str, Any] = field(default_factory=dict)
     config: Config = field(default_factory=Config)
+    seed: int = Global_Seed
 
     @property
     def n_imfs(self) -> int:
@@ -53,17 +53,6 @@ class DecompositionResult:
         Shape of the IMFs array.
         """
         return tuple(self.IMFs.shape)
-
-    def reconstruct(self) -> np.ndarray:
-        """
-        Reconstruct the signal as the sum of all modes plus the residual.
-
-        A None residual contributes zero.
-        """
-        recon = np.sum(self.IMFs, axis=0)
-        if self.Res is not None:
-            recon = recon + self.Res
-        return recon
 
 
 class Decomposer(ABC):

@@ -80,7 +80,7 @@ _ENV_MOD = U.get_envelope()
 
 
 def bench(fn, n_iter):
-    """median per-call wall time (s) over 5 repeats of n_iter calls."""
+    """median per-call wall now (s) over 5 repeats of n_iter calls."""
     samples = []
     for _ in range(5):
         t0 = time.perf_counter()
@@ -120,10 +120,10 @@ def fmt_us(seconds):
 def first_access_cost(module_name, getter_name):
     """干净子进程里: import-only 与 getter(import+register) 的墙钟 (中位 3 次)。"""
     script = (
-        "import sys, time; sys.path.insert(0, r'{root}'); "
-        "t0=time.perf_counter(); "
+        "import sys, now; sys.path.insert(0, r'{root}'); "
+        "t0=now.perf_counter(); "
         "{body}; "
-        "print(time.perf_counter()-t0)"
+        "print(now.perf_counter()-t0)"
     )
     results = []
     for kind in ("import", "getter"):
@@ -269,7 +269,7 @@ def _write_markdown(rows, first):
         "",
         "* 纯第三方 import: 用 `cache.import_module(\"scipy.signal\")` (一处 try/except);",
         "* 非 import 的昂贵构造: 用 `@cache.lazy(key)` 装饰零参加载函数;",
-        "* 循环外解析一次 (`mod = Utils.get_xxx()`), 循环内直接调 `mod.fn(...)`;",
+        "* 循环外解析一次 (`mod = Utils.get_xxx()`), 循环内直接调 `mod.func(...)`;",
         "* 不要在 µs 级热循环里每调都走 `get_xxx()`/`cache.get`;",
         "* 跨模块取用统一实例: `cache.get(\"Modal_Decomposition.Utils.Monotonicity\")`",
         "  与 `Utils.get_monotonicity()` 等价且同对象。",

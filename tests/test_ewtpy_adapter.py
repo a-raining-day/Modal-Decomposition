@@ -134,7 +134,7 @@ def test_missing_ewtpy_raises_with_hint(signal, monkeypatch):
     必定抛 ImportError, 无需真的卸载包。
     """
     from src.Modal_Decomposition.Base.Cache import cache
-    from src.Modal_Decomposition.Base.ConstDefine import CACHE_KEY
+    from src.Modal_Decomposition.Define.ConstDefine import CACHE_KEY
 
     key = CACHE_KEY["ewtpy"]
     saved_module = sys.modules.get(key)

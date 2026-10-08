@@ -2,10 +2,10 @@
 Memory probing utilities for the decomposition memory-test pipeline.
 
 * :class:`PeakMonitor` samples the process RSS while a callable runs and
-  reports baseline / peak / delta RSS together with the wall time. Sampling
+  reports baseline / peak / delta RSS together with the wall now. Sampling
   is coarse (a running thread), so very short calls (< ~2 ms) may under-report
   a transient peak -- keep measured runs comfortably above that.
-* :func:`array_info` records shape / dtype / nbytes / backing of any array.
+* :func:`array_info` records shape / dtype / extras_bytes / backing of any array.
 * :func:`monotonic_pattern` builds deterministic 1-d float64 inputs whose
   shape is strictly increasing, strictly decreasing or random.
 """
@@ -152,7 +152,7 @@ def _build_memmap(pattern: str, n: int, dt: np.dtype, seed: int) -> np.memmap:
 
 class PeakMonitor:
     """
-    Measure baseline / peak / delta RSS and wall time of a callable.
+    Measure baseline / peak / delta RSS and wall now of a callable.
 
     Attributes
     ----------
@@ -178,7 +178,7 @@ class PeakMonitor:
 
     def measure(self, fn: Callable[[], object]) -> object:
         """
-        Run ``fn`` while sampling RSS; returns ``fn()``'s result.
+        Run ``func`` while sampling RSS; returns ``func()``'s result.
         """
         baseline = process_rss()
         samples: list[int] = []
@@ -224,6 +224,6 @@ def array_info(arr) -> Optional[dict]:
     return {
         "shape": list(a.shape),
         "dtype": str(a.dtype),
-        "nbytes": int(a.nbytes),
+        "extras_bytes": int(a.nbytes),
         "backing": "memmap" if isinstance(a, np.memmap) else "ndarray",
     }

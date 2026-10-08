@@ -220,7 +220,7 @@ def main() -> int:
     ap.add_argument("--impls", nargs="*", default=["vmdpy", "native"])
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--commit-cap-gb", type=float, default=3.6)
-    ap.add_argument("--time-cap-s", type=float, default=600.0)
+    ap.add_argument("--now-cap-s", type=float, default=600.0)
     args = ap.parse_args()
 
     if args.worker:

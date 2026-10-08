@@ -18,14 +18,14 @@ import pytest
 
 from src.Modal_Decomposition.Utils.Chunk import (
     ADAPT_MIN_BYTES,
-    DEFAULT_FILL_CHUNK_ELEMS,
+    DEFAULT_FILL_CHUNK_SIZE,
     MIN_CHUNK_ELEMS,
     Chunk,
-    adapt_chunk_size,
+    chunk_size,
     chunked_fill,
     chunked_map,
     chunks,
-    default_chunk_size,
+    chunk_size,
     exo_chunks,
     iter_chunks,
 )
@@ -234,7 +234,7 @@ def test_chunked_fill_memmap(tmp_path):
 # 4. adapt_chunk_size (全局内存策略联动)
 # --------------------------------------------------------------------------- #
 def test_adapt_below_min_bytes_returns_unchanged():
-    assert adapt_chunk_size(10_000_000, ADAPT_MIN_BYTES - 1) == 10_000_000
+    assert chunk_size(10_000_000, ADAPT_MIN_BYTES - 1) == 10_000_000
 
 
 def test_adapt_absolute_strategy_shrinks_to_budget():
@@ -245,14 +245,14 @@ def test_adapt_absolute_strategy_shrinks_to_budget():
     budget = 50 * 1024 * 1024
     expected = max(MIN_CHUNK_ELEMS, budget // 3)  # 50MB // 3 = 17476266
     assert expected == 17_476_266
-    assert adapt_chunk_size(100_000_000, nbytes) == expected
+    assert chunk_size(100_000_000, nbytes) == expected
 
 
 def test_adapt_absolute_budget_exhausted_keeps_chunk():
     from src.Modal_Decomposition.Utils.Memory import set_absolute_limit
 
     set_absolute_limit(100 * 1024 * 1024)   # 100MB 上限
-    assert adapt_chunk_size(1_000_000, 120 * 1024 * 1024) == 1_000_000
+    assert chunk_size(1_000_000, 120 * 1024 * 1024) == 1_000_000
 
 
 def test_adapt_ratio_strategy(monkeypatch):
@@ -266,7 +266,7 @@ def test_adapt_ratio_strategy(monkeypatch):
     nbytes = 400 * 1024 * 1024  # 400MB
     budget = int(0.5 * available) - nbytes
     expected = max(MIN_CHUNK_ELEMS, budget // 3)  # 117440512 // 3 = 39146837
-    assert adapt_chunk_size(100_000_000, nbytes) == expected
+    assert chunk_size(100_000_000, nbytes) == expected
 
 
 def test_adapt_psutil_unavailable_keeps_chunk(monkeypatch):
@@ -275,7 +275,7 @@ def test_adapt_psutil_unavailable_keeps_chunk(monkeypatch):
 
     set_memmap_ratio(0.6)
     monkeypatch.setattr(chunk_mod, "get_available_memory", lambda force=False: None)
-    assert adapt_chunk_size(1_000_000, ADAPT_MIN_BYTES) == 1_000_000
+    assert chunk_size(1_000_000, ADAPT_MIN_BYTES) == 1_000_000
 
 
 # --------------------------------------------------------------------------- #
@@ -297,7 +297,7 @@ def test_check_fill_memmap_delegates(monkeypatch, tmp_path):
     path = str(tmp_path / "fill.dat")
     fp = np.memmap(path, dtype=np.float64, mode="w+", shape=(17,))
     src = np.arange(17, dtype=np.float64)
-    check_mod._fill_memmap(fp, src)
+    check_mod.fill_memmap(fp, src)
     del fp
     back = np.memmap(path, dtype=np.float64, mode="r", shape=(17,))
     assert np.array_equal(back, src)
@@ -335,7 +335,7 @@ def test_get_chunk_registered_in_cache():
 
     mod = U.get_chunk()
     assert mod is cache.get("Modal_Decomposition.Utils.Chunk")
-    assert callable(mod.iter_chunks) and callable(mod.chunked_map)
+    assert callable(mod._iter_chunks) and callable(mod.chunked_map)
 
 
 # --------------------------------------------------------------------------- #
@@ -345,20 +345,20 @@ def test_default_chunk_size_baseline_and_shrink():
     from src.Modal_Decomposition.Utils.Memory import set_absolute_limit
 
     # 小输入 (<64MB): 不咨询策略, base 不变
-    assert default_chunk_size(1024) == DEFAULT_FILL_CHUNK_ELEMS
-    assert default_chunk_size(1024, base=12345) == 12345
+    assert chunk_size(1024) == DEFAULT_FILL_CHUNK_SIZE
+    assert chunk_size(1024, base=12345) == 12345
 
     # 绝对策略: 预算足够时默认 base 不动; base 超预算时收缩 (同 adapt 规则)
     set_absolute_limit(150 * 1024 * 1024)
     nbytes = 100 * 1024 * 1024
     budget = 50 * 1024 * 1024
     cap = max(MIN_CHUNK_ELEMS, budget // 3)
-    assert default_chunk_size(nbytes) == DEFAULT_FILL_CHUNK_ELEMS  # 8.38M < cap
-    assert default_chunk_size(nbytes, base=100_000_000) == cap      # 收缩到 cap
+    assert chunk_size(nbytes) == DEFAULT_FILL_CHUNK_SIZE  # 8.38M < cap
+    assert chunk_size(nbytes, base=100_000_000) == cap      # 收缩到 cap
 
 
 def test_default_chunk_size_rejects_bad_base():
     with pytest.raises((TypeError, ValueError)):
-        default_chunk_size(1024, base=0)
+        chunk_size(1024, base=0)
     with pytest.raises((TypeError, ValueError)):
-        default_chunk_size(1024, base=1.5)
+        chunk_size(1024, base=1.5)

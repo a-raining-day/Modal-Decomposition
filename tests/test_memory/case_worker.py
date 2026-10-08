@@ -91,7 +91,7 @@ def main() -> int:
     except Exception:
         pass  # best effort; the real run reports genuine failures
 
-    # --- phase 2: decomposition (the parent enforces the time budget) ---
+    # --- phase 2: decomposition (the parent enforces the now budget) ---
     dec = PeakMonitor(interval_s=_MEASURE_INTERVAL_S)
     result = None
     dec_error = None

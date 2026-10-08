@@ -25,51 +25,145 @@ Peak detection (统一峰检测)。
 
 import bisect
 import functools
-from typing import Literal, Optional, Union
-
 import numpy as np
+from enum import Enum
+from warnings import warn
+from typing import Literal, Tuple, Dict
 
-from ..Base.Cache import cache
+
+from ..Base import cache, SAFE_MODS
 
 __all__ = ["find_peaks"]
 
-#: numpy / numba 后端支持的过滤参数 (scipy 语义)。
-_SUPPORTED_FILTERS = ("height", "threshold", "distance")
+
+PEAKS_MODS_ARGS = Literal["scipy", "numpy", "numba"]
+class PEAKS_MODS(Enum):
+    Scipy = "scipy"
+    Numpy = "numpy"
+    Numba = "numba"
+DEFAULT_MOD = "numpy"
 
 
-# --------------------------------------------------------------------------- #
-# 校验与过滤 (各后端共用)
-# --------------------------------------------------------------------------- #
-def _validate(S) -> np.ndarray:
-    """规范化输入: 1-D、实数数值、长度 >= 3 (不足则返回空结果)。"""
-    arr = S if isinstance(S, np.ndarray) else np.asarray(S)
-    if arr.ndim != 1:
-        raise ValueError(f"Peaks requires a 1-D signal, got {arr.ndim}-D")
-    if arr.dtype.kind not in "iuf":
-        raise ValueError(
-            f"Peaks requires a real numeric dtype, got {arr.dtype}"
-        )
-    if arr.size < 3:
-        return np.array([], dtype=np.int64), True
-    return arr, False
+PEAKS_SUPPORTED_FILTERS_ARGS = Literal["height", "threshold", "distance"]
+class PEAKS_SUPPORTED_FILTERS(Enum):
+    Height = "height"
+    Threshold = "threshold"
+    Distance = "distance"
 
+
+def find_peaks(
+    S: np.ndarray,
+    mod: PEAKS_MODS_ARGS | PEAKS_MODS = "numpy",
+    safe: Literal["safe", "unknown"] | SAFE_MODS = "unknown",
+    **kwargs,
+) -> tuple[np.ndarray, dict]:
+    """
+    Find peaks in a 1-D signal.
+
+    Parameters
+    ----------
+    S : array-like
+        1-D real numeric signal (length >= 3; shorter inputs yield no peaks).
+    mod : "scipy", "numpy", "numba"
+        "scipy" (default) — :func:`scipy.signal.find_peaks` (全参数支持,含 plateau 规则);
+        "numpy" — 纯 numpy 向量化实现;
+        "numba" — numpy 内核经 njit 编译的可选加速 (需安装 numba)。
+    safe : Literal["safe", "unknown"] | SAFE_MODS
+        安全等级。unknown需要严格检查，safe不需要。
+    **kwargs
+        过滤参数 (scipy 语义): `height` / `threshold` / `distance`.
+        scipy 后端全部透传 (另支持 `prominence`, `width`, `wlen`, `rel_height`, `plateau_size`);
+        numpy / numba 后端仅支持上述三个, 其余抛 NotImplementedError
+
+    Returns
+    -------
+    (indices, properties)
+        indices: np.ndarray (int64)
+            Peak positions
+        properties: dict
+            {"peak_heights": S[indices]}
+
+    Raises
+    ------
+    ValueError
+        非 1-D / 非实数数值输入, 或未知 mod。
+    Warning
+        scipy / numba 后端在对应库缺失时。
+    NotImplementedError
+        numpy / numba 后端收到不支持的过滤参数。
+    """
+    safe = SAFE_MODS(safe)
+    mod = PEAKS_MODS(mod)
+
+    match safe:
+        case SAFE_MODS.Safe:
+            pass
+
+        case SAFE_MODS.Unknown:
+            S: np.ndarray = S if isinstance(S, np.ndarray) else np.asarray(S)
+
+            if S.ndim != 1:
+                raise ValueError(f"Peaks requires a 1-D signal, got {S.ndim}-D")
+            if S.dtype.kind not in "iuf":
+                raise ValueError(
+                    f"Peaks requires a real numeric dtype, got {S.dtype}"
+                )
+
+        case _:
+            if safe == "suspicious" or safe == SAFE_MODS.Suspicious:
+                raise ValueError("this function not supported the safe level of suspicious")
+            else:
+                raise ValueError(f"Unknown mod: {safe!r}; expected {SAFE_MODS}")
+
+    if 1 <= S.size < 3:
+        return indices := np.array(np.arange(S.size), dtype=np.int64), {"peak_heights": S[indices]}
+
+    result: None | Tuple[np.ndarray, Dict[str, np.ndarray]]= None
+    match mod:
+        case PEAKS_MODS.Numpy:
+            return _peaks_numpy(S, kwargs)
+        case PEAKS_MODS.Scipy:
+            result = _peaks_scipy(S, kwargs)
+        case PEAKS_MODS.Numba:
+            result = _peaks_numba(S, kwargs)
+        case _:
+            raise ValueError(f"Unknown mod: {mod!r}; expected 'scipy', 'numpy' or 'numba'")
+
+    if result is None:
+        return _peaks_numpy(S, kwargs)
+    else:
+        return result
+
+
+def _peaks_scipy(S: np.ndarray, kwargs: dict):
+    ss = cache.import_module("scipy.signal",verbose=False)
+    if ss is None:
+        warn("`scipy.signal` not find; use `numpy` instead")
+        return None
+    return ss.find_peaks(S, **kwargs)
+
+
+def _peaks_numpy(S: np.ndarray, kwargs: dict):
+    idx = np.flatnonzero((S[1:-1] > S[:-2]) & (S[1:-1] >= S[2:])) + 1
+    idx = _apply_filters(idx, S, kwargs)
+    return idx, {"peak_heights": S[idx]}
+
+
+def _peaks_numba(S: np.ndarray, kwargs: dict):
+    numba = cache.import_module("numba", verbose=False)
+    if numba is None:
+        warn("`numba` not find; use `numpy` instead")
+        return None
+
+    compiled = _get_compiled(numba)
+    idx = compiled(S)
+    idx = _apply_filters(idx, S, kwargs)
+    return idx, {"peak_heights": S[idx]}
 
 def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
     """
     对候选峰应用 height / threshold / distance 过滤 (numpy/numba 共用)。
-
-    Raises
-    ------
-    NotImplementedError
-        出现不支持的过滤参数 (列出支持集)。
     """
-    unknown = set(kwargs) - set(_SUPPORTED_FILTERS)
-    if unknown:
-        raise NotImplementedError(
-            f"spline_kind supports only {_SUPPORTED_FILTERS}, "
-            f"got unsupported: {sorted(unknown)}"
-        )
-
     height = kwargs.get("height")
     if height is not None:
         # scipy 语义: 标量仅为下界; (min, max) 为区间。
@@ -107,13 +201,6 @@ def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
 
     return idx
 
-
-def _detect_numpy(S: np.ndarray) -> np.ndarray:
-    """向量化基础检测 (numpy 后端): S[i-1] < S[i] >= S[i+1]。"""
-    mask = (S[1:-1] > S[:-2]) & (S[1:-1] >= S[2:])
-    return np.flatnonzero(mask) + 1
-
-
 def _detect_kernel(S: np.ndarray) -> np.ndarray:
     """基础检测内核 (numba 可编译): S[i-1] < S[i] >= S[i+1]。"""
     n = S.shape[0]
@@ -125,94 +212,10 @@ def _detect_kernel(S: np.ndarray) -> np.ndarray:
             count += 1
     return out[:count]
 
-
 @functools.lru_cache(maxsize=None)
 def _get_compiled(numba):
     """按需 njit 编译检测内核 (每进程最多编译一次)。"""
     return numba.njit(nogil=True)(_detect_kernel)
-
-
-def _peaks_scipy(S: np.ndarray, kwargs: dict):
-    ss = cache.import_module(
-        "scipy.signal",
-        description="scipy.signal: find_peaks (供 Utils.Peaks 的 scipy 后端使用)",
-    )
-    return ss.find_peaks(S, **kwargs)
-
-
-def _peaks_numpy(S: np.ndarray, kwargs: dict):
-    idx = _detect_numpy(S)
-    idx = _apply_filters(idx, S, kwargs)
-    return idx, {"peak_heights": S[idx]}
-
-
-def _peaks_numba(S: np.ndarray, kwargs: dict):
-    numba = cache.import_module(
-        "numba",
-        description="numba: JIT 编译 (供 Utils.Peaks 的 numba 后端使用)",
-    )
-    compiled = _get_compiled(numba)
-    idx = compiled(S)
-    idx = _apply_filters(idx, S, kwargs)
-    return idx, {"peak_heights": S[idx]}
-
-
-def find_peaks(
-    S,
-    mod: Literal["scipy", "numpy", "numba"] = "numpy",
-    **kwargs,
-) -> tuple[np.ndarray, dict]:
-    """
-    Find peaks in a 1-D signal.
-
-    Parameters
-    ----------
-    S : array-like
-        1-D real numeric signal (length >= 3; shorter inputs yield no peaks).
-    mod : Literal["scipy", "numpy", "numba"]
-        Backend:
-        ``"scipy"`` (default) — :func:`scipy.signal.find_peaks` (全参数支持,
-        含 plateau 规则);
-        ``"numpy"`` — 纯 numpy 向量化实现;
-        ``"numba"`` — numpy 内核经 ``njit`` 编译的可选加速 (需安装 numba)。
-    **kwargs
-        过滤参数 (scipy 语义): ``height`` / ``threshold`` / ``distance``。
-        scipy 后端全部透传 (另支持 ``prominence`` / ``width`` / ``wlen`` /
-        ``rel_height`` / ``plateau_size``); numpy / numba 后端仅支持上述
-        三个, 其余抛 ``NotImplementedError``。
-
-    Returns
-    -------
-    (indices, properties)
-        ``indices`` : np.ndarray (int64)
-            Peak positions.
-        ``properties`` : dict
-            ``{"peak_heights": S[indices]}`` (numpy / numba) 或 scipy 的
-            完整属性字典 (scipy)。
-
-    Raises
-    ------
-    ValueError
-        非 1-D / 非实数数值输入, 或未知 ``mod``。
-    ImportError
-        scipy / numba 后端在对应库缺失时。
-    NotImplementedError
-        numpy / numba 后端收到不支持的过滤参数。
-    """
-    S, empty = _validate(S)
-    if empty:
-        return np.array([], dtype=np.int64), {}
-
-    match mod:
-        case "scipy":
-            return _peaks_scipy(S, kwargs)
-        case "numpy":
-            return _peaks_numpy(S, kwargs)
-        case "numba":
-            return _peaks_numba(S, kwargs)
-        case _:
-            raise ValueError(f"Unknown mod: {mod!r}; expected 'scipy', 'numpy' or 'numba'")
-
 
 if __name__ == "__main__":
     S = np.array([0, 1, 0, 2, 0, 3, 0], dtype=np.float64)

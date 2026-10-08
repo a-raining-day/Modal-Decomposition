@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from src.Modal_Decomposition.Base.Cache import cache
-from src.Modal_Decomposition.Base.ConstDefine import SPLINE_KIND
+from src.Modal_Decomposition.Define.ConstDefine import SPLINE_KIND
 from src.Modal_Decomposition.Utils.Spline import (
     Spline,
     spline,
@@ -34,7 +34,7 @@ GT = np.sin(XI)
 
 
 def _median_seconds(fn, repeats: int = 3) -> float:
-    """运行 fn 若干次, 返回中位耗时 (秒)。"""
+    """运行 func 若干次, 返回中位耗时 (秒)。"""
     samples = []
     for _ in range(repeats):
         t0 = time.perf_counter()

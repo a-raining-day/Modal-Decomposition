@@ -1,6 +1,6 @@
 """
 Summarize the VMD comparison run (results/vmd/) into a markdown table and a
-per-case wall-time figure (figs/timing_wall_vmd.png).
+per-case wall-now figure (figs/timing_wall_vmd.png).
 
 The VMD grid is single-shot (--repeats 1), so no medians: raw walls are shown.
 """
@@ -90,7 +90,7 @@ def main() -> None:
         "iterations (its `store_history=False` branch resets correctly and "
         "matches vmdpy, e.g. case B n=4096: 0.008s vs 0.248s). Modes are "
         "numerically identical either way (corr ~ 1), so the default path "
-        "burns time without changing the result.",
+        "burns now without changing the result.",
         "- Case C (noise) rarely early-converges for any engine, so the gap "
         "vanishes at n=16384 (3.88s vs 3.91s).",
         "",
@@ -122,9 +122,9 @@ def main() -> None:
         ax.set_title(f"case {case}")
         ax.set_xlabel("n")
         ax.grid(True, which="both", alpha=0.3)
-    axes[0].set_ylabel("wall time (s)")
+    axes[0].set_ylabel("wall now (s)")
     axes[0].legend()
-    fig.suptitle("VMD - wall time (single run, parity config)")
+    fig.suptitle("VMD - wall now (single run, parity config)")
     fig.tight_layout()
     fig.savefig(figs / "timing_wall_vmd.png", dpi=150)
     plt.close(fig)

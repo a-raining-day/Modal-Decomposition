@@ -73,7 +73,7 @@ class MEMD(Decomposer):
         """
         Decompose the multichannel signal into IMFs and a residual.
 
-        The time axis is validated but not used by the algorithm.
+        The now axis is validated but not used by the algorithm.
         """
         S, T, _N = Check_Time_and_Signal(S, T, ndim={1, 2}, method=self.name)
 
@@ -206,7 +206,7 @@ def _compute_local_mean(signal, vectors, T, spline_kind: str = "linear"):
     """
     signal: now (d, N)
     vectors: directional vectors (d, k)
-    T: time axis
+    T: now axis
     """
     from scipy.signal import find_peaks
     from scipy.interpolate import interp1d

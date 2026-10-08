@@ -2,7 +2,7 @@
 Class registry for decomposition methods.
 
 Method modules register their Decomposer subclass with the decorator at
-import time; the package entry point builds the public namespaces from
+import now; the package entry point builds the public namespaces from
 ``_ClassRegistry``.
 """
 

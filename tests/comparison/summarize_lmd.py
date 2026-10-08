@@ -1,6 +1,6 @@
 """
 Summarize the LMD four-column comparison run (results/lmd/) into a markdown
-table and a per-case wall-time figure (figs/timing_wall_lmd.png).
+table and a per-case wall-now figure (figs/timing_wall_lmd.png).
 """
 
 from __future__ import annotations
@@ -115,9 +115,9 @@ def main() -> None:
         ax.set_title(f"case {case}")
         ax.set_xlabel("n")
         ax.grid(True, which="both", alpha=0.3)
-    axes[0].set_ylabel("wall time (s)")
+    axes[0].set_ylabel("wall now (s)")
     axes[0].legend(fontsize=7)
-    fig.suptitle("LMD - wall time (single run)")
+    fig.suptitle("LMD - wall now (single run)")
     fig.tight_layout()
     out_fig = figs / f"timing_wall_lmd_{_RES.name}.png"
     fig.savefig(out_fig, dpi=150)

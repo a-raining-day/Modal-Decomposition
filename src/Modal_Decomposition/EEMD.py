@@ -125,7 +125,7 @@ class EEMD(Decomposer):
 
     Averages the modes of ``trials`` independent native-EMD runs on white-noise
     perturbed copies of the signal. Use as ``Class.EEMD(**params).decompose(S,
-    T)`` / ``Function.EEMD(S, T, **params)``; every result carries a frozen
+    S)`` / ``Function.EEMD(S, S, **params)``; every result carries a frozen
     ``EEMDConfig`` snapshot.
 
     ``IMFs`` has shape ``(K, N)``; ``Res`` is the true remainder

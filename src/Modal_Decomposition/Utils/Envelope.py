@@ -24,47 +24,12 @@ Layering (与 Utils 其余工具一致): 本模块自身不接触缓存; ``Utils
 import numpy as np
 from typing import Literal
 
-from ..Base.Cache import Cache
-from ..Base.ConstDefine import CACHE_KEY
+from ..Base import Cache, CACHE_KEY
+from .Peaks import find_peaks
+from .Spline import Spline
+from .Hilbert import hilbert
 
 __all__ = ["envelope"]
-
-_CACHE_KEY_SIGNAL = CACHE_KEY["scipy"]["signal"]
-_CACHE_KEY_INTERPOLATE = CACHE_KEY["scipy"]["interpolate"]
-
-
-def _signal():
-    """Return the cached scipy.signal submodule (imported once per process).
-
-    惰性导入样板已抽象进 ``Cache.import_module``: 首次调用 import + 注册,
-    之后直接命中统一缓存; ImportError 不缓存, 下次调用自动重试。
-    """
-    # scipy.signal —— 信号处理子模块:
-    #   hilbert:        Hilbert 模式解析信号取包络 (np.abs(analytic))
-    #   butter/filtfilt: Lowpass / IQ 模式的零相位低通滤波
-    #   find_peaks:     PeakInterpolation 模式包络峰值检测
-    return Cache.import_module(
-        _CACHE_KEY_SIGNAL,
-        description="scipy.signal 信号处理子模块: hilbert(解析信号包络) / "
-                    "butter+filtfilt(Lowpass/IQ 零相位低通) / "
-                    "find_peaks(PeakInterpolation 峰值检测), 供 Envelope 使用",
-    )
-
-
-def _interpolate():
-    """Return the cached scipy.interpolate submodule (imported once per process).
-
-    同 ``_signal``: try/except 样板由 ``Cache.import_module`` 收敛。
-    """
-    # scipy.interpolate —— 插值子模块:
-    #   CubicSpline: PeakInterpolation 模式对信号峰值点做三次样条插值,
-    #                得到平滑包络曲线
-    return Cache.import_module(
-        _CACHE_KEY_INTERPOLATE,
-        description="scipy.interpolate 插值子模块: "
-                    "CubicSpline(对信号峰值点做三次样条插值得到包络), "
-                    "供 Envelope 的 PeakInterpolation 模式使用",
-    )
 
 
 def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInterpolation"] = "Hilbert", fs: float = None, fc: float = None, cf: float = None, **kwargs) -> np.ndarray:
@@ -102,7 +67,7 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
     |                   |        |      |       |          | carrier frequency fc; otherwise  |
     |                   |        |      |       |          | beat terms bias the envelope.    |
     +-------------------+--------+------+-------+----------+----------------------------------+
-    | PeakInterpolation | ~0.022 | .997 | ~0.21 | fs, fc   | most accurate on clean AM        |
+    | PeakInterpolation | ~0.022 | .997 | ~0.21 | none     | most accurate on clean AM        |
     |                   |        |      |       |          | (RMSE ~1e-15); degrades under    |
     |                   |        |      |       |          | noise (spurious peaks);          |
     |                   |        |      |       |          | meaningless for non-AM signals.  |
@@ -127,8 +92,14 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
 
     env: np.ndarray = None
 
-    _SCIPY_SIGNAL = _signal()
-    _SCIPY_INTERPOLATION = _interpolate() if method == "PeakInterpolation" else None
+    _SCIPY_SIGNAL = Cache.import_module(CACHE_KEY["scipy"]["signal"])
+
+    peak_mod = kwargs.get("peak_mod", "numpy")
+    spline_mod = kwargs.get("spline_mod", "UnivariateSpline")
+    hilbert_mod = kwargs.get("hilbert_mod", "Scipy")
+
+    peak = lambda x, **kwargs: find_peaks(x, mod=peak_mod, **kwargs)
+    spline = lambda x, y, **kwargs: Spline(x, y, spline_kind=spline_mod, **kwargs)
 
     def _lowpass(data, cutoff, order=4):
         nyq = 0.5 * fs
@@ -137,7 +108,7 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
 
     match method:
         case "Hilbert":
-            analytic = _SCIPY_SIGNAL.hilbert(S)
+            analytic = hilbert(S, mod=hilbert_mod)
             env = np.abs(analytic)
 
         case "Lowpass":
@@ -155,11 +126,12 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
             env = 2 * np.sqrt(i_base ** 2 + q_base ** 2)
 
         case "PeakInterpolation":
-            min_distance = int(fs / (2 * max(fc, 200)))
-            peaks, _ = _SCIPY_SIGNAL.find_peaks(S, distance=min_distance)
+            result = peak(S, **kwargs)
+            x = result[0]
+            y = result[1]["peak_heights"]
 
-            cs = _SCIPY_INTERPOLATION.CubicSpline(peaks, S[peaks])
-            env = cs(np.arange(len(S)))
+            f = spline(x, y, **kwargs)
+            env = f(np.arange(len(S)))
 
         case _:
             raise ValueError(f"Unknown envelope method: {method}")

@@ -39,7 +39,7 @@ from ctypes import POINTER, c_double, c_int, c_long
 
 import numpy as np
 
-from ...Base.ConstDefine import DEFAULT_NUMPY_TYPE
+from src.Modal_Decomposition.Define.ConstDefine import DEFAULT_NUMPY_TYPE
 from ...Error import RealizationError
 
 __all__ = [

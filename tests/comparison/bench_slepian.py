@@ -9,7 +9,7 @@ Slepian (DPSS) 后端基准脚本 —— 生成 docs/Slepian_Backend_Report.md �
 三项内容:
   1) 正确性: 各后端与 scipy.signal.windows.dpss 的偏差 (序列逐元素 + 集中比);
   2) 性能: 稳态重复调用耗时 (best-of-rep) 与 tracemalloc 峰值, 逐 N 对比;
-  3) 冷启动: 单次调用的整进程 wall time (含 import scipy.signal 的代价)。
+  3) 冷启动: 单次调用的整进程 wall now (含 import scipy.signal 的代价)。
 
 内存约束: numpy 后端的稠密分解只到 SLEPIAN_NUMPY_MAX_BYTES 预算 (默认 N<=11584),
 更大 N 直接跳过 (脚本不会尝试 GB 级分配)。
@@ -119,7 +119,7 @@ def bench_speed(sizes, NW=4.0, K=5, rep=3):
 
 
 def bench_cold_start(N=100000, NW=4.0, K=5):
-    """冷启动: 新进程里 import + 单次调用 的全程 wall time。"""
+    """冷启动: 新进程里 import + 单次调用 的全程 wall now。"""
     print(f"\n## 3) 冷启动单次调用 (N={N}, 整进程 wall ms)\n")
     print("| 后端 | 首次 wall | 第二次 wall | 说明 |")
     print("|---|---:|---:|---|")

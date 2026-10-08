@@ -181,7 +181,7 @@ if _native is not None:
     hilbert_transform = _native.hilbert_transform
 
 
-def _hilbert(signal: np.ndarray, matlab_phase: bool = False) -> np.ndarray:
+def _hilbert(signal: np.ndarray, matlab_phase: bool = True) -> np.ndarray:
     """
     对实信号做 Hilbert 变换, 返回解析信号。
     这是 Modal-Decomposition 库对外的统一入口。

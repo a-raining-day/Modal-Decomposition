@@ -41,12 +41,12 @@ Modify:
 import collections
 import threading
 import warnings
-
+import importlib.util
 import numpy as np
+from typing import Literal
 
-from ..Base.ConstDefine import (
+from src.Modal_Decomposition.Define.ConstDefine import (
     SLEPIAN_BACKEND,
-    SLEPIAN_BACKEND_LIST,
     SLEPIAN_CACHE,
     SLEPIAN_CACHE_MAX_BYTES,
     SLEPIAN_CACHE_SIZE,
@@ -68,6 +68,11 @@ __all__ = [
 
 _NORMS = (None, 2, "approximate")
 
+#: 缓存版本戳: 任何会改变数值结果的改动 (算法/符号约定/归一化/后端实现) 都必须提升该版本, 否则旧条目会被错误复用。同时进 ``cache_info()`` 便于诊断。
+_CACHE_VERSION = "slepian-cache"
+
+#: 缓存条目 = (tapers_readonly, ratios_readonly_or_None, extras_bytes)
+_Entry = tuple
 
 def _numpy_sample_limit() -> int:
     """numpy 后端可承受的最大样本数 (由稠密矩阵预算反推: N_max = 2*sqrt(B/8))。"""
@@ -80,8 +85,6 @@ def available_backends() -> dict:
 
     scipy 只查 ``find_spec`` (不导入); C 查库文件存在且能装载 (结果被缓存)。
     """
-    import importlib.util
-
     return {
         "numpy": True,
         "scipy": importlib.util.find_spec("scipy") is not None,
@@ -89,37 +92,9 @@ def available_backends() -> dict:
     }
 
 
-def _canon_mod(mod) -> str:
-    """后端名 → canonical ("numpy" / "scipy" / "C")。"""
-    key = str(mod).strip()
-    table = {name.lower(): name for name in SLEPIAN_BACKEND_LIST}
-    table["c"] = "C"
-    if key.lower() not in table:
-        raise ValueError(
-            f"unsupported slepian mod {mod!r}; expected one of {SLEPIAN_BACKEND_LIST} or 'auto'"
-        )
-    return table[key.lower()]
-
-
-def _small_n_backend() -> str:
+def resolve_backend(N: int, mod: Literal["numpy", "scipy", "C", "auto"] = "auto", halfBW: float = None) -> str:
     """
-    ``scipy`` 用不了时 (``NW >= N/2``) 的替代后端: 按 ``SLEPIAN_SMALL_N_ORDER``
-    取第一个可用者 (默认 "C"; C 未编译则退回 "numpy")。
-
-    实测小 N (N<=6, NW=3, K=5) 单次开销: C 4.5-6.7 us / 2.3-3.2 KB,
-    numpy 38-67 us / 7.1-7.6 KB ⇒ C 快 7-10x 且内存小 2.4x, 故排在首位。
-    """
-    for name in SLEPIAN_SMALL_N_ORDER:
-        name = _canon_mod(name)
-        if name == "C" and not _c_available():
-            continue
-        return name
-    return "numpy"
-
-
-def resolve_backend(N: int, mod=None, halfBW: float = None) -> str:
-    """
-    解析生效后端名 (不会是 "auto")。
+    解析生效后端名。
 
     Parameters
     ----------
@@ -136,54 +111,49 @@ def resolve_backend(N: int, mod=None, halfBW: float = None) -> str:
 
     Notes
     -----
-    **仅默认路径** (``mod=None``/``"auto"``) 在后端不可用 (如 C 未编译) 时降级
-    numpy; 显式指定的后端不可用时由 :func:`slepian` 报错。
+    **仅默认路径** (``mod=None``/``"auto"``) 在后端不可用 (如 C 未编译) 时降级 numpy; 显式指定的后端不可用时由 :func:`slepian` 报错。
     """
-    explicit = not (mod is None or str(mod).strip().lower() == "auto")
+    match mod:
+        case "auto":
+            return SLEPIAN_BACKEND
 
-    if mod is None:
-        name = _canon_mod(SLEPIAN_BACKEND)
-    elif not explicit:
-        name = "C" if (int(N) > _numpy_sample_limit() and _c_available()) \
-            else _canon_mod(SLEPIAN_BACKEND)
-    else:
-        name = _canon_mod(mod)
+        case "C":
+            if not _c_available():
+                warnings.warn(
+                    "Slepian 后端 'C' 未编译, 本次降级为 'numpy'; 构建后可恢复 (`pip install -e .` 或见 Utils/_Slepian/C.py 头部编译命令)",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                return "numpy"
 
-    # 默认路径降级: 默认后端 (C) 不可用时改用 numpy
-    if not explicit and name == "C" and not _c_available():
-        warnings.warn(
-            "Slepian 后端 'C' 未编译, 本次降级为 'numpy'; 构建后可恢复 "
-            "(pip install -e . 或见 Utils/_Slepian/C.py 头部编译命令)",
-            UserWarning,
-            stacklevel=3,
-        )
-        return "numpy"
+        case "scipy":
+            if halfBW is not None and 2.0 * float(halfBW) >= int(N):
+                alt: str = None
+                for name in SLEPIAN_SMALL_N_ORDER:
+                    if name == "C" and not _c_available():
+                        continue
+                    alt = name
+                alt = "numpy" if alt is None else alt
 
-    # scipy 固有规模限制: NW >= N/2 时 scipy.dpss 必然抛错 -> 换更快更省的后端
-    if name == "scipy" and halfBW is not None and 2.0 * float(halfBW) >= int(N):
-        alt = _small_n_backend()
-        warnings.warn(
-            f"scipy 后端无法处理 NW >= N/2 (N={int(N)}, halfBW={float(halfBW)!r}); "
-            f"本次改用 '{alt}' 后端 (小 N 下更快且更省内存)。"
-            f"如需 scipy 请增大 N 或减小 halfBW。",
-            UserWarning,
-            stacklevel=3,
-        )
-        return alt
-    return name
+                warnings.warn(
+                    f"scipy 后端无法处理 NW >= N/2 (N={int(N)}, halfBW={float(halfBW)!r}); "
+                    f"本次改用 '{alt}' 后端 (小 N 下更快且更省内存)。"
+                    f"如需 scipy 请增大 N 或减小 halfBW。",
+                    UserWarning,
+                    stacklevel=3,
+                )
+                return alt
+
+        case "numpy":
+            return mod
+
+        case _:
+            raise KeyError(f"the mod of {mod} is not supported!")
 
 
 # --------------------------------------------------------------------------- #
-# Tier-1 进程内缓存 (纯函数记忆化; 有界 LRU + 精确键 + 只读主副本)
+# 进程内缓存 (纯函数记忆化; 有界 LRU + 精确键 + 只读主副本)
 # --------------------------------------------------------------------------- #
-#: 缓存版本戳: 任何会改变数值结果的改动 (算法/符号约定/归一化/后端实现) 都必须提升
-#: 该版本, 否则旧条目会被错误复用。同时进 ``cache_info()`` 便于诊断。
-_CACHE_VERSION = "slepian-cache-v1"
-
-#: 缓存条目 = (tapers_readonly, ratios_readonly_or_None, nbytes)
-_Entry = tuple
-
-
 class _TaperCache:
     """
     有界 LRU 缓存 (线程安全)。
@@ -376,7 +346,7 @@ def _scipy_backend(N, halfBW, nTapers, return_ratios, norm, sym):
     return (tapers, ratios) if return_ratios else tapers
 
 
-def slepian(N: int, halfBW: float, nTapers: int = None, mod=None,
+def slepian(N: int, halfBW: float, nTapers: int = None, mod: Literal["auto", "numpy", "scipy", "C"]="auto",
             return_ratios: bool = False, norm=None, sym: bool = True,
             cache=None) -> np.ndarray:
     """
@@ -392,7 +362,7 @@ def slepian(N: int, halfBW: float, nTapers: int = None, mod=None,
         返回条数 (阶数 0 … nTapers-1, 集中比降序)。``None`` →
         ``max(1, floor(2*halfBW - 1))``, 并截断到 ``solve_n = N`` (``sym=False`` 时
         ``N+1``)。
-    mod : {"numpy", "scipy", "C", "auto", None}
+    mod : {"auto", "numpy", "scipy", "C"}
         后端选择; ``None`` 用 ``ConstDefine.SLEPIAN_BACKEND`` (默认 "C"),
         ``"auto"`` 按规模与可用性挑。默认路径下后端不可用会降级 numpy 并发一次
         ``UserWarning``; 显式指定时不可用则报错。
@@ -451,18 +421,19 @@ def slepian(N: int, halfBW: float, nTapers: int = None, mod=None,
     elif backend == "C":
         if not _c_available():
             raise RealizationError(
-                "Slepian 后端 'C' 未编译: 请构建 _slepian_native "
-                "(pip install -e . 或见 Utils/_Slepian/C.py 头部的编译命令)"
+                "Slepian 后端 'C' 未编译: 请构建 _slepian_native (`pip install -e .` 或见 Utils/_Slepian/C.py 头部的编译命令)"
             )
         result = generate_slepian_c(N, halfBW, nTapers,
                                     return_ratios=return_ratios, norm=norm, sym=sym)
     elif backend == "scipy":
         result = _scipy_backend(N, halfBW, nTapers, return_ratios, norm, sym)
-    else:                                                # pragma: no cover
+
+    else:
         raise ValueError(f"unsupported backend {backend!r}")
 
     if use_cache:
         entry = _freeze(result, return_ratios)
         if entry is not None:
             _CACHE.put(key, entry, maxsize, SLEPIAN_CACHE_MAX_BYTES)
+
     return result

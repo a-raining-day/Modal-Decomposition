@@ -27,7 +27,7 @@ Layering (与 Utils 其余工具一致): 本模块自身不接触缓存;
 """
 
 import numpy as np
-from ..Base.ConstDefine import DEFAULT_NUMPY_TYPE
+from ..Base import DEFAULT_NUMPY_TYPE
 
 __all__ = ["mirror_extrema", "mirror_signal"]
 

@@ -573,12 +573,12 @@ def test_temp_memmap_backing_file_registered_and_cleaned():
     mm = check_mod._temp_memmap(np.float64, (1024,))
     path = mm.filename
     assert os.path.exists(path)
-    assert path in check_mod._MEM_FILES
+    assert path in check_mod._MM_FILES
     assert os.path.basename(path).startswith("md_memmap_")
 
     check_mod._cleanup_memmaps()
     assert not os.path.exists(path), f"temporary backing file not removed: {path}"
-    assert path not in check_mod._MEM_FILES
+    assert path not in check_mod._MM_FILES
 
 
 def test_temp_memmap_cleanup_is_idempotent():
@@ -587,4 +587,4 @@ def test_temp_memmap_cleanup_is_idempotent():
     check_mod._temp_memmap(np.float32, (256,))
     check_mod._cleanup_memmaps()
     check_mod._cleanup_memmaps()  # 重复调用不报错、不残留
-    assert check_mod._MEM_FILES == {}
+    assert check_mod._MM_FILES == {}

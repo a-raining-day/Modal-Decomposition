@@ -27,7 +27,7 @@ from typing import ClassVar, Literal
 import numpy as np
 
 from .Base import Config, Decomposer, DecompositionResult
-from .Base.ConstDefine import (
+from src.Modal_Decomposition.Define.ConstDefine import (
     VMD_MIN_SAMPLES,
     VMD_UHAT_INFO_LIMIT,
     VMD_PEAK_INIT_LIMIT,
@@ -35,7 +35,7 @@ from .Base.ConstDefine import (
 )
 from ._Registry import register_class
 from .Utils import Check_Time_and_Signal, get_fft, get_mirror, get_peaks, resolve_seed
-from .Utils.Chunk import chunked_fill, default_chunk_size, temp_memmap, drop_memmap
+from .Utils.Chunk import chunked_fill, chunk_size, temp_memmap, drop_memmap
 from .Utils.Memory import should_use_memmap
 
 __all__ = ["VMD", "VMDConfig"]
@@ -411,7 +411,7 @@ class VMD(Decomposer):
                 # 注: 直接用 Chunk 的默认 8M 频点基数在 K 较大时会得到 GB 级工作集,
                 # 故这里先按 K 折算基数。
                 base = max(1, VMD_CHUNK_WORK_BYTES // (K * 16 * 3))
-                chunk_size = int(default_chunk_size(N * 16, base=min(base, N)))
+                chunk_size = int(chunk_size(N * 16, base=min(base, N)))
             else:
                 chunk_size = int(self.chunk_size)
             chunk_size = max(1, min(chunk_size, N))

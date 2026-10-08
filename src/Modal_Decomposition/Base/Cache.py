@@ -59,16 +59,16 @@ class cache:
     'signal processing submodule'
     >>> cache.add("scipy.signal", ss)  # duplicate: never overwrites
     False
+    'signal processing submodule'
     """
 
     # --- process-wide shared state (class attributes; instances share it) ---
     _entries: Dict[str, Any] = {}
+    _exists: Dict[str, bool] = {}
     _descriptions: Dict[str, str] = {}
     _lock = threading.RLock()
 
-    # ------------------------------------------------------------------ #
     # helpers
-    # ------------------------------------------------------------------ #
     @staticmethod
     def _validate_name(name) -> str:
         """
@@ -118,17 +118,33 @@ class cache:
             return getattr(api, "__name__", str(api))
         return f"{type(api).__module__}.{type(api).__qualname__}"
 
-    # ------------------------------------------------------------------ #
-    # public API (classmethods: usable as ``cache.add(...)`` and
-    # ``cache().add(...)`` alike)
-    # ------------------------------------------------------------------ #
+    # methods
+    @classmethod
+    def get(cls, name):
+        """
+        return the cached api
+
+        Raises
+        ------
+        KeyError
+            When ``name`` is not registered.
+        """
+        name = cls._validate_name(name)
+        with cls._lock:
+            if name not in cls._entries:
+                raise KeyError(
+                    f"'{name}' is not registered in the cache; "
+                    f"registered entries: {sorted(cls._entries)}"
+                )
+            return cls._entries[name]
+
     @classmethod
     def add(
-        cls,
-        name,
-        api,
-        verbose: bool = False,
-        description: Optional[str] = None,
+            cls,
+            name,
+            api,
+            verbose: bool = False,
+            description: Optional[str] = None,
     ) -> bool:
         """
         add the api of the module or function or class to the cache
@@ -191,13 +207,10 @@ class cache:
                 except ImportError:
                     raise ImportError(...)
 
-        - 首次调用: import 目标模块, 以模块名 ``name`` 注册进统一缓存
-          (持 ``RLock``, 恰好执行一次);
+        - 首次调用: import 目标模块, 以模块名 ``name`` 注册进统一缓存(持 ``RLock``, 恰好执行一次);
         - 之后调用: 直接返回缓存实例, 不再执行 import;
-        - ``ImportError`` 原样传播且**不缓存** (标志保持"未就绪", 下次调用
-          自动重试) —— try/except 只存在于这一处, 调用方零样板;
-        - 键已存在时 (可能由另一条 import 路径先注册) 直接返回既有实例,
-          维持"永不覆盖"契约。
+        - 如果运行时不存在则记录缓冲, 在代码运行阶段不考虑动态 pip install 的情况, 直接视为不存在, 后续继续加载则直接报错或静默;
+        - 键已存在时 (可能由另一条 import 路径先注册) 直接返回既有实例,维持"永不覆盖"契约。
 
         Parameters
         ----------
@@ -221,18 +234,26 @@ class cache:
             if name in cls._entries:
                 return cls._entries[name]
 
-            from importlib import import_module as _import_module
+            if name not in cls._exists:
+                from importlib import import_module as _import_module
+                try:
+                    api = _import_module(name)  # ImportError propagates, nothing cached
+                except ImportError:
+                    cls._exists[name] = False
+                    api = None
+            else:
+                api = None
 
-            api = _import_module(name)  # ImportError propagates, nothing cached
-            cls._validate_api(api)
-            cls._entries[name] = api
-            cls._descriptions[name] = (
-                description if description is not None
-                else f"<imported module '{name}'>"
-            )
+            if api is not None:
+                cls._entries[name] = api
+                cls._descriptions[name] = (
+                    description if description is not None
+                    else f"<imported module '{name}'>"
+                )
 
-            if verbose:
-                print(f"[cache] registered '{name}' ({cls._api_label(api)})")
+            if verbose and api is None:
+                raise ImportError(f"the {name} module is not pip!")
+
             return api
 
     @classmethod
@@ -240,8 +261,7 @@ class cache:
         """
         装饰器: 把零参加载函数变成"进程内恰好执行一次"的惰性取用器。
 
-        对调用方完全透明 (``functools.wraps`` 保留签名与 docstring), 缓存
-        藏在背后: 调用者只看到一个普通函数调用。
+        对调用方完全透明 (``functools.wraps`` 保留签名与 docstring), 缓存藏在背后: 调用者只看到一个普通函数调用。
 
         - 首次调用: 持 ``RLock`` 执行原函数, 结果以 ``name`` 注册进缓存并返回;
         - 之后调用: 返回缓存实例, 原函数不再执行;
@@ -293,25 +313,6 @@ class cache:
         return dec
 
     @classmethod
-    def get(cls, name):
-        """
-        return the cached api
-
-        Raises
-        ------
-        KeyError
-            When ``name`` is not registered.
-        """
-        name = cls._validate_name(name)
-        with cls._lock:
-            if name not in cls._entries:
-                raise KeyError(
-                    f"'{name}' is not registered in the cache; "
-                    f"registered entries: {sorted(cls._entries)}"
-                )
-            return cls._entries[name]
-
-    @classmethod
     def check(cls, name) -> bool:
         """
         return the result of the query to cache
@@ -356,6 +357,7 @@ class cache:
             existed = name in cls._entries
             cls._entries.pop(name, None)
             cls._descriptions.pop(name, None)
+            cls._exists.pop(name, None)
             return existed
 
     @classmethod
@@ -364,6 +366,7 @@ class cache:
         with cls._lock:
             cls._entries.clear()
             cls._descriptions.clear()
+            cls._exists.clear()
 
     @classmethod
     def names(cls) -> List[str]:

@@ -1,7 +1,7 @@
 """
 Figures for the EMD comparison report.
 
-* ``figs/timing_wall.png``       - wall time vs signal length (log-log), one
+* ``figs/timing_wall.png``       - wall now vs signal length (log-log), one
   panel per case, three lines (implementations);
 * ``figs/timing_ratio.png``      - PySDKit / MD-EMD wall ratio vs length;
 * ``figs/memory_delta.png``      - decomposition RSS delta for the ok
@@ -67,8 +67,8 @@ def timing_figs() -> None:
                 plt.loglog(xs, ys, _STYLE[impl], color=_COLORS[impl],
                            marker="o", ms=5, label=impl)
         plt.xlabel("signal length n (samples)")
-        plt.ylabel("median wall time (s)")
-        plt.title(f"case {case} - EMD wall time")
+        plt.ylabel("median wall now (s)")
+        plt.title(f"case {case} - EMD wall now")
         plt.legend()
         plt.grid(True, which="both", alpha=0.3)
         plt.tight_layout()
@@ -91,8 +91,8 @@ def timing_figs() -> None:
                      label=f"{impl} / MD-EMD")
     plt.axhline(1.0, color="gray", lw=0.8)
     plt.xlabel("signal length n (samples)")
-    plt.ylabel("wall-time ratio (other / MD-EMD)")
-    plt.title("case A - relative wall time")
+    plt.ylabel("wall-now ratio (other / MD-EMD)")
+    plt.title("case A - relative wall now")
     plt.legend()
     plt.grid(True, which="both", alpha=0.3)
     plt.tight_layout()

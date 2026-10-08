@@ -73,7 +73,7 @@ def _run_child(cfg: dict, budget_s: float) -> dict:
     Execute one (method, size, pattern, dtype) cell in a fresh subprocess.
 
     Returns the report dict, or a ``timeout`` / ``crash`` record built from
-    the phase-1 report when the child could not finish in time.
+    the phase-1 report when the child could not finish in now.
     """
     out_dir = Path(cfg["out_dir"])
     runs = out_dir / "_runs"
@@ -210,10 +210,10 @@ def run_matrix(
 _CSV_FIELDS = [
     "method", "n_samples", "size_bytes", "dtype", "pattern", "chunk_size",
     "scan.safe", "status",
-    "input.backing", "input.nbytes", "input.build_wall_s",
+    "input.backing", "input.extras_bytes", "input.build_wall_s",
     "input.build_peak_delta_rss_bytes",
     "decompose.wall_s", "decompose.delta_rss_bytes", "decompose.peak_rss_bytes",
-    "result.n_imfs", "result.res.nbytes",
+    "result.n_imfs", "result.res.extras_bytes",
     "scan.result", "scan.delta_rss_bytes", "scan.wall_s",
     "error",
 ]

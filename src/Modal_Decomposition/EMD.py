@@ -61,6 +61,7 @@ References
 import numpy as np
 from dataclasses import dataclass
 from typing import ClassVar, Literal
+from enum import Enum
 
 from .Base import Config, Decomposer, DecompositionResult
 from ._Registry import register_class
@@ -74,9 +75,14 @@ from .Utils import (
 
 __all__ = ["EMD", "EMDConfig"]
 
-#: 包络后端 (与形参 spline_kind 的 Literal 一致; "linear" = np.interp 特例)。
-_EMD_KINDS = ("CubicSpline", "PCHIP", "linear")
-_PEAKS_MODS = ("scipy", "numpy", "numba")
+
+SPLINE_MODS_ARGS = Literal["CubicSpline", "PCHIP", "linear"]
+class SPLINE_MODS(Enum):
+    CubicSpline = "CubicSpline"
+    PCHIP = "PCHIP"
+    Linear = "linear"
+
+
 
 
 @dataclass(frozen=True, kw_only=True)

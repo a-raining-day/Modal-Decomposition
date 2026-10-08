@@ -44,7 +44,7 @@ Description: (if None write None)
     {description}
     
 Modify:  (must)
-    {time} - Create
+    {now} - Create
     """,
 
     "sub-lib":
@@ -62,7 +62,7 @@ Description: (if None write None)
     {description}
     
 Modify:  (must)
-    {time} - Create
+    {now} - Create
     """,
 
     "function":
@@ -139,7 +139,7 @@ def generate_template(template: Dict[str, str], verbose: bool = True, clip: bool
                 "package_version": f"{package_version}",
                 "Role": f"{Role}",
                 "Object": f"{Object}",
-                "time": f"{time}",
+                "now": f"{time}",
                 "description": f"{description}"
             }
 
@@ -181,7 +181,7 @@ def generate_template(template: Dict[str, str], verbose: bool = True, clip: bool
                 "package_version": f"{package_version}",
                 # "Role": Role,
                 "Object": f"{Object}",
-                "time": f"{time}",
+                "now": f"{time}",
                 "description": f"{description}"
             }
 

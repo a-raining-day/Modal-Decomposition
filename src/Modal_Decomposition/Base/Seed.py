@@ -1,8 +1,7 @@
 """
-Two-level random seed management.
+Global Seed
 
-Global seed state plus resolution of effective per-method seeds. Global
-seed overrides a non-None local seed and emits a UserWarning.
+应当隶属于全局
 """
 
 import threading
@@ -10,7 +9,7 @@ import contextlib
 from warnings import warn
 from typing import Generator
 
-__all__ = ["Seed", "set_seed", "get_seed"]
+__all__ = ["Seed", "Global_Seed"]
 
 
 class Seed:
@@ -24,8 +23,8 @@ class Seed:
     _locked = False
     _instance = None
 
-    def __new__(cls):
-        if cls._instance is None:
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
 
@@ -50,7 +49,7 @@ class Seed:
         return value
 
     @classmethod
-    def set(cls, seed: int, lock: bool=False, verbose: bool=False) -> int:
+    def set(cls, seed: int, lock: bool=False, verbose: bool=True) -> int:
         """
         Set the seed.
         :param seed: int of your seed.
@@ -79,7 +78,7 @@ class Seed:
             return cls.GLOBAL_SEED
 
     @property
-    def value(self):
+    def seed(self):
         return self.get()
 
     @staticmethod
@@ -91,17 +90,12 @@ class Seed:
         :return:
         """
         old_seed = Seed().GLOBAL_SEED
-        old_locked = Seed()._locked
 
-        Seed()._locked = False
-        Seed().set(seed)
+        seed = Seed().validate(seed)
+        Seed().GLOBAL_SEED = seed
         try:
             yield
         finally:
             Seed().GLOBAL_SEED = old_seed
-            Seed()._locked = old_locked
 
-
-def validate_seed(seed) -> int | None: return Seed.validate(seed)
-def set_seed(seed: int, lock: bool=False, verbose: bool=False) -> int: return Seed.set(seed=seed, lock=lock, verbose=verbose)
-def get_seed() -> int: return Seed.get()
+Global_Seed = Seed.get()

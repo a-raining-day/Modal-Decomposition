@@ -19,7 +19,7 @@ Deferred cells (recorded, not executed -- see POSTPONED_3GB.md):
 
 * every size >= 2 GB (the 3 GB cells of the tests/test_memory matrix): the
   earlier matrix already shows pure-Python sifting cannot finish them in any
-  reasonable budget; they only cost disk and machine time;
+  reasonable budget; they only cost disk and machine now;
 * ``random`` noise at size >= 512 MB on this 16 GB machine: a single sifting
   step on >= 512 MB of float64 noise needs multi-GB working arrays; the whole
   machine starts swapping before any comparative information appears.

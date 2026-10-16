@@ -329,8 +329,8 @@ class EMD(Decomposer):
         while self.max_imf == -1 or len(IMFs) < self.max_imf:
             if is_monotonic(Res):
                 break
-            up_idx, _ = self.find_peaks(Res, mod=self.find_peaks_mod)
-            dn_idx, _ = self.find_peaks(-Res, mod=self.find_peaks_mod)
+            up_idx, _ = self.find_peaks(Res, mod="max", backend=self.find_peaks_mod)
+            dn_idx, _ = self.find_peaks(Res, mod="min", backend=self.find_peaks_mod)
             if up_idx.size < 2 or dn_idx.size < 2:
                 break
 
@@ -371,8 +371,8 @@ class EMD(Decomposer):
 
         for it in range(self.max_iter):
             if it > 0:
-                up_idx, _ = self.find_peaks(h, mod=self.find_peaks_mod)
-                dn_idx, _ = self.find_peaks(-h, mod=self.find_peaks_mod)
+                up_idx, _ = self.find_peaks(h, mod="max", backend=self.find_peaks_mod)
+                dn_idx, _ = self.find_peaks(h, mod="min", backend=self.find_peaks_mod)
                 if up_idx.size < 2 or dn_idx.size < 2:
                     break
 
@@ -410,8 +410,8 @@ class EMD(Decomposer):
         实验 E-H), 本开关在库内对齐 MD 原生规则。
         """
         zc = _zero_cross_count(h)
-        m_idx, _ = self.find_peaks(h, mod=self.find_peaks_mod)
-        n_idx, _ = self.find_peaks(-h, mod=self.find_peaks_mod)
+        m_idx, _ = self.find_peaks(h, mod="max", backend=self.find_peaks_mod)
+        n_idx, _ = self.find_peaks(h, mod="min", backend=self.find_peaks_mod)
         return abs(zc - (m_idx.size + n_idx.size)) <= 1
 
     def _envelope(self, positions, values, grid) -> np.ndarray:

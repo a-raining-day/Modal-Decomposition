@@ -45,18 +45,17 @@ import importlib.util
 import numpy as np
 from typing import Literal
 
-from src.Modal_Decomposition.Define.ConstDefine import (
+from ..Define.ConstDefine import (
     SLEPIAN_BACKEND,
     SLEPIAN_CACHE,
     SLEPIAN_CACHE_MAX_BYTES,
     SLEPIAN_CACHE_SIZE,
-    SLEPIAN_NUMPY_MAX_BYTES,
     SLEPIAN_SMALL_N_ORDER,
 )
 from ..Error import RealizationError
 from ._Slepian.C import available as _c_available
 from ._Slepian.C import generate_slepian_c
-from ._Slepian.numpy_slepian import generate_slepian_numpy
+from ._Slepian.numpy_slepian import generate_slepian_numpy, SLEPIAN_NUMPY_MAX_BYTES
 
 __all__ = [
     "slepian",

@@ -8,12 +8,13 @@ Base 为不同级模块, 可使用
 
 import os
 import warnings
-from typing import Optional, Any
+from enum import Enum
+from typing import Optional, Any, Type, Literal
 
 import numpy as np
 
-from ..Define import DEFAULT_NUMPY_TYPE, SIZE
-from ..Base import should_use_memmap, temp_memmap, Chunk, CHUNK_MOD
+from ..Define import DEFAULT_NUMPY_TYPE, SIZE, SAFE_MODS
+from ..Base import CHUNK_MOD, Chunk, should_use_memmap, temp_memmap
 
 
 __all__ = ["Check", "Check_Time_and_Signal"]
@@ -105,17 +106,11 @@ class Check:
     @classmethod
     def is_numeric(cls, S) -> bool:
         """dtype 为 bool / int / uint / float 之一。"""
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         return S.dtype.kind in "biuf"
 
     @classmethod
     def is_real(cls, S) -> bool:
         """dtype 为 int / uint / float 之一 (不含 bool)。"""
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         return S.dtype.kind in "iuf"
 
     @classmethod
@@ -125,9 +120,6 @@ class Check:
         :param S:
         :return:
         """
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         if S.ndim == 0 and S.size != 0:
             return True
         else:
@@ -135,31 +127,19 @@ class Check:
 
     @classmethod
     def is_1d(cls, S: np.ndarray) -> bool:
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         return S.ndim == 1
 
     @classmethod
     def is_2d(cls, S: np.ndarray) -> bool:
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         return S.ndim == 2
 
     @classmethod
     def is_empty(cls, S) -> bool:
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         return S.size == 0
 
     @classmethod
     def is_duplicates(cls, S: np.ndarray, axis: int=0, temp_dir: Optional[str]=None) -> bool:
         """是否存在相邻重复值。分块遍历, 含跨块边界"""
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         if cls.is_0d(S):
             return True
 
@@ -218,9 +198,6 @@ class Check:
     @classmethod
     def is_infinite(cls, S: np.ndarray | np.memmap, chunk_size: int = None) -> bool:
         """`True` means finite, `False` means infinite."""
-        cls.not_numpy_arr(S)
-        cls.not_numpy_memmap(S)
-
         if should_use_memmap(S.nbytes):
             chunk_size = Chunk.chunk_size(S.nbytes) if chunk_size is None else chunk_size
             for chunk in Chunk.chunk(S, chunk_size=chunk_size):
@@ -270,9 +247,28 @@ class Check:
                 f"{prefix}length mismatch between S ({T.shape[0]}) and S ({S.shape[-1]})"
             )
 
+    # 检测输入合规性
+    @staticmethod
+    def validate_safe(safe: str | SAFE_MODS) -> SAFE_MODS:
+        try:
+            return SAFE_MODS(safe)
+        except ValueError:
+            raise ValueError(
+                "the parameter of `safe` can only be ['safe', 'suspicious', 'unknown']"
+            )
+
+    @staticmethod
+    def validate_mod(mod: str | Type[Enum], MOD: Type[Enum]):
+        try:
+            return MOD(mod)
+        except ValueError:
+            raise ValueError(
+                f"the parameter of `mod` can only be {MOD._member_names_}"
+            )
+
     #  规范化 (改数据)
     @classmethod
-    def to_array(cls, S, dtype: type | np.dtype =None) -> np.ndarray:
+    def to_array(cls, S, *, dtype: type | np.dtype = None, safe: str | SAFE_MODS = "unknown", ndim: int = 1, need_squeeze: bool = True) -> np.ndarray:
         """
         规范化任意 array-like 为 ndarray, 可选转 dtype。
 
@@ -303,45 +299,69 @@ class Check:
         ValueError
             非数值 dtype、0-d 输入、或 squeeze 后变 0-d。
         """
-        # 1. array-ify
-        if not isinstance(S, np.ndarray):
-            S = np.asarray(S, copy=False, dtype=DEFAULT_NUMPY_TYPE if dtype is None else dtype)
-
-        # 2. dtype 合法性
-        if not cls.is_numeric(S):
-            raise ValueError(f"unsupported non-numeric dtype {S.dtype}")
-
-        # 3. ndim > 0
-        if S.ndim == 0:
-            if S.size != 0:
-                S = S.reshape(1,)
+        safe = cls.validate_safe(safe)
+        if safe == "safe":
+            if dtype is not None:
+                S = np.asarray(S, dtype=dtype, copy=False)
             else:
-                raise ValueError("Signal must have at least 1 dimension, got 0-d array")
+                pass
+        else:
+            # 1. array-ify
+            if not isinstance(S, np.ndarray):
+                S = np.asarray(S, copy=False, dtype=DEFAULT_NUMPY_TYPE if dtype is None else dtype)
 
-        # 4. dtype 转换 —— 必须在 squeeze 之前
-        #    squeeze 会返回普通 ndarray 视图 (不再是 np.memmap), 之后再 astype 就会绕过 fill_memmap, 把整条数组拉回 RAM
-        if dtype is not None:
-            target = np.dtype(dtype)
-            if S.dtype != target:
-                if isinstance(S, np.memmap):
-                    fp = temp_memmap(target, S.shape)
-                    Chunk.fill_memmap(fp, S)  # 分块写, peak 内存只有一块
-                    S = fp
-                else:
-                    S = S.astype(target, copy=False)
+            # 2. dtype 合法性
+            if not cls.is_numeric(S):
+                raise ValueError(f"unsupported non-numeric dtype {S.dtype}")
 
-        # 5. squeeze
-        if S.ndim == 1:
-            return S
+            # 3. dtype 转换 —— 必须在 squeeze 之前
+            #    squeeze 会返回普通 ndarray 视图 (不再是 np.memmap), 之后再 astype 就会绕过 fill_memmap, 把整条数组拉回 RAM
+            if dtype is not None:
+                S = cls.to_dtype(S, dtype)
 
-        S = S.squeeze()
-        if S.ndim == 0:
-            raise ValueError("Signal must have at least 1 dimension after squeeze")
+            if safe == "suspicious":
+                pass
+
+            else:
+                # 4. 维度检查
+                if not isinstance(ndim, int):
+                    raise TypeError("ndim must be an integer")
+
+                if not (ndim >= 1):
+                    raise ValueError("ndim must be >= 1")
+
+                if S.ndim == 0:
+                    if S.size != 0:
+                        S = S.reshape(1,)
+
+                    else:
+                        raise ValueError("Signal must have at least 1 dimension, got 0-d array")
+
+                # 5. 有限性检查
+                if Check.return_dtype_kind(S) == "float" and not Check.is_infinite(S):
+                    raise ValueError("NaN or Inf found")
+
+                if S.ndim == 1:
+                    if ndim == 1:
+                        return S
+                    else:
+                        raise ValueError(f"the input is 1-dim! not {ndim}")
+
+                if not isinstance(need_squeeze, bool):
+                    raise ValueError("need_squeeze must be bool")
+
+                if need_squeeze:
+                    S = S.squeeze()
+                    if S.ndim == 0:
+                        raise ValueError("Signal must have at least 1 dimension after squeeze")
+
+                if S.ndim != ndim:
+                    raise ValueError(f"the ndim of input -> {S.ndim} != {ndim}")
 
         return S
 
     @staticmethod
-    def to_dtype(S, dtype: np.dtype) -> np.ndarray | np.memmap:
+    def to_dtype(S: np.ndarray | np.memmap, dtype: np.dtype) -> np.ndarray | np.memmap:
         """
         转 dtype。memmap 走 temp_memmap + Chunk.fill_memmap 分块写,
         绝不 .astype —— 那会把整条数组拉回 RAM, 破坏全局内存策略。
@@ -424,10 +444,7 @@ def Check_Time_and_Signal(
     from .Monotonicity import monotonic
 
     S: list | tuple | np.ndarray | np.memmap = _load(S, target_dtype=dtype)  # load
-    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype)  # transform the (list, tuple, set) to np.ndarray or np.memmap
-
-    if ndim is not None and isinstance(ndim, (list, set, tuple)):
-        Check.require_ndim(S, ndim, method)
+    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype, safe="unknown", ndim=ndim)  # transform the (list, tuple, set) to np.ndarray or np.memmap
 
     N = S.shape[-1]
     if Check.is_empty(S):
@@ -438,7 +455,7 @@ def Check_Time_and_Signal(
             T = np.arange(N, dtype=S.dtype)
         # else: keep S as None (see default_T above).
     else:
-        T = Check.to_array(S=T, dtype=S.dtype)
+        T = Check.to_array(S=T, dtype=S.dtype, ndim=1)
         Check.require_1d(T, method=method)
         Check.require_length_match(T, S, method=method)
 

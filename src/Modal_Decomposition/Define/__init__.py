@@ -1,5 +1,16 @@
-from .ClassDefine import *
-from .ConfigDefine import *
+from .ClassDefine import (
+    DecompositionResult,
+    Decomposer
+)
+from .ConfigDefine import Config
+from .PathDefine import (
+    ROOT_DIR,
+    BASE_DIR,
+    UTILS_DIR,
+    ERROR_DIR,
+    DEFINE_DIR,
+    OPERATOR_DIR,
+)
+from .TextDefine import Name, Reference
+
 from .ConstDefine import *
-from .PathDefine import *
-from .TextDefine import *

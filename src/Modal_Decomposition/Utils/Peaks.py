@@ -7,10 +7,14 @@ Peak detection (统一峰检测)。
   任意符号都恒为 False, 且返回的是长度 n-1 的掩码而非峰索引。现改为与
   :func:`scipy.signal.find_peaks` 同语义的向量化检测, 返回 ``int64`` 索引;
 - **统一返回契约**: 所有后端都返回 ``(indices: np.ndarray(int64),
-  properties: dict)``, 与 scipy 一致;
-- **统一过滤参数**: numpy / numba 后端支持 ``height`` / ``threshold`` /
-  ``distance`` (scipy 语义), 其它参数显式 ``NotImplementedError`` (不静默
-  忽略); scipy 后端全参数透传;
+  values: np.ndarray)``; ``values`` 恒为**原信号**幅值 (``mod="min"`` 也不取负);
+- **峰型与后端解耦**: ``mod`` 选峰型 (``"max"`` / ``"min"`` / ``"both"``),
+  ``backend`` 选实现 (``"numpy"`` / ``"scipy"`` / ``"numba"``); 极小内核是极大内核的
+  镜像, 不物化 ``-S``。``"both"`` 一次给出两组并按样本序归并 (O(P), 不用
+  ``argsort``), 因此**多返回一个类型掩码** ``is_max``;
+- **统一过滤参数**: numpy / numba 后端识别 ``height`` / ``threshold`` /
+  ``distance`` (scipy 语义, 按峰型方向解释), 其余键忽略 (``Envelope`` 等调用方
+  会把自家参数一并透传); scipy 后端全参数透传;
 - **依赖获取**: scipy / numba 经 ``cache.import_module`` 惰性获取 (一次
   import, 无 try/except 样板), 移除了旧式模块级 ``Cache`` 用法;
 - **numba 分支修复**: 旧代码引用未定义变量 ``module``。现改为把向量化
@@ -19,8 +23,9 @@ Peak detection (统一峰检测)。
 - **输入校验**: 1-D、长度 >= 3、实数数值 dtype。
 
 注意: scipy 的 plateau (平台) 规则复杂 (取平台中点等), numpy / numba
-后端采用基础规则 ``S[i-1] < S[i] >= S[i+1]``, 平台场景请使用 ``"scipy"``
-后端。NaN 在比较中为 False, 不会成为峰 (与 scipy 行为一致)。
+后端采用基础规则 ``S[i-1] < S[i] >= S[i+1]`` (``mod="min"`` 为其镜像
+``S[i-1] > S[i] <= S[i+1]``), 平台场景请使用 ``"scipy"`` 后端。NaN 在比较中为
+False, 不会成为峰 (与 scipy 行为一致)。
 """
 
 import bisect
@@ -28,21 +33,27 @@ import functools
 import numpy as np
 from enum import Enum
 from warnings import warn
-from typing import Literal, Tuple, Dict
+from typing import Literal, Tuple, Optional
 
 
-from ..Base import cache, SAFE_MODS
+from ..Base import cache
+from .Check import Check
+from ..Define import SAFE_MODS
 
-__all__ = ["find_peaks"]
+__all__ = ["find_peaks", "PEAKS_MODS", "PEAKS_MODS_ARGS", "PEAKS_BACKEND", "PEAKS_BACKEND_ARGS", "PEAKS_SUPPORTED_FILTERS", "PEAKS_SUPPORTED_FILTERS_ARGS"]
 
 
-PEAKS_MODS_ARGS = Literal["scipy", "numpy", "numba"]
+PEAKS_MODS_ARGS = Literal["max", "min", "both"]
 class PEAKS_MODS(Enum):
+    Max = "max"
+    Min = "min"
+    Both = "both"
+
+PEAKS_BACKEND_ARGS = Literal["scipy", "numpy", "numba"]
+class PEAKS_BACKEND(Enum):
     Scipy = "scipy"
     Numpy = "numpy"
     Numba = "numba"
-DEFAULT_MOD = "numpy"
-
 
 PEAKS_SUPPORTED_FILTERS_ARGS = Literal["height", "threshold", "distance"]
 class PEAKS_SUPPORTED_FILTERS(Enum):
@@ -53,124 +64,206 @@ class PEAKS_SUPPORTED_FILTERS(Enum):
 
 def find_peaks(
     S: np.ndarray,
-    mod: PEAKS_MODS_ARGS | PEAKS_MODS = "numpy",
+    mod: PEAKS_MODS_ARGS | PEAKS_MODS = "max",
+    backend: PEAKS_BACKEND_ARGS | PEAKS_BACKEND = "numpy",
     safe: Literal["safe", "unknown"] | SAFE_MODS = "unknown",
     **kwargs,
-) -> tuple[np.ndarray, dict]:
+) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Find peaks in a 1-D signal.
 
     Parameters
     ----------
     S : array-like
-        1-D real numeric signal (length >= 3; shorter inputs yield no peaks).
-    mod : "scipy", "numpy", "numba"
-        "scipy" (default) — :func:`scipy.signal.find_peaks` (全参数支持,含 plateau 规则);
-        "numpy" — 纯 numpy 向量化实现;
-        "numba" — numpy 内核经 njit 编译的可选加速 (需安装 numba)。
+        1-D real numeric signal (length >= 3; shorter inputs yield every index).
+    mod : {"max", "min", "both"}
+        峰型: ``"max"`` (默认) 取极大 ``S[i-1] < S[i] >= S[i+1]``;
+        ``"min"`` 取极小 ``S[i-1] > S[i] <= S[i+1]`` (极大内核的镜像);
+        ``"both"`` 两种都要 —— 各自检测 / 各自过滤后按样本序归并,
+        **多返回一个类型掩码** (见 Returns)。
+    backend : {"numpy", "scipy", "numba"}
+        ``"numpy"`` (``DEFAULT_BACKEND``) — 纯 numpy 向量化实现;
+        ``"scipy"`` — :func:`scipy.signal.find_peaks` (全参数支持, 含 plateau 规则;
+        取极小时内部对 ``-S`` 找峰);
+        ``"numba"`` — numpy 内核经 njit 编译的可选加速 (需安装 numba)。
     safe : Literal["safe", "unknown"] | SAFE_MODS
         安全等级。unknown需要严格检查，safe不需要。
     **kwargs
-        过滤参数 (scipy 语义): `height` / `threshold` / `distance`.
+        过滤参数 (scipy 语义): `height` / `threshold` / `distance`, 按峰型方向
+        解释 (``mod="min"`` 等价于在 ``-S`` 上施加同样的过滤)。
+        ``mod="both"`` 时**按类型分别施加** (极大只与极大比距离, 极小只与极小比),
+        然后归并 —— 混合序列上的全局贪心顺序没有定义, 不采用。
         scipy 后端全部透传 (另支持 `prominence`, `width`, `wlen`, `rel_height`, `plateau_size`);
-        numpy / numba 后端仅支持上述三个, 其余抛 NotImplementedError
+        numpy / numba 后端只识别上述三个, 其余键忽略。
 
     Returns
     -------
-    (indices, properties)
+    (indices, values)            # mod="max" / "min"
         indices: np.ndarray (int64)
             Peak positions
-        properties: dict
-            {"peak_heights": S[indices]}
+        values: np.ndarray
+            S[indices] —— 原信号幅值, ``mod="min"`` 时也不取负
+    (indices, values, is_max)    # mod="both"
+        indices: np.ndarray (int64)
+            极大 + 极小, 已按样本序**归并**且严格升序
+        values: np.ndarray
+            S[indices] —— 原信号幅值
+        is_max: np.ndarray (bool)
+            与 indices 等长; ``True`` = 该位置是极大, ``False`` = 极小
 
     Raises
     ------
     ValueError
-        非 1-D / 非实数数值输入, 或未知 mod。
+        非 1-D / 非实数数值输入, 或未知 mod / backend。
     Warning
         scipy / numba 后端在对应库缺失时。
-    NotImplementedError
-        numpy / numba 后端收到不支持的过滤参数。
+
+    Notes
+    -----
+    ``S.size < 3`` 的捷径对 ``"both"`` 返回**空集 + 空掩码** (样本太短时无法区分
+    方向, 不能声称每个样本既是极大又是极小); 单峰型仍沿用旧行为 (每个下标都是峰)。
     """
-    safe = SAFE_MODS(safe)
-    mod = PEAKS_MODS(mod)
+    safe = Check.validate_safe(safe)
+    if safe == SAFE_MODS.Suspicious:
+        raise ValueError("the `suspicious` mod is not supported in this function")
 
-    match safe:
-        case SAFE_MODS.Safe:
-            pass
+    mod = Check.validate_mod(mod, PEAKS_MODS)
+    backend = Check.validate_mod(backend, PEAKS_BACKEND)
 
-        case SAFE_MODS.Unknown:
-            S: np.ndarray = S if isinstance(S, np.ndarray) else np.asarray(S)
-
-            if S.ndim != 1:
-                raise ValueError(f"Peaks requires a 1-D signal, got {S.ndim}-D")
-            if S.dtype.kind not in "iuf":
-                raise ValueError(
-                    f"Peaks requires a real numeric dtype, got {S.dtype}"
-                )
-
-        case _:
-            if safe == "suspicious" or safe == SAFE_MODS.Suspicious:
-                raise ValueError("this function not supported the safe level of suspicious")
-            else:
-                raise ValueError(f"Unknown mod: {safe!r}; expected {SAFE_MODS}")
+    S = Check.to_array(S, safe=safe)
 
     if 1 <= S.size < 3:
-        return indices := np.array(np.arange(S.size), dtype=np.int64), {"peak_heights": S[indices]}
+        # 太短: 无法区分极值方向。单峰型沿用旧行为 (每个下标都是"峰");
+        # both 不能声称每个样本既是极大又是极小 -> 空集 + 空掩码。
+        indices = np.array(np.arange(S.size), dtype=np.int64)
+        if mod is PEAKS_MODS.Both:
+            empty = np.empty(0, dtype=np.int64)
+            return empty, S[empty], np.empty(0, dtype=bool)
+        return indices, S[indices]
 
-    result: None | Tuple[np.ndarray, Dict[str, np.ndarray]]= None
-    match mod:
-        case PEAKS_MODS.Numpy:
-            return _peaks_numpy(S, kwargs)
-        case PEAKS_MODS.Scipy:
-            result = _peaks_scipy(S, kwargs)
-        case PEAKS_MODS.Numba:
-            result = _peaks_numba(S, kwargs)
+    result: None | Tuple[np.ndarray, np.ndarray]= None
+    match backend:
+        case PEAKS_BACKEND.Numpy:
+            return _peaks_numpy(S, mod, kwargs)
+        case PEAKS_BACKEND.Scipy:
+            result = _peaks_scipy(S, mod, kwargs)
+        case PEAKS_BACKEND.Numba:
+            result = _peaks_numba(S, mod, kwargs)
         case _:
-            raise ValueError(f"Unknown mod: {mod!r}; expected 'scipy', 'numpy' or 'numba'")
+            raise ValueError(f"Unknown backend: {backend!r}; expected 'scipy', 'numpy' or 'numba'")
 
     if result is None:
-        return _peaks_numpy(S, kwargs)
+        return _peaks_numpy(S, mod, kwargs)
     else:
         return result
 
-
-def _peaks_scipy(S: np.ndarray, kwargs: dict):
+# 分支
+def _peaks_scipy(S: np.ndarray, mod: PEAKS_MODS, kwargs: dict):
     ss = cache.import_module("scipy.signal",verbose=False)
     if ss is None:
         warn("`scipy.signal` not find; use `numpy` instead")
         return None
-    return ss.find_peaks(S, **kwargs)
+
+    # scipy 只会找极大: 找极小就对 -S 找峰, 但返回的取值必须是原信号的幅值
+    if mod is PEAKS_MODS.Max:
+        idx = ss.find_peaks(S, **kwargs)[0].astype(np.int64, copy=False)
+        return idx, S[idx]
+
+    if mod is PEAKS_MODS.Min:
+        idx = ss.find_peaks(-S, **kwargs)[0].astype(np.int64, copy=False)
+        return idx, S[idx]
+
+    # both: 两次检测 (scipy 没有极小模式, -S 省不掉); 过滤器由 scipy 各自按方向施加
+    neg = -S
+    max_idx = ss.find_peaks(S, **kwargs)[0].astype(np.int64, copy=False)
+    min_idx = ss.find_peaks(neg, **kwargs)[0].astype(np.int64, copy=False)
+    return _merge_both(max_idx, min_idx, S)
+
+def _peaks_numpy(S: np.ndarray, mod: PEAKS_MODS, kwargs: dict):
+    # 极小内核是极大内核的镜像 (等价于对 -S 找峰, 但不物化 -S)
+    c = S[1:-1]
+
+    if mod is PEAKS_MODS.Max:
+        idx = np.flatnonzero((c > S[:-2]) & (c >= S[2:])) + 1
+        idx = _apply_filters(idx, S, mod, kwargs)
+        return idx, S[idx]
+
+    if mod is PEAKS_MODS.Min:
+        idx = np.flatnonzero((c < S[:-2]) & (c <= S[2:])) + 1
+        idx = _apply_filters(idx, S, mod, kwargs)
+        return idx, S[idx]
+
+    # both: 两组各自检测 + 各自按方向过滤, 再按样本序归并 (O(P), 不用 argsort)
+    max_idx = _apply_filters(np.flatnonzero((c > S[:-2]) & (c >= S[2:])) + 1, S, PEAKS_MODS.Max, kwargs)
+    min_idx = _apply_filters(np.flatnonzero((c < S[:-2]) & (c <= S[2:])) + 1, S, PEAKS_MODS.Min, kwargs)
+    return _merge_both(max_idx, min_idx, S)
 
 
-def _peaks_numpy(S: np.ndarray, kwargs: dict):
-    idx = np.flatnonzero((S[1:-1] > S[:-2]) & (S[1:-1] >= S[2:])) + 1
-    idx = _apply_filters(idx, S, kwargs)
-    return idx, {"peak_heights": S[idx]}
-
-
-def _peaks_numba(S: np.ndarray, kwargs: dict):
+def _peaks_numba(S: np.ndarray, mod: PEAKS_MODS, kwargs: dict):
     numba = cache.import_module("numba", verbose=False)
     if numba is None:
         warn("`numba` not find; use `numpy` instead")
         return None
 
     compiled = _get_compiled(numba)
-    idx = compiled(S)
-    idx = _apply_filters(idx, S, kwargs)
-    return idx, {"peak_heights": S[idx]}
 
-def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
+    if mod is PEAKS_MODS.Max:
+        idx = _apply_filters(compiled(S, 1), S, mod, kwargs)
+        return idx, S[idx]
+
+    if mod is PEAKS_MODS.Min:
+        idx = _apply_filters(compiled(S, -1), S, mod, kwargs)
+        return idx, S[idx]
+
+    max_idx = _apply_filters(compiled(S, 1), S, PEAKS_MODS.Max, kwargs)
+    min_idx = _apply_filters(compiled(S, -1), S, PEAKS_MODS.Min, kwargs)
+    return _merge_both(max_idx, min_idx, S)
+
+
+def _merge_both(max_idx: np.ndarray, min_idx: np.ndarray, S: np.ndarray):
+    """
+    归并两组极值索引 → ``(idx, values, is_max)`` (``mod="both"`` 的返回)。
+
+    两组各自已升序, 且极大 / 极小的判定条件互斥 (同一样本不可能同属两组),
+    因此用 ``np.searchsorted`` 直接算出落位: O(P), 不需要 ``argsort``。
+    """
+    idx = np.empty(max_idx.size + min_idx.size, dtype=np.int64)
+    is_max = np.empty(idx.size, dtype=bool)
+
+    max_pos = np.arange(max_idx.size) + np.searchsorted(min_idx, max_idx, side="left")
+    min_pos = np.arange(min_idx.size) + np.searchsorted(max_idx, min_idx, side="left")
+
+    idx[max_pos] = max_idx
+    is_max[max_pos] = True
+    idx[min_pos] = min_idx
+    is_max[min_pos] = False
+
+    return idx, S[idx], is_max
+
+# 函数
+def _apply_filters(idx: np.ndarray, S: np.ndarray, mod: PEAKS_MODS, kwargs: dict) -> np.ndarray:
     """
     对候选峰应用 height / threshold / distance 过滤 (numpy/numba 共用)。
+
+    过滤按"峰的那一侧"解释: 极小取 ``sign = -1``, 等价于在 ``-S`` 上做同样的
+    过滤, 但不物化 ``-S``。未识别的键忽略。
+
+    ``both`` 不接受: 它由调用方拆成 ``Max`` / ``Min`` 两组分别进来, 否则这里会
+    静默按极小处理。
     """
+    if mod is PEAKS_MODS.Both:
+        raise ValueError("the filters are per peak type; both must be split into Max / Min")
+
+    sign = 1 if mod is PEAKS_MODS.Max else -1
+
     height = kwargs.get("height")
     if height is not None:
         # scipy 语义: 标量仅为下界; (min, max) 为区间。
         h_min, h_max = (
             height if isinstance(height, (tuple, list)) else (height, np.inf)
         )
-        keep = (S[idx] >= h_min) & (S[idx] <= h_max)
+        peak = sign * S[idx]
+        keep = (peak >= h_min) & (peak <= h_max)
         idx = idx[keep]
 
     threshold = kwargs.get("threshold")
@@ -178,7 +271,7 @@ def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
         t_min, t_max = (
             threshold if isinstance(threshold, (tuple, list)) else (threshold, threshold)
         )
-        keep = (S[idx] - S[idx - 1] >= t_min) & (S[idx] - S[idx + 1] >= t_max)
+        keep = (sign * (S[idx] - S[idx - 1]) >= t_min) & (sign * (S[idx] - S[idx + 1]) >= t_max)
         idx = idx[keep]
 
     distance = kwargs.get("distance")
@@ -187,7 +280,7 @@ def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
             raise ValueError(f"distance must be >= 1, got {distance!r}")
         # 贪心: 按峰高降序保留 (scipy 语义: 距更高峰不足 distance 者被移除)。
         # 有序列表 + bisect 判邻, O(P log P)。
-        order = np.argsort(S[idx])[::-1]
+        order = np.argsort(sign * S[idx])[::-1]
         selected: list = []
         for pos in order:
             p = int(idx[pos])
@@ -201,13 +294,14 @@ def _apply_filters(idx: np.ndarray, S: np.ndarray, kwargs: dict) -> np.ndarray:
 
     return idx
 
-def _detect_kernel(S: np.ndarray) -> np.ndarray:
-    """基础检测内核 (numba 可编译): S[i-1] < S[i] >= S[i+1]。"""
+def _detect_kernel(S: np.ndarray, sign: int) -> np.ndarray:
+    """基础检测内核 (numba 可编译): sign=1 取极大 ``S[i-1] < S[i] >= S[i+1]``,
+    sign=-1 取极小 ``S[i-1] > S[i] <= S[i+1]``。"""
     n = S.shape[0]
     out = np.empty(n, dtype=np.int64)
     count = 0
     for i in range(1, n - 1):
-        if S[i - 1] < S[i] and S[i] >= S[i + 1]:
+        if sign * S[i - 1] < sign * S[i] and sign * S[i] >= sign * S[i + 1]:
             out[count] = i
             count += 1
     return out[:count]
@@ -219,5 +313,7 @@ def _get_compiled(numba):
 
 if __name__ == "__main__":
     S = np.array([0, 1, 0, 2, 0, 3, 0], dtype=np.float64)
-    idx, props = find_peaks(S, mod="numpy", height=1.5)
-    print(idx, props)
+    idx, vals = find_peaks(S, mod="max", backend="numpy", height=1.5)
+    print(idx, vals)
+    idx, vals = find_peaks(S, mod="min", backend="numpy")
+    print(idx, vals)

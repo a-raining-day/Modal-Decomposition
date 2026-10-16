@@ -32,7 +32,7 @@ import threading
 import types
 from typing import Any, Dict, List, Optional, Tuple
 
-__all__ = ["Cache"]
+__all__ = ["Cache", "cache"]
 
 
 class cache:

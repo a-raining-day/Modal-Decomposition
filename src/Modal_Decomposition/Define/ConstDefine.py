@@ -15,7 +15,8 @@ from typing import Literal, Dict
 """
 defination: seed
 """
-# GLOBAL_SEED = None  # GLOBAL_SEED 现在位于 Utils/Seed.py 的 Seed 中
+# GLOBAL_SEED 现在位于 Utils/Seed.py 的 Seed 中
+
 
 """
 definition: size of arr
@@ -121,7 +122,6 @@ SLEPIAN_BACKEND = "scipy"
 
 #: numpy 后端的稠密矩阵内存预算 (字节)。折半后需对 (N/2)×(N/2) 稠密矩阵做 eigh,
 #: 故 N 稍大就会 GB 级分配 (N=65536 → 8.6 GB); 超过该预算时 numpy 后端直接报错并提示改用 "C"/"scipy" (两者的内存都是 O(N))。对应样本上限 N_max = 2*sqrt(B/8)。
-SLEPIAN_NUMPY_MAX_BYTES = 256 * SIZE["1MB"]     # 256 MB -> N_max = 8192
 
 #: scipy 后端的固有规模限制 ``scipy.signal.windows.dpss`` 要求 ``NW < M/2``
 #: (即 ``2*halfBW < N``); 不满足时该后端必然抛 ValueError, 此时按下面的顺序改用其他后端 (默认参数 NW=3.0 时即 N <= 6)。
@@ -145,20 +145,3 @@ SLEPIAN_CACHE_MAX_BYTES = 256 * SIZE["1MB"]
 definition: default type of numpy type
 """
 DEFAULT_NUMPY_TYPE = np.float64
-
-
-"""
-definition: for hilbert
-"""
-HILBERT_BACKEND = \
-[
-    "Scipy",
-    "Fourth-order Wave",
-    "FHT",
-    "SB-Hilbert",
-    "Kramers-Kronig",
-    "FIR",
-    "HST",
-    "FFT",
-    "Optional-order FIR",
-]

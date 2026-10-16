@@ -22,17 +22,25 @@ Layering (与 Utils 其余工具一致): 本模块自身不接触缓存; ``Utils
 """
 
 import numpy as np
-from typing import Literal
+from enum import Enum
+from typing import Literal, Callable
 
-from ..Base import Cache, CACHE_KEY
+from ..Base import Cache
+from .Check import Check
 from .Peaks import find_peaks
-from .Spline import Spline
 from .Hilbert import hilbert
 
-__all__ = ["envelope"]
+__all__ = ["envelope", "ENVELOPE_MODS", "ENVELOPE_MODS_ARGS"]
+
+ENVELOPE_MODS_ARGS = Literal["Hilbert", "Lowpass", "IQ", "PeakInterpolation"]
+class ENVELOPE_MODS(Enum):
+    Hilbert = "Hilbert"
+    Lowpass = "Lowpass"
+    IQ = "IQ"
+    Peak = "PeakInterpolation"
 
 
-def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInterpolation"] = "Hilbert", fs: float = None, fc: float = None, cf: float = None, **kwargs) -> np.ndarray:
+def envelope(S: np.ndarray, method: ENVELOPE_MODS_ARGS | ENVELOPE_MODS = "Hilbert", fs: float = None, fc: float = None, cf: float = None, spline: Callable = None, **kwargs) -> np.ndarray:
     """
     Compute the amplitude envelope of a 1-D signal.
 
@@ -41,6 +49,7 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
     :param fs: sampling rate (required by Lowpass / IQ / PeakInterpolation)
     :param fc: carrier frequency (required by IQ / PeakInterpolation)
     :param cf: cut-off frequency (required by Lowpass / IQ)
+    :param spline: spline function (required by PeakInterpolation)
     :return: envelope array with the same shape as S
 
     Default-mode report (tests/comparison/verify_envelope_modes.py,
@@ -81,25 +90,23 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
         if (fc is None) and (fs is None) and (cf is None):
             raise ValueError("Either fc, fs or cf must be specified!")
 
-    if method == "PeakInterpolation" and (fs is None or fc is None):
-        raise ValueError("fs and fc must be specified for PeakInterpolation!")
-
-    if method not in ("Hilbert", "Lowpass", "IQ", "PeakInterpolation"):
+    try:
+        method = ENVELOPE_MODS(method)
+    except ValueError:
         raise ValueError(f"Unknown envelope method: {method}")
 
-    if not isinstance(S, np.ndarray):
-        raise TypeError("The kind of input should be np.ndarray!")
+    Check.not_numpy_arr(S)
+    Check.not_numpy_memmap(S)
 
     env: np.ndarray = None
 
-    _SCIPY_SIGNAL = Cache.import_module(CACHE_KEY["scipy"]["signal"])
+    _SCIPY_SIGNAL = Cache.import_module("scipy.signal")
+    _SCIPY_INTERAPT = Cache.import_module("scipy.interpolate")
 
     peak_mod = kwargs.get("peak_mod", "numpy")
-    spline_mod = kwargs.get("spline_mod", "UnivariateSpline")
-    hilbert_mod = kwargs.get("hilbert_mod", "Scipy")
+    hilbert_mod = kwargs.get("hilbert_mod", "scipy")
 
-    peak = lambda x, **kwargs: find_peaks(x, mod=peak_mod, **kwargs)
-    spline = lambda x, y, **kwargs: Spline(x, y, spline_kind=spline_mod, **kwargs)
+    peak = lambda x, **kwargs: find_peaks(x, mod="max", backend=peak_mod, **kwargs)
 
     def _lowpass(data, cutoff, order=4):
         nyq = 0.5 * fs
@@ -108,7 +115,7 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
 
     match method:
         case "Hilbert":
-            analytic = hilbert(S, mod=hilbert_mod)
+            analytic = hilbert(S, mod=hilbert_mod, **kwargs)
             env = np.abs(analytic)
 
         case "Lowpass":
@@ -128,9 +135,10 @@ def envelope(S: np.ndarray, method: Literal["Hilbert", "Lowpass", "IQ", "PeakInt
         case "PeakInterpolation":
             result = peak(S, **kwargs)
             x = result[0]
-            y = result[1]["peak_heights"]
+            y = result[1]
 
-            f = spline(x, y, **kwargs)
+            f = _SCIPY_INTERAPT.CubicSpline if spline is None else spline
+            f = f(x, y, **kwargs)
             env = f(np.arange(len(S)))
 
         case _:

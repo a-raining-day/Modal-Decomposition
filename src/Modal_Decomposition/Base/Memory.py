@@ -153,8 +153,7 @@ def drop_memmap(mm: np.memmap, try_times: int = 5, force: bool = False) -> bool:
     warn(f"the {path} cannot be removed!")
     return False
 
-atexit.register(cleanup_memmaps)
-
+atexit.register(lambda: cleanup_memmaps(force=True))
 
 """
 Memory
@@ -192,33 +191,8 @@ class MemoryPolicy:
         return cls.memory_reserve_ratio
 
     @classmethod
-    def set_memmap_ratio(cls, ratio: float) -> float:
-        """
-        Switch to the ratio strategy: memmap when the projected usage reaches
-        ``ratio`` of the remaining available memory.
-
-        Parameters
-        ----------
-        ratio : float
-            Threshold fraction in ``(0, 1]``.
-
-        Raises
-        ------
-        ValueError
-            On a ratio outside ``(0, 1]``.
-        """
-
-        if not isinstance(ratio, (int, float)) or not (0.0 < ratio <= 1.0):
-            raise ValueError(f"ratio must be in (0, 1], got {ratio!r}")
-
-        cls.memmap_ratio_limit = float(ratio)
-        return cls.memmap_ratio_limit
-
-    @classmethod
-    @property
     def policy(cls) -> dict:
         return {
-            "memmap_ratio_limit": cls.memmap_ratio_limit,
             "memory_reserve_ratio": cls.memory_reserve_ratio,
             "commit_ratio_limit": cls.commit_ratio_limit,
             "snapshot_ttl": Snapshot.ttl,

@@ -147,6 +147,7 @@ class Chunk:
         if S.ndim == 0:
             if S.size != 0:
                 yield S
+                return
             else:
                 raise ValueError("chunking requires at least 1 dimension, got 0-d array")
 
@@ -164,10 +165,10 @@ class Chunk:
 
         match mod:
             case CHUNK_MOD.Memory:
-                return cls._iter_chunks(S, chunk_size, axis=axis)
+                yield from cls._iter_chunks(S, chunk_size, axis=axis)
 
             case CHUNK_MOD.ExoMemory:
-                return cls._exo_chunks(S, chunk_size, temp_dir=temp_dir, dtype=dtype, axis=axis)
+                yield from cls._exo_chunks(S, chunk_size, temp_dir=temp_dir, dtype=dtype, axis=axis)
 
     @staticmethod
     def _iter_chunks(S: np.ndarray, chunk_size: int, axis: int = 0) -> Iterator[np.ndarray]:
@@ -389,17 +390,12 @@ class Chunk:
         """Stream ``source`` into ``fp`` chunk-wise so the peak memory stays at
         one chunk (delegates to ``Utils.Chunk.chunked_fill``; chunk granularity
         comes from ``Chunk.default_chunk_size`` under the global memory policy)."""
-        src_nbytes = getattr(source, "extras_bytes", 0)
+        src_nbytes = getattr(source, "nbytes", 0)
         nbytes = max(fp.nbytes, src_nbytes)
 
         chunk_size = cls.chunk_size(nbytes)
         cls.chunked_fill(fp, source, chunk_size)
 
-    def __repr__(self) -> str:
-        return (
-            f"<Chunk mod={self.mod!r} chunk_size={self.chunk_size} "
-            f"temp_dir={self.temp_dir!r}>"
-        )
 
 
 if __name__ == "__main__":

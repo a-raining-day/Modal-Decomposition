@@ -143,10 +143,7 @@ class Spline:
             if "s" not in kwargs:
                 kwargs["s"] = 0
 
-        interp = Cache.import_module(
-            "scipy.interpolate",
-            description="scipy.interpolate: 供 Utils.Spline 的样条构造使用",
-        )
+        interp = Cache.import_module("scipy.interpolate")
         constructor = {
             "UnivariateSpline": interp.UnivariateSpline,
             "CubicSpline": interp.CubicSpline,

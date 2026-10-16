@@ -55,16 +55,15 @@ import numpy as np
 import importlib.util
 from typing import Optional, Literal
 
-from ..Base import (
-    cache,
+from ..Define import (
     BIG_ARRAY,
-    CACHE_KEY,
     FFT_BACKEND_BIG,
     FFT_BACKEND_SMALL,
     FFT_PIP_PACKAGE,
     FFT_THREAD_MIN_ELEMS,
     FFT_TILED_MIN_ELEMS,
 )
+from ..Base import cache
 
 from .Memory import resolve_workers
 

@@ -31,11 +31,10 @@ Import the public API through ``..Hilbert`` instead of reaching into this
 package.
 """
 
+import numpy as np
+from enum import Enum
 from typing import Literal
 
-import numpy as np
-
-from ...Base import HILBERT_BACKEND
 from . import (
     _fft,             # noqa: F401  (reserved empty placeholder)
     _fht,
@@ -47,20 +46,31 @@ from . import (
 
 __all__ = ["hilbert"]
 
+HILBERT_MODS_ARGS = Literal[
+    "scipy",
+    "Fourth-order Wave",
+    "FHT",
+    "SB-Hilbert",
+    "Kramers-Kronig",
+    "FIR",
+    "HST",
+    "FFT",
+    "Optional-order FIR",
+]
+class HILBERT_MODS(Enum):
+    Scipy = "scipy",
+    FW = "Fourth-order Wave"
+    FHT = "FHT",
+    SBH = "SB-Hilbert",
+    KK = "Kramers-Kronig",
+    FIR = "FIR",
+    HST = "HST",
+    FFT = "FFT",
+    Oo_FIR = "Optional-order FIR",
 
 def hilbert(
     S: np.ndarray,
-    mod: Literal[
-        "Scipy",
-        "Fourth-order Wave",
-        "FHT",
-        "SB-Hilbert",
-        "Kramers-Kronig",
-        "FIR",
-        "HST",
-        "FFT",
-        "Optional-order FIR",
-    ] = "Scipy",
+    mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy",
     **kwargs
 ) -> np.ndarray:
     """
@@ -97,6 +107,4 @@ def hilbert(
             return _fht._hilbert(S, **kwargs)
 
         case _:
-            raise ValueError(
-                f"Unknown Hilbert spline_kind {mod!r}; expected one of {sorted(HILBERT_BACKEND)}"
-            )
+            raise ValueError(f"Unknown Hilbert spline_kind {mod!r}; expected one of {HILBERT_MODS._member_names_}")

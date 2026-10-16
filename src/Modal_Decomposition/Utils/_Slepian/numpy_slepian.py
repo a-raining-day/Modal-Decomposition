@@ -59,9 +59,11 @@ Modify:
 
 import numpy as np
 
-from src.Modal_Decomposition.Define.ConstDefine import SLEPIAN_NUMPY_MAX_BYTES, DEFAULT_NUMPY_TYPE
+from ...Define import SIZE, DEFAULT_NUMPY_TYPE
 
-__all__ = ["generate_slepian_numpy"]
+__all__ = ["generate_slepian_numpy", "SLEPIAN_NUMPY_MAX_BYTES"]
+
+SLEPIAN_NUMPY_MAX_BYTES = 256 * SIZE["1MB"]     # 256 MB -> N_max = 8192
 
 #: ``norm`` 取值: 2 = 单位能量 (scipy 在给出 Kmax 时的默认), None = 同 2,
 #: "approximate" = 峰值 1 并按 ``M^2/(M^2+NW)`` 修正偶长度的功率差 (scipy 同名取法)。

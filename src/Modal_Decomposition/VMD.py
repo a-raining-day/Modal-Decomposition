@@ -914,12 +914,12 @@ class VMD(Decomposer):
 
         # "peak": Utils.Peaks 惰性取用 (每次 decompose 解析一次, 迭代内零开销)。
         find_peaks = get_peaks().find_peaks
-        idx, props = find_peaks(np.abs(f_hat_plus), mod="numpy")
+        idx, heights = find_peaks(np.abs(f_hat_plus), mod="max", backend="numpy")
 
         if idx.size == 0:
             return (0.5 / K) * np.arange(K, dtype=np.float64)
 
-        heights = np.asarray(props.get("peak_heights", np.abs(f_hat_plus)[idx]))
+        heights = np.asarray(heights)
         strongest = np.argsort(heights, kind="stable")[::-1][:K]
         picked = np.sort(idx[strongest]).astype(np.float64) / (2.0 * N)
 

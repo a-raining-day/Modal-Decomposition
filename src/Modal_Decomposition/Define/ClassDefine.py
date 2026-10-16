@@ -8,10 +8,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
-from ..Base import Global_Seed
+from ..Error import PreError
+
 from .ConfigDefine import Config
 from .TextDefine import Name, Reference
-from src.Modal_Decomposition.Error import PreError
 
 __all__ = ["DecompositionResult", "Decomposer"]
 
@@ -38,7 +38,6 @@ class DecompositionResult:
     Res: np.ndarray | None
     info: dict[str, Any] = field(default_factory=dict)
     config: Config = field(default_factory=Config)
-    seed: int = Global_Seed
 
     @property
     def n_imfs(self) -> int:

@@ -120,8 +120,8 @@ def give_monotony(
     direction; the caller decides whether that satisfies their own
     monotonicity definition.
     """
-    safe = _validate_safe(safe)
-    arr = _validate_array(arr, safe)
+    safe = Check.validate_safe(safe)
+    arr = Check.to_array(arr, safe=safe)
     return _give_monotony(arr, chunk_size, chunk_mod)
 
 
@@ -169,55 +169,10 @@ def monotonic(
         On invalid ``safe`` / ``mod`` / ``chunk_size``, wrong dimensionality,
         or (``safe=2`` only) non-finite / non-numeric input.
     """
-    safe = _validate_safe(safe)
-    mod = _validate_mod(mod)
-    arr = _validate_array(arr, safe)
+    safe = Check.validate_safe(safe)
+    mod = Check.validate_mod(mod, MONOTONY_MODS)
+    arr = Check.to_array(arr, safe=safe)
     return _monotonic_bool(arr, strict, mod, chunk_size, chunk_mod)
-
-
-# ---------------------------------------------------------------------------
-# Entry-time validation (called only from the two public functions)
-# ---------------------------------------------------------------------------
-
-def _validate_safe(safe) -> SAFE_MODS:
-    try:
-        return SAFE_MODS(safe)
-    except ValueError:
-        raise ValueError(
-            "the parameter of `safe` can only be ['safe', 'suspicious', 'unknown']"
-        )
-
-
-def _validate_mod(mod) -> str:
-    try:
-        return MONOTONY_MODS(mod).value
-    except ValueError:
-        raise ValueError(
-            "the parameter of `mod` can only be ['increasing', 'decreasing', 'monotonic']"
-        )
-
-
-def _validate_array(arr, safe: SAFE_MODS):
-    if safe is SAFE_MODS.Safe:
-        return arr
-
-    arr = Check.to_array(arr, dtype=DEFAULT_NUMPY_TYPE)
-
-    if Check.is_0d(arr):
-        arr = arr.reshape(1)
-    if not Check.is_1d(arr):
-        raise ValueError("the dim of arr must be 1-dim!")
-
-    if safe is SAFE_MODS.Unknown:
-        if not Check.is_real(arr):
-            raise TypeError(
-                f"the kind of arr's elements must be numeric! "
-                f"not {Check.return_dtype_kind(arr)}"
-            )
-        if Check.return_dtype_kind(arr) == "float" and not Check.is_infinite(arr):
-            raise ValueError("NaN or Inf found")
-
-    return arr
 
 
 # ---------------------------------------------------------------------------

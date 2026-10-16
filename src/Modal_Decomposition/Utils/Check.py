@@ -300,7 +300,7 @@ class Check:
             非数值 dtype、0-d 输入、或 squeeze 后变 0-d。
         """
         safe = cls.validate_safe(safe)
-        if safe == "safe":
+        if safe == SAFE_MODS.Safe:
             if dtype is not None:
                 S = np.asarray(S, dtype=dtype, copy=False)
             else:
@@ -308,7 +308,7 @@ class Check:
         else:
             # 1. array-ify
             if not isinstance(S, np.ndarray):
-                S = np.asarray(S, copy=False, dtype=DEFAULT_NUMPY_TYPE if dtype is None else dtype)
+                S = np.asarray(S, dtype=DEFAULT_NUMPY_TYPE if dtype is None else dtype)
 
             # 2. dtype 合法性
             if not cls.is_numeric(S):
@@ -319,7 +319,7 @@ class Check:
             if dtype is not None:
                 S = cls.to_dtype(S, dtype)
 
-            if safe == "suspicious":
+            if safe == SAFE_MODS.Suspicious:
                 pass
 
             else:

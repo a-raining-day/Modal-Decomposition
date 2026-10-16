@@ -59,7 +59,7 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
            *,
            verbose: bool = False,
            peaks_backend: PEAKS_BACKEND_ARGS | PEAKS_BACKEND = "numpy",
-           **kwargs) -> np.ndarray:
+           **kwargs) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     信号端点外拓: 端点镜像, 或"检出极值 → 外延极值表"。
 
@@ -92,11 +92,14 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
     Returns
     -------
     np.ndarray
-        ``mod="mirror"``: 1-D 镜像信号, 长度 ``N + 2*nbsym``;
-        其余模式: ``(2, L')`` 极值表 (第 0 行时间、第 1 行幅值, 时间升序),
-        ``extrema`` / ``polynomial`` / ``parallel`` 为 ``L + 2*nbsym``,
-        ``BLCSE`` 为 ``L + 4`` (每端固定补一对极值, 与 ``nbsym`` 无关);
-        其中 ``L`` 是检出的极值数 (极大 + 极小); ``nbsym=0`` 时只有中段 ``(2, L)``。
+        ``mod="mirror"``: 1-D 镜像信号, 长度 ``N + 2*nbsym``。
+    (mirror_arr, is_max)
+        其余模式: ``mirror_arr`` 是 ``(2, L')`` 极值表 (第 0 行时间、第 1 行幅值,
+        时间升序), ``is_max`` 是等长 bool 掩码 (``True`` = 该列是极大)。
+        ``extrema`` / ``polynomial`` / ``parallel`` 为 ``L' = L + 2*nbsym``,
+        ``BLCSE`` 为 ``L' = L + 4`` (每端固定补一对极值, 与 ``nbsym`` 无关);
+        其中 ``L`` 是检出的极值数 (极大 + 极小); ``nbsym=0`` 时只有中段。
+        调用方按掩码取两组分别拟合上 / 下包络; 端部外延点只参与拟合。
 
     Raises
     ------
@@ -115,8 +118,9 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
     >>> mirror(np.arange(6.0), nbsym=2).tolist()   # 1-D, 反射不含端点
     [2.0, 1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0]
     >>> S = np.sin(np.linspace(0.0, 4.0 * np.pi, 200))
-    >>> mirror(S, mod="extrema", nbsym=2).shape    # (2, L + 4)
-    (2, 8)
+    >>> extrema_arr, is_max = mirror(S, mod="extrema", nbsym=2)
+    >>> extrema_arr.shape, is_max.shape            # (2, L + 4) 与同长掩码
+    ((2, 8), (8,))
     """
     dtype = kwargs.get("dtype", None)
     safe = kwargs.get("safe", "unknown")
@@ -180,7 +184,8 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             if T.size != arr_length:
                 raise ValueError(f"the T must have the same size as the S ({T.size} != {arr_length})!")
 
-            increasing = monotonic(T, mod="increasing")
+            # 非严格递增 (允许相等) 用 Monotonicity.monotonic 判; 不满足则整表按时间重排
+            increasing = monotonic(T, mod="increasing", safe="safe")
             if verbose:
                 if not Check.is_uniform(T):
                     warn("the T is not uniform!")
@@ -217,12 +222,8 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             mirror_arr[:nbsym] = S[nbsym:0:-1]  # S[E], ..., S[1]
             mirror_arr[nbsym:mirror_length - nbsym] = S
 
-            # mirror_arr[mirror_length - nbsym:] = S[S.size - 2::-1][:nbsym]
-            stop = S.size - 2 - nbsym
-            if stop >= -1:
-                mirror_arr[-nbsym:] = S[S.size - 2:stop:-1]
-            else:
-                mirror_arr[-nbsym:] = S[S.size - 2::-1][-nbsym:]  # 退化情况
+            # 右端: 取 S[N-2], S[N-3], ... 共 nbsym 个 (用 mirror_length - nbsym 定位, 避免 -0 取整行)
+            mirror_arr[mirror_length - nbsym:] = S[S.size - 2::-1][:nbsym]
 
             return mirror_arr
 
@@ -235,20 +236,25 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
 
             mirror_length: int = extrema_length + 2 * nbsym
             mirror_arr: np.ndarray = np.empty(shape=(2, mirror_length), dtype=output_dtype)
+            mirror_type: np.ndarray = np.empty(shape=mirror_length, dtype=bool)
 
-            # 左端: 以首极值为对称中心, 把它之后的 nbsym 个极值镜像出去
+            # 左端: 以首极值为对称中心, 把它之后的 nbsym 个极值镜像出去 (型别随镜像源照抄)
             # mirror_arr[0, :nbsym] = 2 * extrema_T[0] - extrema_T[1: nbsym + 1][::-1]
             # mirror_arr[1, :nbsym] = extrema_arr[1: nbsym + 1][::-1]
             mirror_arr[0, :nbsym] = 2 * extrema_T[0] - extrema_T[nbsym:0:-1]
             mirror_arr[1, :nbsym] = extrema_arr[nbsym:0:-1]
+            mirror_type[:nbsym] = is_max[nbsym:0:-1]
 
             mirror_arr[:, nbsym: mirror_length - nbsym] = (extrema_T, extrema_arr)
+            mirror_type[nbsym: mirror_length - nbsym] = is_max
 
             # 右端: 以末极值为对称中心, 把它之前的 nbsym 个极值镜像出去
             # mirror_arr[0, mirror_length - nbsym:] = 2 * extrema_T[-1] - extrema_T[extrema_length - nbsym - 1: -1][::-1]
             # mirror_arr[1, mirror_length - nbsym:] = extrema_arr[extrema_length - nbsym - 1: -1][::-1]
-            mirror_arr[0, -nbsym:] = 2 * extrema_T[-1] - extrema_T[-2:-nbsym - 2:-1]
-            mirror_arr[1, -nbsym:] = extrema_arr[-2:-nbsym - 2:-1]
+            # (起点写 mirror_length - nbsym: 用 -nbsym 的话 nbsym=0 会取到整行)
+            mirror_arr[0, mirror_length - nbsym:] = 2 * extrema_T[-1] - extrema_T[-2:-nbsym - 2:-1]
+            mirror_arr[1, mirror_length - nbsym:] = extrema_arr[-2:-nbsym - 2:-1]
+            mirror_type[mirror_length - nbsym:] = is_max[-2:-nbsym - 2:-1]
 
         case MIRROR_MODS.Polynomial:
             if isinstance(poly_order, bool) or not isinstance(poly_order, int):
@@ -271,7 +277,9 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
 
             mirror_length: int = extrema_length + 2 * nbsym
             mirror_arr: np.ndarray = np.empty(shape=(2, mirror_length), dtype=output_dtype)
+            mirror_type: np.ndarray = np.empty(shape=mirror_length, dtype=bool)
             mirror_arr[:, nbsym: mirror_length - nbsym] = (extrema_T, extrema_arr)
+            mirror_type[nbsym: mirror_length - nbsym] = is_max
 
             head_T, head_arr = extrema_T[: nbsym + 1], extrema_arr[: nbsym + 1]
             tail_T, tail_arr = extrema_T[extrema_length - nbsym - 1:], extrema_arr[extrema_length - nbsym - 1:]
@@ -282,17 +290,30 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             # left_ordinal: np.ndarray = np.arange(-nbsym, 0)
             # right_ordinal: np.ndarray = np.arange(extrema_length, extrema_length + nbsym)
             left_ordinal = head_ordinal[:nbsym] - nbsym
-            right_ordinal = tail_ordinal + nbsym
+            right_ordinal = np.arange(extrema_length, extrema_length + nbsym)
 
             left_T: np.ndarray = fast_poly(head_ordinal, head_T, time_poly_order, left_ordinal, safe="safe")
             left_arr: np.ndarray = fast_poly(head_T, head_arr, poly_order, left_T, safe="safe")
             right_T: np.ndarray = fast_poly(tail_ordinal, tail_T, time_poly_order, right_ordinal, safe="safe")
             right_arr: np.ndarray = fast_poly(tail_T, tail_arr, poly_order, right_T, safe="safe")
 
+            # 拟合出来的时间在端点外不保证单调 (会回折 -> 时间行不递增, 样条不可用):
+            # 一旦折返或越过边界, 就退回"端点时刻 ± 端点附近平均间隔", 与 parallel 同款兜底。
+            if not (np.all(np.diff(left_T) > 0) and left_T[-1] < head_T[0]):
+                left_T = head_T[0] - np.arange(nbsym, 0, -1, dtype=np.float64) * np.abs(np.diff(head_T)).mean()
+
+            if not (np.all(np.diff(right_T) > 0) and right_T[0] > tail_T[-1]):
+                right_T = tail_T[-1] + np.arange(1, nbsym + 1, dtype=np.float64) * np.abs(np.diff(tail_T)).mean()
+
             mirror_arr[0, :nbsym] = left_T
             mirror_arr[1, :nbsym] = left_arr
             mirror_arr[0, mirror_length - nbsym:] = right_T
             mirror_arr[1, mirror_length - nbsym:] = right_arr
+
+            # 端部是合成点: 型别按"从边界极值出发向外交替" (最近的一个与边界相反)
+            near_left, near_right = np.bool_(is_max[0]), np.bool_(is_max[-1])
+            mirror_type[:nbsym] = np.where(np.arange(nbsym, 0, -1) % 2 == 1, ~near_left, near_left)
+            mirror_type[mirror_length - nbsym:] = np.where(np.arange(1, nbsym + 1) % 2 == 1, ~near_right, near_right)
 
         case MIRROR_MODS.Parallel:
             if not (extrema_length >= 2):
@@ -303,7 +324,7 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
 
             mirror_length: int = extrema_length + 2 * nbsym
             mirror_arr: np.ndarray = np.empty(shape=(2, mirror_length), dtype=output_dtype)
-
+            mirror_type: np.ndarray = np.empty(shape=mirror_length, dtype=bool)
             # 平行延拓的步长: 极值间隔的平均值 (与方向无关, 取绝对值)
             step = np.abs(np.diff(extrema_T)).mean()
 
@@ -320,6 +341,12 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             mirror_arr[1, mirror_length - nbsym:] = extrema_arr[-1] + right_distance * right_slope
 
             mirror_arr[:, nbsym: mirror_length - nbsym] = (extrema_T, extrema_arr)
+            mirror_type[nbsym: mirror_length - nbsym] = is_max
+
+            # 端部是合成点: 型别按"从边界极值出发向外交替" (最近的一个与边界相反)
+            near_left, near_right = np.bool_(is_max[0]), np.bool_(is_max[-1])
+            mirror_type[:nbsym] = np.where(np.arange(nbsym, 0, -1) % 2 == 1, ~near_left, near_left)
+            mirror_type[mirror_length - nbsym:] = np.where(np.arange(1, nbsym + 1) % 2 == 1, ~near_right, near_right)
 
         case MIRROR_MODS.BLCSE:
             # 极大 / 极小各自的序列: 从归并表按掩码切出 (掩码已随表按时间重排, 切出后仍升序)
@@ -354,26 +381,58 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             # 每端补一对 (极小, 极大), 按时间先后落位
             mirror_length: int = extrema_length + 4
             mirror_arr: np.ndarray = np.empty(shape=(2, mirror_length), dtype=output_dtype)
+            mirror_type: np.ndarray = np.empty(shape=mirror_length, dtype=bool)
             mirror_arr[:, 2: 2 + extrema_length] = (extrema_T, extrema_arr)
+            mirror_type[2: 2 + extrema_length] = is_max
 
             left_min_T = min_T[0] - min_step_left
             left_max_T = max_T[0] - max_step_left
 
+            # 修正 1: 两个候选点可能算到同一时刻 (两类局部间隔不同) -> 拉开一个平均间隔
+            if left_max_T == left_min_T:
+                left_max_T = left_min_T + overall_step
+
+            # 修正 2: 端点对必须严格落在表外, 否则会与中段首列撞时间 (重复时间戳 -> 样条不可用)
+            left_late = max(left_min_T, left_max_T)
+            if left_late >= extrema_T[0]:
+                shift = left_late - extrema_T[0] + overall_step
+                left_min_T, left_max_T = left_min_T - shift, left_max_T - shift
+
             if left_min_T <= left_max_T:
                 mirror_arr[0, 0], mirror_arr[1, 0] = left_min_T, min_arr_left
+                mirror_type[0] = False
                 mirror_arr[0, 1], mirror_arr[1, 1] = left_max_T, max_arr_left
+                mirror_type[1] = True
             else:
                 mirror_arr[0, 0], mirror_arr[1, 0] = left_max_T, max_arr_left
+                mirror_type[0] = True
                 mirror_arr[0, 1], mirror_arr[1, 1] = left_min_T, min_arr_left
+                mirror_type[1] = False
 
             right_min_T = min_T[-1] + min_step_right
             right_max_T = max_T[-1] + max_step_right
 
+            # 右端同理: 先拉开重合的两个候选点, 再整体推到末列之后
+            if right_max_T == right_min_T:
+                right_max_T = right_min_T + overall_step
+
+            right_early = min(right_min_T, right_max_T)
+            if right_early <= extrema_T[-1]:
+                shift = extrema_T[-1] + overall_step - right_early
+                right_min_T, right_max_T = right_min_T + shift, right_max_T + shift
+
             if right_min_T <= right_max_T:
                 mirror_arr[0, 2 + extrema_length], mirror_arr[1, 2 + extrema_length] = right_min_T, min_arr_right
+                mirror_type[2 + extrema_length] = False
                 mirror_arr[0, 3 + extrema_length], mirror_arr[1, 3 + extrema_length] = right_max_T, max_arr_right
+                mirror_type[3 + extrema_length] = True
             else:
                 mirror_arr[0, 2 + extrema_length], mirror_arr[1, 2 + extrema_length] = right_max_T, max_arr_right
+                mirror_type[2 + extrema_length] = True
                 mirror_arr[0, 3 + extrema_length], mirror_arr[1, 3 + extrema_length] = right_min_T, min_arr_right
+                mirror_type[3 + extrema_length] = False
 
-    return mirror_arr
+        case _:
+            raise ValueError(f"the mods of mirror only support {MIRROR_MODS._member_names_}!")
+
+    return mirror_arr, mirror_type

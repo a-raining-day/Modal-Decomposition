@@ -302,9 +302,9 @@ class Check:
         safe = cls.validate_safe(safe)
         if safe == SAFE_MODS.Safe:
             if dtype is not None:
-                S = np.asarray(S, dtype=dtype, copy=False)
-            else:
-                pass
+                S = cls.to_dtype(S, dtype)
+
+            return S
         else:
             # 1. array-ify
             if not isinstance(S, np.ndarray):
@@ -320,7 +320,7 @@ class Check:
                 S = cls.to_dtype(S, dtype)
 
             if safe == SAFE_MODS.Suspicious:
-                pass
+                return S
 
             else:
                 # 4. 维度检查
@@ -366,7 +366,11 @@ class Check:
         转 dtype。memmap 走 temp_memmap + Chunk.fill_memmap 分块写,
         绝不 .astype —— 那会把整条数组拉回 RAM, 破坏全局内存策略。
         """
-        dtype = np.dtype(dtype)
+        try:
+            dtype = np.dtype(dtype)
+        except TypeError:
+            raise TypeError("dtype must be np.dtype or float, int...")
+
         if S.dtype == dtype:
             return S
 

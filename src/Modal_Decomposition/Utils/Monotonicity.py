@@ -227,7 +227,7 @@ def _give_monotony(arr, chunk_size, chunk_mod) -> Monotony:
 
 
 def _monotonic_bool(arr, strict: bool, mod: str, chunk_size, chunk_mod) -> bool:
-    if mod == "monotonic":
+    if mod == MONOTONY_MODS.Monotonic:
         m = _give_monotony(arr, chunk_size, chunk_mod)
         if m is Monotony.No:
             return False
@@ -302,11 +302,11 @@ def _pair_monotony(a, b) -> Monotony:
 
 def _direction_ok(chunk: np.ndarray, strict: bool, mod: str) -> bool:
     """Whether a single chunk (chunk.size >= 2) satisfies the direction."""
-    if mod == "increasing":
+    if mod == MONOTONY_MODS.Increasing:
         if strict:
             return bool(np.all(chunk[1:] > chunk[:-1]))
         return bool(np.all(chunk[1:] >= chunk[:-1]))
-    # mod == "decreasing"
+    # decreasing
     if strict:
         return bool(np.all(chunk[1:] < chunk[:-1]))
     return bool(np.all(chunk[1:] <= chunk[:-1]))
@@ -314,6 +314,6 @@ def _direction_ok(chunk: np.ndarray, strict: bool, mod: str) -> bool:
 
 def _pair_ok(a, b, strict: bool, mod: str) -> bool:
     """Whether the boundary pair (a, b) preserves the direction."""
-    if mod == "increasing":
+    if mod == MONOTONY_MODS.Increasing:
         return a < b if strict else a <= b
     return a > b if strict else a >= b

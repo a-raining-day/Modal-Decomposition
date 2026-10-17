@@ -1,4 +1,4 @@
-﻿"""层次导入自检: 自动发现包目录名, 再验证 Define / Base / Utils 能否各自 import。
+"""层次导入自检: 自动发现包目录名, 再验证 Define / Base / Utils 能否各自 import。
 
 运行: .venv\\Scripts\\python.exe tests\\check_layers.py
 """
@@ -48,8 +48,8 @@ if utils is not None:
     import numpy as np
     from importlib import import_module
 
-    mirror_new = import_module(f"{NAME}.Utils.Mirror_NEW").mirror
-    print("Mirror_NEW smoke   :", mirror_new(np.arange(6.0), nbsym=2).tolist())
+    mirror_new = import_module(f"{NAME}.Utils.Mirror").mirror
+    print("Mirror smoke       :", mirror_new(np.arange(6.0), nbsym=2).tolist())
     print("find_peaks(mod=min):", utils.find_peaks(np.sin(np.arange(60.0) / 3), mod="min")[0][:4])
     print("Check.is_uniform   :", utils.Check.is_uniform(np.arange(10.0)))
     for name in ("mirror", "MIRROR_MODS", "is_monotonic", "is_uniform", "Chunk",

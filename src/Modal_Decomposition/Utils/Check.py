@@ -268,7 +268,7 @@ class Check:
 
     #  规范化 (改数据)
     @classmethod
-    def to_array(cls, S, *, dtype: type | np.dtype = None, safe: str | SAFE_MODS = "unknown", ndim: int = 1, need_squeeze: bool = True) -> np.ndarray:
+    def to_array(cls, S, *, dtype: type | np.dtype = None, safe: str | SAFE_MODS = "unknown", ndim: int | set | tuple | None = 1, need_squeeze: bool = True) -> np.ndarray:
         """
         规范化任意 array-like 为 ndarray, 可选转 dtype。
 
@@ -323,12 +323,23 @@ class Check:
                 return S
 
             else:
-                # 4. 维度检查
-                if not isinstance(ndim, int):
-                    raise TypeError("ndim must be an integer")
-
-                if not (ndim >= 1):
-                    raise ValueError("ndim must be >= 1")
+                # 4. 维度检查 —— ndim 允许 int | 维数集合 | None(不检查)
+                #    Check_Time_and_Signal 的契约是 set[int], 库内分解方法均以
+                #    ndim={1} / ndim={1, 2} 调用, 这里统一收口
+                if ndim is None:
+                    pass
+                elif isinstance(ndim, int) and not isinstance(ndim, bool):
+                    if not (ndim >= 1):
+                        raise ValueError("ndim must be >= 1")
+                    ndim = (ndim,)
+                elif isinstance(ndim, (set, frozenset, list, tuple)):
+                    if not ndim:
+                        raise ValueError("ndim must not be empty")
+                    if any((not isinstance(d, int)) or isinstance(d, bool) or d < 1 for d in ndim):
+                        raise ValueError("ndim must contain ints >= 1")
+                    ndim = tuple(ndim)
+                else:
+                    raise TypeError("ndim must be an int, a collection of ints, or None")
 
                 if S.ndim == 0:
                     if S.size != 0:
@@ -342,7 +353,7 @@ class Check:
                     raise ValueError("NaN or Inf found")
 
                 if S.ndim == 1:
-                    if ndim == 1:
+                    if ndim is None or 1 in ndim:
                         return S
                     else:
                         raise ValueError(f"the input is 1-dim! not {ndim}")
@@ -355,7 +366,7 @@ class Check:
                     if S.ndim == 0:
                         raise ValueError("Signal must have at least 1 dimension after squeeze")
 
-                if S.ndim != ndim:
+                if ndim is not None and S.ndim not in ndim:
                     raise ValueError(f"the ndim of input -> {S.ndim} != {ndim}")
 
         return S
@@ -392,9 +403,10 @@ def Check_Time_and_Signal(
     default_T: bool = True,
     dtype: np.dtype = None,
     axis: int = 0,
+    need_T: bool = True,
     chunk_size: int = None,
     temp_dir: Optional[str] = None
-) -> tuple[np.ndarray, Optional[np.ndarray], int]:
+) -> tuple[np.ndarray, Optional[np.ndarray], int] | tuple[np.ndarray, int]:
     """
     Validate the signal and its now axis and return them in canonical form.
 
@@ -434,10 +446,12 @@ def Check_Time_and_Signal(
 
     Returns
     -------
-    tuple[np.ndarray, Optional[np.ndarray], int]
-        (S, S, N). S 默认保留输入 dtype (可能 memmap 支撑); 显式
-        ``dtype="float64"`` 时为 float64; S 同理 (或 None 当 ``S`` 未给且
-        ``default_T`` 为 False); N 为末轴长度。
+    tuple[np.ndarray, Optional[np.ndarray], int] | tuple[np.ndarray, int]
+        ``need_T=True`` (默认): ``(S, T, N)``。``S`` 默认保留输入 dtype (可能
+        memmap 支撑); 显式 ``dtype="float64"`` 时为 float64; ``T`` 为时间轴,
+        未给且 ``default_T=False`` 时为 None; ``N`` 为末轴长度。
+        ``need_T=False``: ``(S, N)`` —— 不构造 ``T``, 因而不产生
+        ``arange(N)`` 这一份与信号等长的临时数组。算法不使用时间轴时应当选它。
 
     Raises
     ------
@@ -455,7 +469,7 @@ def Check_Time_and_Signal(
         raise ValueError("Signal must not be empty")
 
     if T is None:
-        if default_T:
+        if default_T and need_T:
             T = np.arange(N, dtype=S.dtype)
         # else: keep S as None (see default_T above).
     else:
@@ -463,8 +477,8 @@ def Check_Time_and_Signal(
         Check.require_1d(T, method=method)
         Check.require_length_match(T, S, method=method)
 
-        # 分块检查重复与降序
-        duplicate = Check.is_duplicates(S, axis=axis, temp_dir=temp_dir)
+        # 分块检查重复与降序 (检的是时间轴 T, 不是信号 S)
+        duplicate = Check.is_duplicates(T, axis=axis, temp_dir=temp_dir)
         if duplicate:
             raise ValueError("Time axis contains duplicate values")
 
@@ -480,7 +494,10 @@ def Check_Time_and_Signal(
             T = T[idx]
             S = S[..., idx]
 
-    return S, T, N
+    if need_T:
+        return S, T, N
+    else:
+        return S, N
 
 
 def _load(S, target_dtype=None) -> np.ndarray | np.memmap | list | tuple:
@@ -500,7 +517,10 @@ def _load(S, target_dtype=None) -> np.ndarray | np.memmap | list | tuple:
     if isinstance(S, np.ndarray):
         if S.ndim >= 1 and S.size > 0 and should_use_memmap(S.nbytes):
             out_dtype = target_dtype if target_dtype is not None else S.dtype
-            fp = temp_memmap(out_dtype, S.shape)
+            # 形参顺序是 (shape, dtype) —— 写反了会静默建不出 memmap
+            fp = temp_memmap(S.shape, out_dtype)
+            if fp is None:
+                return S            # 建不起来就退回内存, 不把 None 交给 fill_memmap
             Chunk.fill_memmap(fp, S)
             return fp
         return S
@@ -515,7 +535,9 @@ def _load(S, target_dtype=None) -> np.ndarray | np.memmap | list | tuple:
 
     if isinstance(S, (list, tuple)) and len(S) > LIST_MEM_THRESHOLD:
         out_dtype = target_dtype if target_dtype is not None else DEFAULT_NUMPY_TYPE
-        fp = temp_memmap(out_dtype, (len(S),))
+        fp = temp_memmap((len(S),), out_dtype)      # 形参顺序 (shape, dtype)
+        if fp is None:
+            return S
         Chunk.fill_memmap(fp, S)
         return fp
 

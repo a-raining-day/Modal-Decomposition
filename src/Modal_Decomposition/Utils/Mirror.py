@@ -33,7 +33,7 @@ from enum import Enum
 from typing import Literal
 from warnings import warn
 
-from ..Define import DEFAULT_NUMPY_TYPE
+from ..Define import DEFAULT_NUMPY_TYPE, SAFE_ARGS, SAFE_MODS
 
 from .Check import Check
 from .Peaks import PEAKS_BACKEND, PEAKS_BACKEND_ARGS, find_peaks
@@ -59,6 +59,7 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
            *,
            verbose: bool = False,
            peaks_backend: PEAKS_BACKEND_ARGS | PEAKS_BACKEND = "numpy",
+           safe: SAFE_ARGS | SAFE_MODS = "unknown",
            **kwargs) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     信号端点外拓: 端点镜像, 或"检出极值 → 外延极值表"。
@@ -118,12 +119,11 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
     >>> mirror(np.arange(6.0), nbsym=2).tolist()   # 1-D, 反射不含端点
     [2.0, 1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0]
     >>> S = np.sin(np.linspace(0.0, 4.0 * np.pi, 200))
-    >>> extrema_arr, is_max = mirror(S, mod="extrema", nbsym=2)
-    >>> extrema_arr.shape, is_max.shape            # (2, L + 4) 与同长掩码
-    ((2, 8), (8,))
+    >>> extrema_x, extrema_arr, is_max = mirror(S, mod="extrema", nbsym=2)
+    >>> extrema_x.shape, extrema_arr.shape, is_max.shape
+    ((8,), (8,), (8,))
     """
     dtype = kwargs.get("dtype", None)
-    safe = kwargs.get("safe", "unknown")
     squeeze = kwargs.get("squeeze", True)
 
     mod: MIRROR_MODS = Check.validate_mod(mod, MIRROR_MODS)
@@ -435,4 +435,4 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
         case _:
             raise ValueError(f"the mods of mirror only support {MIRROR_MODS._member_names_}!")
 
-    return mirror_arr, mirror_type
+    return mirror_arr[0, :], mirror_arr[1, :], mirror_type

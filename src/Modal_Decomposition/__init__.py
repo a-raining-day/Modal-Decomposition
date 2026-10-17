@@ -49,7 +49,7 @@ from .Utils import *
 __all__ = [
     "Class",
     "Function",
-    "SIZE",
+    "SIZE"
     "__version__",
     "__author__",
     "__email__",

@@ -6,17 +6,16 @@
 
 ## 1. EMD 相关实验
 
-| 主题 | 实验脚本（tests/…） | 原始产物 | docs 报告 |
+| 主题 | 实验脚本 | 原始产物 | docs 报告 |
 |---|---|---|---|
-| `faster` 两档四向对比（quality/fast × PyEMD/PySDKit） | `comparison/bench_emd_faster.py` | `comparison/results/emd_faster_raw.json` | `docs/EMD_faster_Branch_Comparison_Report.md` |
-| 停止判据变体 V0–V8（sd 收紧 / svar / 窄带门） | `comparison/bench_emd_stopping_variants.py` | `comparison/results/emd_stopping_variants_raw.json` | `docs/EMD_Quality_Gap_and_Optimization.md` |
-| EMD × PyEMD 十二问逐点对照（E-A…E-H） | `comparison/bench_emd_vs_pyemd_alignment.py` | `comparison/results/emd_vs_pyemd_alignment_raw.json` | `docs/EMD_vs_PyEMD_Detailed_Comparison.md` |
-| 三方验证网格（MD/PyEMD/PySDKit × A/B/C × 256–65536） | `comparison/bench_emd_validation.py` + `comparison/refresh_emd_validation_md.py` | `comparison/results/emd_validation_raw.json` | `docs/EMD_Validation_and_Comparison_Report.md` |
-| 原生 vs `EMD_new` 性能 + 参数扫描 | `comparison/bench_emd_new.py` | 直接产出 docs 两份 | `docs/EMD_vs_EMD_new_Performance_Report.md`、`docs/EMD_new_Parameter_Sweep_Report.md` |
+| **EMD（原生引擎）验证轮**：三方对照、Pareto 调参与默认值选择、`faster` 门、`nbsym` 口径对齐、`mirror_mod` 评测、内存轴 | `.scratch/emd_new/t00`–`t28`（脚本清单见数据目录 README） | `tests/comparison/results/emd_new/*.json` | `docs/test/EMD_Native_Engine_Report.md` |
 | EEMD 原生 vs PyEMD 包装（trials / 长度 / noise_width 扫描） | `comparison/bench_eemd_native.py` | `comparison/results/eemd_native_raw.json` | `docs/EEMD_Native_vs_PyEMD_Report.md` |
-| 计时·质量三方（原生引擎，现行默认） | `comparison/bench_timing.py --method EMD` | `comparison/results/emd/{timing_raw.csv,timing_metrics.json}` | `docs/EMD_Timing_Memory_Quality_Report.md` |
-| 大数据内存轴（三方 RSS，1MB–1GB × increasing/random） | `comparison/bench_memory.py`（**2026-09-10 原生引擎重跑**） | `comparison/results/memory/*.{json,csv}`（旧数据归档于 `_legacy_pyemd_wrapper/memory/`） | `docs/EMD_Large_Signal_Memory_Report.md`（重跑版） |
-| 大数据内存矩阵（dtype × 长度 × pattern × chunk 策略） | `test_memory/run_matrix.py`、`test_memory/test_emd_memory.py`（**2026-09-10 原生引擎重跑**） | `test_memory/result_for_each_decomposition/EMD.{json,csv}`（旧数据归档为 `EMD_legacy_pyemd_wrapper.*`） | 同上 |
+
+> 本表其余行引用的 EMD 脚本与报告（`bench_emd_faster.py`、`bench_emd_stopping_variants.py`、
+> `bench_emd_vs_pyemd_alignment.py`、`bench_emd_validation.py`、`refresh_emd_validation_md.py`、
+> `bench_emd_new.py`，以及 `docs/EMD_*.md` 全部报告）已在本次重构中删除；其历史结论仅存于
+> git 历史与 `comparison/results/_legacy_pyemd_wrapper/`，**不再作为现行依据**。计时与内存轴的
+> 现行数字并入上方 `EMD_Native_Engine_Report.md`（§3 计时、§9 内存）。
 
 ## 2. 其它方法实验
 
@@ -55,7 +54,14 @@
 
 * 删除 `tests/test_path.py` —— 引用不存在的 `PathDefine.ROOT`，pytest 收集即报错；
 * 删除 `tests/test_optimize_decomposition/` —— 早期 EMD 原型草稿
-  （`EMD_new.py`：`decompose` 无返回值、依赖已删除接口），无测试价值；
+  （该目录下的 `EMD_new.py`：`decompose` 无返回值、依赖已删除接口），无测试价值。
+  **注意：它是另一份废弃草稿，与后来转正的引擎无关** —— 后者原为
+  `src/Modal_Decomposition/EMD_NEW.py`，现已转正为 `src/Modal_Decomposition/EMD.py`；
+* 删除 EMD 对照实验的脚本与报告（`comparison/bench_emd_faster.py`、
+  `comparison/bench_emd_stopping_variants.py`、`comparison/bench_emd_vs_pyemd_alignment.py`、
+  `comparison/bench_emd_validation.py`、`comparison/refresh_emd_validation_md.py`、
+  `comparison/bench_emd_new.py` 与全部 `docs/EMD_*.md`），由本轮 `.scratch/emd_new/`
+  实验与 `docs/test/EMD_Native_Engine_Report.md` 取代；
 * 删除全部 `__pycache__/` 与 `.pytest_cache/`；
 * 删除 `comparison/results/lmd_test{1..5}.log`（临时日志）；
 * 删除 `comparison/results/efd/`、`comparison/results/lmd/` —— 被修正版

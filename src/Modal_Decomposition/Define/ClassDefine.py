@@ -8,8 +8,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
-from ..Error import PreError
-
 from .ConfigDefine import Config
 from .TextDefine import Name, Reference
 
@@ -64,12 +62,8 @@ class Decomposer(ABC):
 
     name: ClassVar[str]
 
-    def __init__(self):
-        self.__snapshot = None
-        self.__config_construct_success = False
-
     @abstractmethod
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S) -> DecompositionResult:
         """
         Decompose the signal.
 
@@ -93,25 +87,12 @@ class Decomposer(ABC):
         :return:
         """
 
-    def config_construct_start(self) -> None:
-        internal = {"_Decomposer__snapshot", "_Decomposer__config_construct_success"}
-
-        self.__snapshot = set(vars(self)) - internal
-        self.__config_construct_success = True
-
-    def config_construct_end(self) -> dict:
-        if (not self.__config_construct_success) or (self.__snapshot is None):
-            raise PreError(
-                "the pre-config isn't constructed yet, use `config_construct_start` at the beginning of __init__"
-            )
-
-        missing = [k for k in self.__snapshot if not hasattr(self, k)]
-        if missing:
-            raise PreError(
-                f"the following config keys were recorded at __init__, but are not set as attributes on self: {missing}"
-            )
-
-        return {k: getattr(self, k) for k in self.__snapshot}
+    @abstractmethod
+    def config_generate(self) -> Config:
+        """
+        Generate the Config of this decomposition method.
+        :return:
+        """
 
     @property
     def full_name(self) -> str:

@@ -1,4 +1,0 @@
-impl,size_bytes,n_samples,pattern,dtype,status,dec_wall_s,dec_baseline_rss_bytes,dec_peak_rss_bytes,dec_delta_rss_bytes,hb_n,input_backing,input_build_wall_s,input_build_delta_rss_bytes,n_rows,recon_max_abs_err,error
-MD-EMD,104857600,13107200,increasing,float64,ok,0.593,223019008,852467712,629448704,19,ndarray,0.052954,164319232,1,,
-MD-EMD,524288000,65536000,increasing,float64,ok,6.015,642277376,4259008512,3616731136,177,memmap,1.005579,561401856,1,,
-MD-EMD,1073741824,134217728,increasing,float64,ok,13.641,1191931904,6949519360,5757587456,429,memmap,2.091668,1132384256,1,,

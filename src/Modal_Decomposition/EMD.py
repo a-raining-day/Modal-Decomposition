@@ -1,439 +1,426 @@
-"""
-Empirical Mode Decomposition —— 原生实现 (正式 EMD)。
-
-EMD 已由自研实现转正: 本模块取代原 PyEMD 包装版, 注册键 ``"EMD"``
-(``Class.EMD`` / ``Function.EMD``)。背景: 原包装版首次使用需 import PyEMD
-(约 1.1-1.4 s), 且筛分耗时约 75% 在包络样条; 原生实现去掉 EMD 本体的第三方
-分解依赖, 保留向量化极值检测与 dtype 保持。PyEMD 仍用于 EEMD / CEEMDAN 的
-集合扩展与基准对比 (见 ``tests/comparison/bench_emd_new.py`` 与
-``docs/EMD_vs_EMD_new_Performance_Report.md``)。
-
-工具取用 (与 Utils 基础设施一致)
---------------------------------
-- 极值检测经 ``Utils.get_peaks()`` 取 ``Peaks.find_peaks`` (scipy/numpy/
-  numba 三后端, 统一返回 ``(indices, properties)``);
-- 包络样条经 ``Utils.get_spline()`` 取 ``Spline.spline``: ``spline_kind``
-  形参直接采用 Spline 的 canonical 后端名 ("CubicSpline"/"PCHIP"), "linear"
-  特例直接用 ``np.interp``; 惰性 import 并注册进进程级 import 缓存;
-- 端点镜像经 ``Utils.get_mirror()`` 取 ``Mirror.mirror_extrema`` (nbsym 语义);
-- 单调性停止判据用 ``Utils.is_monotonic``。
-
-算法 (经典 Huang 1998 筛分)
----------------------------
-1. 向量化找局部极大/极小 (平台取右边缘, 与 Utils.Peaks 同规则);
-2. 端点以 ``nbsym`` 个镜像极值外延, 三次样条 (或 PCHIP/线性) 插值上下
-   包络, 局部均值 ``m = (up + low) / 2``;
-3. ``h <- h - m``, 直到 Cauchy 型判据 ``sum(m^2)/sum(h_prev^2) < sd_thr``
-   (``faster=True``) —— 或该判据与经典窄带平衡 ``|zc - ext| <= 1`` 同时
-   满足 (``faster=False``, 默认), 或达到 ``max_iter``;
-4. 每得一个 IMF 即从残差中减去; 残差极值不足或单调时停止, 余量即 ``Res``。
-
-``faster`` 分支语义
-------------------
-* ``faster=True``: 旧高速档 —— 能量型 Cauchy SD 收敛即停, 迭代预算最小;
-  带噪/弱分量场景行的 |zc−ext| 平衡不保证 (质量参考: 上一轮机制分析报告
-  ``docs/EMD_Quality_Gap_and_Optimization.md``)。
-* ``faster=False`` (默认, 质量档): 在 SD 收敛之外还要求当前 h 满足经典
-  IMF 必要条件 ``|zc − ext| <= 1`` (zc 用与 PyEMD 一致的过零计数口径),
-  不满足则继续筛分直到 ``max_iter``。对已窄带的行零额外迭代 (干净信号
-  代价≈0); 对噪声/长信号迭代次数上升, 换来行级纯度 (corr/valid) 对标
-  PyEMD。``sd_thr`` / ``max_iter`` / ``spline_kind`` 两档通用、语义不变。
-
-返回契约
---------
-``DecompositionResult`` (IMFs (K,num_imfs), Res, info, config), 与全库一致:
-- dtype: float32/float64 全程保持原精度; float16 与整数/布尔输入提升为
-  float64 计算;
-- 重构精确: ``IMFs.sum(axis=0) + Res == S`` (残差是逐次减法余量);
-- ``info``: ``{"iterations": [...], "final_sd": [...]}``, 逐 IMF 一一对应。
-  ``final_sd[k]`` 是该阶最后一个 sift 迭代的 Cauchy 量
-  ``sum(m^2)/sum(h_prev^2)``; 若该阶**一次 sift 都没做完**就退出 (实测可达
-  路径: 极小幅度信号的自点积在 float64 下下溢为 0), 则该位置为
-  ``float("nan")`` —— 表示"无 SD 可报", 与"收敛到 0"区分开。
-  常量 / 单调 / 全零信号在 ``decompose`` 外层即被拦下, 不产生 IMF,
-  ``final_sd`` 为空列表。
-
-References
-----------
-10.1098/rspa.1998.0193
-"""
-
 import numpy as np
 from dataclasses import dataclass
-from typing import ClassVar, Literal
-from enum import Enum
+from typing import List
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
-from .Utils import (
-    Check_Time_and_Signal,
-    get_mirror,
-    get_peaks,
-    get_spline,
-    is_monotonic,
-)
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Base import Cache
+from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal
 
-__all__ = ["EMD", "EMDConfig"]
-
-
-SPLINE_MODS_ARGS = Literal["CubicSpline", "PCHIP", "linear"]
-class SPLINE_MODS(Enum):
-    CubicSpline = "CubicSpline"
-    PCHIP = "PCHIP"
-    Linear = "linear"
-
-
-
-
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class EMDConfig(Config):
-    """
-    Effective parameters of an EMD run.
-    """
+    num_imf: int
     nbsym: int
-    spline_kind: str
-    max_imf: int
-    max_iter: int
-    sd_thr: float
-    dtype: np.dtype | None
-    compile: bool
-    find_peaks_mod: str
+    internal_iter: int
+    internal_delta: float
+    res_energy: float
+    store_iter_info: bool
+    pre_num_imfs: int
+    dtype: type | np.dtype | None
+    safe: str
+    need_squeeze: bool
+    mirror_mod: str
+    poly_order: int
+    time_poly_order: int
+    peaks_backend: str
     faster: bool
 
 
-def _work_dtype(dtype) -> np.dtype:
-    """float32/float64 保持原精度; 其余 (float16/int/bool) 提升为 float64。"""
-    if dtype.kind == "f" and dtype.itemsize >= 4:
-        return dtype
-    return np.dtype(np.float64)
-
-
-@register_class("EMD")
+"""
+Class and Function of decomposer
+"""
 class EMD(Decomposer):
-    """
-    Empirical Mode Decomposition (native sifting implementation).
+    name = "EMD"
 
-    Decomposes a 1-D signal into intrinsic mode functions (IMFs) and a
-    residual via the classical Huang-1998 sifting process:
-
-    1. local extrema of the current signal (``Utils.Peaks``);
-    2. upper/lower envelopes through mirror-extended extrema — ``nbsym``
-       endpoint mirroring via ``Utils.Mirror``, envelopes via
-       ``Utils.Spline`` (``spline_kind`` is the canonical backend name;
-       ``"linear"`` evaluates ``np.interp`` directly);
-    3. subtract the local-mean envelope repeatedly until the Cauchy-type
-       criterion ``sum(m^2)/sum(h_prev^2) < sd_thr`` (``faster=True``) or
-       until that criterion *and* the classic narrowband balance
-       ``|zc - ext| <= 1`` hold (``faster=False``, default), or
-       ``max_iter``;
-    4. the sifted component is one IMF; subtract it from the residual and
-       repeat until the residual is monotonic or has too few extrema.
-
-    ``faster`` branch (两档停止策略)
-    -------------------------------
-    * ``faster=True`` — legacy fast branch: the energy Cauchy SD criterion
-      alone stops sifting (minimal iteration budget; on noisy / long signals
-      the rows are not guaranteed to satisfy the zero-crossing/extrema
-      balance).
-    * ``faster=False`` (default, quality branch): after the SD criterion is
-      met the current ``h`` must also satisfy ``|zc - ext| <= 1``
-      (zero crossings counted with the PyEMD-consistent ``indzer``
-      convention; extrema counted with the MD-native ``Utils.Peaks`` rule
-      ``S[i-1] < S[i] >= S[i+1]``); otherwise sifting continues up to
-      ``max_iter``. Rows already narrowband exit immediately (clean signals
-      cost nothing extra); noisy / long signals spend more iterations and
-      gain row-level purity (tone capture and IMF-validity comparable with
-      PyEMD). On plateau/quantized signals the two counting conventions
-      diverge (MD counts every rising edge into a flat run, PyEMD counts
-      plateau midpoints with rise-then-fall — experiment E-H in
-      ``docs/EMD_vs_PyEMD_Detailed_Comparison.md``); the gate is aligned to
-      the MD-native rule there, like the rest of the native engine.
-
-    Effect (效果要点)
-    -----------------
-    * IMFs are extracted from high frequency to low frequency; the first IMF
-      tracks the dominant high-frequency component of the signal;
-    * exact reconstruction — ``IMFs.sum(axis=0) + Res == S`` (the residual is
-      the successive-subtraction remainder), so ``reconstruct()`` reproduces
-      the input to machine precision (both branches);
-    * float32/float64 inputs keep their precision, float16 / integer / bool
-      inputs are promoted to float64;
-    * quality branch (default, ``faster=False``) is benchmarked in
-      ``docs/EMD_faster_Branch_Comparison_Report.md`` against the fast
-      branch, PyEMD and PySDKit (mode capture, row validity, runtime).
-
-    Use as ``Class.EMD(**params).decompose(S, T)`` or ``Function.EMD(S, T,
-    **params)``; a frozen ``EMDConfig`` snapshot of the effective parameters
-    is attached to every ``DecompositionResult``.
-    """
-
-    name: ClassVar[str] = "EMD"
-
-    def __init__(
-        self,
-        nbsym: int = 2,
-        spline_kind: Literal["CubicSpline", "PCHIP", "linear"] = "CubicSpline",
-        max_imf: int = -1,
-        max_iter: int = 100,
-        sd_thr: float = 0.01,
-        dtype: np.dtype = None,
-        compile: bool = False,
-        find_peaks_mod: Literal["scipy", "numpy", "numba"] = "numpy",
-        faster: bool = False,
-        config: EMDConfig = None,
-    ) -> None:
+    def __init__(self, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, **kwargs):
         """
-        Parameters
-        ----------
-        nbsym : int
-            Number of extrema mirrored at each boundary (classic endpoint
-            treatment). 0 disables mirroring.
-        spline_kind : {"CubicSpline", "PCHIP", "linear"}
-            Envelope backend — the canonical spline kinds of
-            ``Utils.Spline``, passed straight through; "linear" evaluates
-            ``np.interp`` directly (fewer than 3 extrema also fall back to
-            linear interpolation).
-        max_imf : int
-            Maximum number of IMFs; -1 decomposes completely.
-        max_iter : int
-            Sifting iterations per IMF (Cauchy-type SD guard).
-        sd_thr : float
-            SD stopping threshold ``sum(m^2)/sum(h_prev^2) < sd_thr``.
-        dtype : np.dtype | None
-            Working dtype. None: float32/float64 preserved, others promoted
-            to float64.
-        compile : bool
-            Reserved flag (kept for future JIT backends; currently unused).
-        find_peaks_mod : {"scipy", "numpy", "numba"}
-            Peak-detection backend of ``Utils.Peaks``.
-        faster : bool
-            Stopping-policy branch. ``True`` keeps the legacy fast branch
-            (Cauchy-type SD convergence stops sifting); ``False`` (default)
-            additionally requires the classic narrowband balance
-            ``|zc - ext| <= 1`` before a sifted row is accepted — higher
-            row quality at the price of extra iterations on noisy / long
-            signals (clean signals: no extra cost).
-        config : EMDConfig, optional
-            Frozen parameter snapshot; when given it overrides every other
-            argument (``self.config`` stays that snapshot).
 
-        Notes
-        -----
-        Defaults: CubicSpline envelope + ``sd_thr=0.01`` + ``faster=False``
-        (quality branch). The envelope choice keeps the same spline
-        semantics as the external references (PyEMD/PySDKit); the SD
-        threshold is set by the mode-level validation in
-        ``docs/EMD_Validation_and_Comparison_Report.md``: the loose sweep
-        optimum (0.3) stops sifting before IMFs satisfy the classic
-        zero-crossing/extrema balance and splits tones across adjacent rows
-        (single-row tone capture ~0.65-0.87), while ``sd_thr=0.01`` restores
-        single-row capture (~0.94) at a still-small cost (CubicSpline
-        ~14 ms, linear ~4 ms at n=4096 vs ~56 ms for PyEMD). ``faster=False``
-        adds the narrowband gate measured in
-        ``docs/EMD_Quality_Gap_and_Optimization.md`` (variant V4): row-level
-        validity on noise reaches the PyEMD level while remaining faster
-        than PyEMD; ``faster=True`` reproduces the pre-``faster`` behaviour
-        (see the four-way benchmark in
-        ``docs/EMD_faster_Branch_Comparison_Report.md``).
+        :param num_imf:
+        :param nbsym:
+        :param internal_delta:
+        :param internal_iter:
+        :param res_energy:
+        :param faster:
+        :param store_iter_info:
+        :param kwargs:
         """
-        self.config = config
 
-        if isinstance(self.config, Config):
-            self.nbsym = self.config.nbsym
-            self.spline_kind = self.config.spline_kind
-            self.max_imf = self.config.max_imf
-            self.max_iter = self.config.max_iter
-            self.sd_thr = self.config.sd_thr
-            self.dtype = self.config.dtype
-            self.compile = self.config.compile
-            self.find_peaks_mod = self.config.find_peaks_mod
-            self.faster = self.config.faster
-        else:
-            self.nbsym = nbsym
-            self.spline_kind = spline_kind
-            self.max_imf = max_imf
-            self.max_iter = max_iter
-            self.sd_thr = sd_thr
-            self.dtype = dtype
-            self.compile = compile
-            self.find_peaks_mod = find_peaks_mod
-            self.faster = faster
+        self.num_imf: int = num_imf
+        self.nbsym: int = nbsym
+        self.internal_iter: int = internal_iter
+        self.internal_delta: float = internal_delta
+        self.res_energy: float = res_energy
+        self.faster: bool = faster
+        self.store_iter_info: bool = store_iter_info
 
-        # --- 参数校验 --------------------------------------------------- #
-        if not isinstance(self.nbsym, int) or self.nbsym < 0:
-            raise ValueError(f"nbsym must be an int >= 0, got {self.nbsym!r}")
-        if self.spline_kind not in _EMD_KINDS:
-            raise ValueError(
-                f"spline_kind must be one of {_EMD_KINDS}, got {self.spline_kind!r}"
-            )
-        if not isinstance(self.max_imf, int) or (self.max_imf != -1 and self.max_imf < 1):
-            raise ValueError(f"max_imf must be -1 or >= 1, got {self.max_imf!r}")
-        if not isinstance(self.max_iter, int) or self.max_iter < 1:
-            raise ValueError(f"max_iter must be an int >= 1, got {self.max_iter!r}")
-        if not (0.0 < self.sd_thr <= 1.0):
-            raise ValueError(f"sd_thr must be in (0, 1], got {self.sd_thr!r}")
+        unknown = set(kwargs) - {
+            "pre_num_imfs", "dtype", "safe", "need_squeeze",
+            "mirror_mod", "poly_order", "time_poly_order", "peaks_backend",
+        }
+        if unknown:
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
+
+        self.pre_num_imfs: int = kwargs.get("pre_num_imfs", 10)
+
+        self.dtype: type | np.dtype | None = kwargs.get("dtype", None)
+        self.safe: str = kwargs.get("safe", "unknown")
+        self.need_squeeze: bool = kwargs.get("need_squeeze", True)
+
+        self.mirror_mod: str = kwargs.get("mirror_mod", "extrema")
+        self.poly_order: int = kwargs.get("poly_order", 2)
+        self.time_poly_order: int = kwargs.get("time_poly_order", 2)
+        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")
+
+        # self.config: EMDConfig = config  # 暂时先不考虑 config 输入, 有一些问题需要解决
+
+        self.param_check()
+
+        self.imfs = None
+        self.res  = None
+
+        self.temp_imf_arr: List[np.ndarray] = [] if self.store_iter_info else None
+        self.iter_convergence: List[bool] = [] if self.store_iter_info else None
+
+    def param_check(self) -> None:
+        if not isinstance(self.num_imf, int) or isinstance(self.num_imf, bool):
+            raise TypeError("the `num_imf` must be int.")
+
+        if self.num_imf != -1:
+            if not (self.num_imf > 0):
+                raise TypeError("the `num_imf` must be positive.")
+
+        if not isinstance(self.nbsym, int) or isinstance(self.nbsym, bool):
+            raise TypeError("the `nbsym` must be int.")
+
+        if not (self.nbsym >= 0):
+            raise ValueError("the `nbsym` must >= 0.")
+
+        if not isinstance(self.res_energy, float):
+            raise TypeError("the `res_energy` must be float.")
+
+        if not (self.res_energy >= 0):
+            raise ValueError("the `res_energy` must >= 0.")
+
+        if not isinstance(self.internal_iter, int) or isinstance(self.internal_iter, bool):
+            raise TypeError("the `internal_iter` must be int.")
+
+        if self.internal_iter != -1:
+            if not (self.internal_iter > 0):
+                raise ValueError("the `internal_iter` must > 0.")
+
+        if not isinstance(self.internal_delta, float):
+            raise TypeError("the `internal_delta` must be float.")
+
+        if not (0 <= self.internal_delta < 1):
+            raise ValueError("the `internal_delta` must be between 0 and 1.")
+
+        if not isinstance(self.pre_num_imfs, int) or isinstance(self.pre_num_imfs, bool):
+            raise TypeError("the `pre_num_imfs` must be int.")
+
+        if not (self.pre_num_imfs >= 1):
+            raise ValueError("the `pre_num_imfs` must >= 1.")
+
+        if not isinstance(self.store_iter_info, bool):
+            raise TypeError("the `store_iter_info` must be bool.")
+
         if self.dtype is not None and np.dtype(self.dtype).kind != "f":
-            raise ValueError(
-                f"dtype must be a floating numpy dtype or None, got {self.dtype!r}"
-            )
-        if self.find_peaks_mod not in _PEAKS_MODS:
-            raise ValueError(
-                f"find_peaks_mod must be one of {_PEAKS_MODS}, got {self.find_peaks_mod!r}"
-            )
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if self.safe not in ("safe", "suspicious", "unknown"):
+            raise ValueError("the `safe` can only be ['safe', 'suspicious', 'unknown'].")
+
+        if self.peaks_backend not in ("scipy", "numpy", "numba"):
+            raise ValueError("the `peaks_backend` can only be ['scipy', 'numpy', 'numba'].")
+
+        # "mirror" 模式返回的是 1-D 信号而非 (时间, 幅值, 极值掩码) 三元组, 本处无法使用
+        if self.mirror_mod not in ("extrema", "polynomial", "parallel", "BLCSE"):
+            raise ValueError("the `mirror_mod` can only be ['extrema', 'polynomial', 'parallel', 'BLCSE'].")
+
+        if not isinstance(self.poly_order, int) or isinstance(self.poly_order, bool) or self.poly_order <= 0:
+            raise ValueError("the `poly_order` must be a positive int.")
+
+        if not isinstance(self.time_poly_order, int) or isinstance(self.time_poly_order, bool) or self.time_poly_order <= 0:
+            raise ValueError("the `time_poly_order` must be a positive int.")
+
+        # polynomial 模式每端只有 nbsym+1 个极值参与拟合, 阶数不得超过 nbsym
+        if self.nbsym != 0 and self.mirror_mod == "polynomial":
+            if self.poly_order > self.nbsym or self.time_poly_order > self.nbsym:
+                raise ValueError("the `poly_order` and the `time_poly_order` must be <= `nbsym` when mirror_mod='polynomial'.")
+
         if not isinstance(self.faster, bool):
-            raise ValueError(f"faster must be a bool, got {self.faster!r}")
+            raise TypeError("the `faster` must be bool.")
 
-        if self.config is None:
-            self.config = EMDConfig(
-                nbsym=self.nbsym,
-                spline_kind=self.spline_kind,
-                max_imf=self.max_imf,
-                max_iter=self.max_iter,
-                sd_thr=self.sd_thr,
-                dtype=np.dtype(self.dtype) if self.dtype is not None else None,
-                compile=self.compile,
-                find_peaks_mod=self.find_peaks_mod,
-                faster=self.faster,
-            )
-
-        # 工具惰性取用 (Utils getter 首次访问时 import + 注册进进程级缓存)。
-        _peaks = get_peaks()
-        self.find_peaks = _peaks.find_peaks
-        self.spline = get_spline().spline
-        self.mirror_extrema = get_mirror().mirror_extrema
-
-    def __call__(self, S, T=None) -> DecompositionResult:
-        return self.decompose(S, T)
-
-    def decompose(self, S, T=None) -> DecompositionResult:
-        """
-        Decompose the signal into IMFs and a residual (native sifting).
-
-        Returns a ``DecompositionResult`` with ``IMFs`` of shape (K, num_imfs) and
-        the exact reconstruction ``sum(IMFs, axis=0) + Res == S``.
-        """
-        S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
-
-        # dtype 策略: 显式 dtype 优先; 否则 f32/f64 保持, 其余提升 f64。
-        target = np.dtype(self.dtype) if self.dtype is not None else _work_dtype(S.dtype)
-        S = np.asarray(S).astype(target, copy=False)
-
-        # 包络在索引空间构造与求值 (经典 EMD 语义; T 仅用于校验)。
-        grid = np.arange(N, dtype=np.float64)
-
-        Res = S.copy()
-        IMFs: list = []
-        iterations: list = []
-        final_sds: list = []
-
-        while self.max_imf == -1 or len(IMFs) < self.max_imf:
-            if is_monotonic(Res):
-                break
-            up_idx, _ = self.find_peaks(Res, mod="max", backend=self.find_peaks_mod)
-            dn_idx, _ = self.find_peaks(Res, mod="min", backend=self.find_peaks_mod)
-            if up_idx.size < 2 or dn_idx.size < 2:
-                break
-
-            imf, it, sd = self._sift(Res, up_idx, dn_idx, grid)
-            IMFs.append(imf)
-            iterations.append(it)
-            final_sds.append(sd)
-            Res = Res - imf
-
-        IMFs_arr = (
-            np.array(IMFs, dtype=target)
-            if IMFs
-            else np.empty((0, N), dtype=target)
+    def config_generate(self) -> Config:
+        return EMDConfig(
+            num_imf=self.num_imf,
+            nbsym=self.nbsym,
+            internal_iter=self.internal_iter,
+            internal_delta=self.internal_delta,
+            res_energy=self.res_energy,
+            store_iter_info=self.store_iter_info,
+            pre_num_imfs=self.pre_num_imfs,
+            dtype=self.dtype,
+            safe=self.safe,
+            need_squeeze=self.need_squeeze,
+            mirror_mod=self.mirror_mod,
+            poly_order=self.poly_order,
+            time_poly_order=self.time_poly_order,
+            peaks_backend=self.peaks_backend,
+            faster=self.faster,
         )
+
+    def decompose(self, S: list | np.ndarray) -> DecompositionResult:
+        si = Cache.import_module("scipy.interpolate")
+
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False)
+
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
+            S = Check.to_dtype(S, np.dtype(np.float64))
+
+        # 能量一律用 dot 而非 sum(x**2) 避免每次都要分配一份与信号等长的临时数组
+        original_energy = np.dot(S, S)
+        # 索引网格延迟到真正要筛分时再建 (N 长 float64): 单调/常量/极值不足的信号
+        # 在第一次停止判据就退出, 不该为它们先垫一份 N 长的网格。
+        # 必须是 float64 —— scipy 的 CubicSpline.__call__ 会把非 float 的求值点再拷一份
+        # (实测 int64 网格每调用一次多分配一份 N 长 float64, 而内层每轮要调两次)。
+        grid = None
+
+        # IMF 缓冲: 行数按需增长
+        #   num_imf > 0 : 一次性按请求量 K 定尺 —— 精确到行, 既不会过冲, 也没有
+        #                 扩容峰值 (若改成"先给 pre_num_imfs 行再补", 扩容那一瞬
+        #                 要同时持有旧行与新行, 实测 n=65536/K=12 峰值反而由
+        #                 27xN 升到 37xN)。
+        #   num_imf == -1: 先给 pre_num_imfs 行, 之后按 pre_num_imfs 成块增长。
+        # 用 empty 而非 zeros: 每一行在被读取前都会被 self.imfs[num_imf, :] 写入,
+        # 末尾又按 num_imf 截断, 所以 initial_rows × N 的全量清零是纯浪费。
+        if self.num_imf == -1:
+            initial_rows = self.pre_num_imfs
+        else:
+            initial_rows = self.num_imf
+        self.imfs = np.empty((initial_rows, N), dtype=S.dtype)
+        total_imfs = initial_rows
+        num_imf = 0
+        self.res = None
+        # 残差缓冲是否已归本函数所有: 输入数组可能属于调用方 (Check 的内存策略在
+        # 未触发 memmap 时原样返回), 首轮相减把副本拿到手之后才能就地更新。
+        owns_res = False
+
+        iterations: List[int] = []
+        final_sds: List[float] = []
+
+        if self.store_iter_info:
+            self.temp_imf_arr = []
+            self.iter_convergence = []
+
+        while True:
+            # 停止判据前置: 残差已单调或已低于能量下限时不得再产出 IMF
+            # (res_energy 按原始信号能量归一, 保证对幅值尺度不变)
+            if monotonic(S, mod="monotonic", safe="safe") or np.dot(S, S) < self.res_energy * original_energy:
+                self.res = S
+                break
+
+            # 内层筛分
+            if grid is None:
+                grid = np.arange(N, dtype=np.float64)
+            h = S  # 可省略为 h = S
+            last_h = None
+            last_sd = float("nan")
+            inner_iter = 0
+
+            if self.store_iter_info:
+                this_temp_imfs = []
+                this_iter_convergences = []
+
+            while True:
+                inner_iter += 1
+                if self.internal_iter != -1:
+                    if inner_iter > self.internal_iter:
+                        break
+
+                # 找极值: 先按原始极值判定"残差是否还值得再筛", 再做端点延拓
+                peak_x, peak_arr, peak_max = find_peaks(h, mod="both", safe="safe", backend=self.peaks_backend)
+                if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
+                    break
+
+                if self.nbsym == 0:
+                    mirror_x, mirror_arr, mirror_max = peak_x, peak_arr, peak_max
+                else:
+                    try:
+                        mirror_x, mirror_arr, mirror_max = mirror(h, safe="safe", nbsym=self.nbsym, mod=self.mirror_mod, peaks_backend=self.peaks_backend, poly_order=self.poly_order,time_poly_order=self.time_poly_order)
+                    except ValueError as exc:
+                        msg = str(exc)
+                        if ("nbsym must be <=" in msg) or ("no extrema" in msg) \
+                                or ("at least 2 extrema" in msg) or ("needs both the maxima" in msg):
+                            mirror_x, mirror_arr, mirror_max = peak_x, peak_arr, peak_max
+                        else:
+                            raise
+
+                max_spline = si.CubicSpline(mirror_x[mirror_max], mirror_arr[mirror_max])
+                min_spline = si.CubicSpline(mirror_x[~mirror_max], mirror_arr[~mirror_max])
+                max_env = np.asarray(max_spline(grid), dtype=h.dtype)
+                min_env = np.asarray(min_spline(grid), dtype=h.dtype)
+                # 求局部均值。此处不能像以前那样就地复用 max_env 的缓冲: faster=False 时
+                # end() 要用原样的上/下包络做"包络异号"判定 (代价: 多一份 N 长数组)
+                avg_env = np.add(max_env, min_env)
+                avg_env /= 2
+
+                h_new = h - avg_env
+
+                if last_h is not None:
+                    # 能量用 dot 而非 sum(x**2): 不产生与信号等长的平方临时数组
+                    denominator = np.dot(last_h, last_h)
+                    if denominator < 1e-12:
+                        SD = 0.0
+                    else:
+                        delta = last_h - h_new
+                        SD = np.dot(delta, delta) / denominator
+                    last_sd = SD
+                    # faster=True : Cauchy SD 收敛即放行 (高速档)
+                    # faster=False: 还要通过 end() 的 IMF 必要条件 (对标 OLD / PyEMD)
+                    if SD <= self.internal_delta and (self.faster or self.end(h_new, h, max_env, min_env)):
+                        h = h_new
+                        if self.store_iter_info:
+                            this_temp_imfs.append(h_new)
+                            this_iter_convergences.append(True)
+                        break
+
+                if self.store_iter_info:
+                    this_temp_imfs.append(h_new)
+                    this_iter_convergences.append(False)
+
+                last_h = h_new
+                h = h_new
+
+            imf = h
+
+            # 无进展保护: 本次没提取出有效分量 -> 残差不再变化, 外层循环必须终止
+            #   * ``imf is S``       : 内层首次迭代就因极值不足退出, h 从未被改写,
+            #                          残差与输入同一对象 (短/单峰信号), 不得当成 IMF;
+            #   * 幅值可忽略          : BLCSE 等会伪造极值的模式绕过了极值守卫, 筛分塌缩成
+            #                          零分量; 没有这一条就会退化成"零分量无限循环 +
+            #                          self.imfs 无界增长"。
+            if (imf is S) or max(float(imf.max()), -float(imf.min())) <= 1e-12 * max(np.sqrt(original_energy / N), np.finfo(float).tiny):
+                self.res = S
+                break
+
+            iterations.append(inner_iter)
+            final_sds.append(last_sd)
+
+            if num_imf >= total_imfs:
+                # np.resize 直接把缓冲扩到目标行数 (峰值 = 旧 + 新);
+                # np.concatenate((self.imfs, np.empty((pre, N)))) 还要再多一份
+                # 只为凑行数而存在的 pre×N 空数组, 峰值 = 旧 + 空 + 新。
+                # 新增行随后会被 self.imfs[num_imf, :] 覆盖, 且末尾按 num_imf 截断,
+                # 因此 np.resize 的重复填充不会外泄 (已用 pre_num_imfs=2/3/10/50
+                # 逐位比对确认)。num_imf > 0 时缓冲已一次定尺, 这里不会触发。
+                self.imfs = np.resize(self.imfs, (total_imfs + self.pre_num_imfs, N))
+                total_imfs += self.pre_num_imfs
+            self.imfs[num_imf, :] = imf
+            num_imf += 1
+
+            # 残差就地更新: 首轮相减同时把副本拿到手 (S 从此归本函数所有), 之后
+            # S -= imf 原地做 —— 每轮省下一次 N 长数组的分配/释放与随之而来的页错误。
+            if owns_res:
+                S -= imf
+            else:
+                S = S - imf
+                owns_res = True
+
+            if self.store_iter_info:
+                self.temp_imf_arr.append(this_temp_imfs)
+                self.iter_convergence.append(this_iter_convergences)
+
+            if self.num_imf != -1 and num_imf >= self.num_imf:
+                self.res = S
+                break
+
+        self.imfs = self.imfs[:num_imf, :]
+
+        config = self.config_generate()
+        info = {"iterations": iterations, "final_sd": final_sds}
+        if self.store_iter_info:
+            info["iter_temp_imf"] = self.temp_imf_arr
+            info["iter_convergence"] = self.iter_convergence
 
         return DecompositionResult(
-            IMFs_arr,
-            Res,
-            {"iterations": iterations, "final_sd": final_sds},
-            self.config,
+            IMFs=self.imfs,
+            Res=self.res,
+            info=info,
+            config=config
         )
 
-    # ------------------------------------------------------------------ #
-    # 筛分内循环 (首次迭代复用 decompose 预检过的极值, 省一次全数组扫描)
-    # ------------------------------------------------------------------ #
-    def _sift(self, h, up_idx, dn_idx, grid):
-        # last_sd 初值取 NaN 而非 0.0: 存在**一次 sift 都没做完**就退出的路径,
-        # 此时不存在任何 SD 可报。实测可达的那一条是 ``prev_energy == 0.0``:
-        # 极小幅度信号 (如 1e-300 量级) 的自点积在 float64 下下溢为 0, 于是首轮
-        # 就 break, iters 保持 0。旧实现以 0.0 作初值, 此时 info["final_sd"]
-        # 会谎报"完美收敛到 0", 而 0.0 又小于任何合法 sd_thr, 与真正收敛无法区分。
-        # NaN 表示"无 SD 可报", 与 iters == 0 严格对应。
-        #
-        # 注意: 常量 / 单调 / 全零信号**不会**走到这里 —— 它们在 decompose 的外层
-        # 循环就被 is_monotonic 拦下, ``_sift`` 根本不执行 (故 final_sd 为空列表)。
-        last_sd = float("nan")
-        iters = 0
-
-        for it in range(self.max_iter):
-            if it > 0:
-                up_idx, _ = self.find_peaks(h, mod="max", backend=self.find_peaks_mod)
-                dn_idx, _ = self.find_peaks(h, mod="min", backend=self.find_peaks_mod)
-                if up_idx.size < 2 or dn_idx.size < 2:
-                    break
-
-            up_pos, up_vals = self.mirror_extrema(up_idx, h[up_idx], self.nbsym)
-            dn_pos, dn_vals = self.mirror_extrema(dn_idx, h[dn_idx], self.nbsym)
-            up = self._envelope(up_pos, up_vals, grid)
-            dn = self._envelope(dn_pos, dn_vals, grid)
-            mean = (up + dn) * 0.5
-
-            # Cauchy 型判据: sd = sum(mean^2) / sum(h_prev^2)。
-            prev_energy = float(np.dot(h, h))
-            if prev_energy == 0.0:
-                break  # 全零: 无需再筛, 无 SD
-
-            h_new = h - mean
-            last_sd = float(np.dot(mean, mean)) / prev_energy
-            h = h_new
-            iters = it + 1
-
-            if last_sd < self.sd_thr:
-                # faster=False (默认质量档): 收敛之上还需窄带平衡才放行;
-                # faster=True (高速档): 能量收敛即停 (旧行为)。
-                if self.faster or self._narrowband_ok(h):
-                    break
-
-        return h, iters, last_sd
-
-    def _narrowband_ok(self, h) -> bool:
-        """经典 IMF 必要条件: |过零数 − 极值数| ≤ 1。
-
-        过零用 PyEMD ``indzer`` 同口径 (严格符号积 <0 + 零点段中点); 极值用
-        MD 原生 ``Utils.Peaks`` 规则 (``S[i-1] < S[i] >= S[i+1]``, 平台取升沿
-        右缘)。无平台信号上与 PyEMD 的 f2 (|ext−zc|<2) 等价; 平台/量化信号上
-        两引擎计数契约不同 (见 ``docs/EMD_vs_PyEMD_Detailed_Comparison.md``
-        实验 E-H), 本开关在库内对齐 MD 原生规则。
+    def end(self, h: np.ndarray, h_old: np.ndarray, up: np.ndarray, dn: np.ndarray) -> bool:
         """
-        zc = _zero_cross_count(h)
-        m_idx, _ = self.find_peaks(h, mod="max", backend=self.find_peaks_mod)
-        n_idx, _ = self.find_peaks(h, mod="min", backend=self.find_peaks_mod)
-        return abs(zc - (m_idx.size + n_idx.size)) <= 1
+        ``faster=False`` 的额外放行判定 (仅供 ``decompose`` 在 SD 判据已通过后调用)。
 
-    def _envelope(self, positions, values, grid) -> np.ndarray:
-        """在索引网格 [0, num_imfs) 上按镜像后的极值插值包络 (回投工作 dtype)。"""
-        if self.spline_kind == "linear":
-            out = np.interp(grid, positions, values)
-        else:
-            # spline_kind 即 Utils.Spline 的 canonical 后端名 (Literal 直通)
-            sp = self.spline(positions, values, spline_kind=self.spline_kind)
-            out = sp(grid)
-        return np.asarray(out, dtype=values.dtype)
+        Cauchy SD 只说明"相邻两次筛分不再显著变化", 并不保证筛出来的东西是 IMF。
+        本方法参照 OLD 0.3.0 与 PyEMD 1.9 的内层停筛条件, 再补三道 IMF 必要条件,
+        全部通过才允许该阶收敛:
+
+        1. **窄带平衡** ``|过零数 − 极值数| <= 1``
+           —— OLD ``faster=False`` 的窄带门, 也等价于 PyEMD 的 ``f2 = |extNo − nzm| < 2``。
+           过零用 PyEMD ``indzer`` 口径 (严格符号积 < 0, 零点段按段计), 极值用库内
+           ``Utils.Peaks`` 规则, 与 OLD ``_narrowband_ok`` 逐字一致。
+        2. **包络异号** ``up >= 0`` 且 ``dn <= 0``
+           —— PyEMD ``check_imf`` 的首要条件 (局部极大必须为正、局部极小必须为负)。
+        3. **收敛量级** ``svar = ||h_old − h||² / (max(h_old) − min(h_old)) < 0.001``
+           或 ``std = Σ((h_old − h) / h)² < 0.2``
+           —— PyEMD ``check_imf`` 的两个主判据 (其 ``energy_ratio`` 已由本函数的调用方
+           用 Cauchy SD 承担, 故不重复)。
+
+        刻意不含 PyEMD 的 ``sum(imf_new²) < 1e-10`` 绝对下限: 那是绝对能量阈值, 会像
+        ``res_energy`` 一样破坏幅值尺度不变性; 全零/极小幅度分量由 ``decompose`` 外层
+        的"无进展保护"拦截。
+
+        Parameters
+        ----------
+        h : 当前候选 (已做完本轮 ``h <- h - mean``)
+        h_old : 上一轮候选
+        up, dn : 本轮的上 / 下包络 (必须是未就地改写过的原值)
+
+        Returns
+        -------
+        bool
+            True = 允许该阶收敛; False = 继续筛分直到 ``internal_iter``。
+        """
+        # --- 1) 窄带平衡: |过零 − 极值| <= 1 --------------------------------- #
+        s1, s2 = h[:-1], h[1:]
+        zc = int(np.sum(s1 * s2 < 0))
+        if np.any(h == 0):
+            indz = np.nonzero(h == 0)[0]
+            if np.any(np.diff(indz) == 1):          # 存在零点段才做段合并 (PyEMD 同款条件)
+                zero = h == 0
+                dz = np.diff(np.concatenate(([0], zero, [0])))
+                zc += int(np.nonzero(dz == 1)[0].size)
+
+        m_idx, _ = find_peaks(h, mod="max", safe="safe", backend=self.peaks_backend)
+        n_idx, _ = find_peaks(h, mod="min", safe="safe", backend=self.peaks_backend)
+        if abs(zc - (m_idx.size + n_idx.size)) > 1:
+            return False
+
+        # --- 2) 包络异号 ------------------------------------------------------ #
+        if np.any(up < 0) or np.any(dn > 0):
+            return False
+
+        # --- 3) PyEMD 的缩放方差 / 标准差 ------------------------------------- #
+        delta = h_old - h
+        span = float(np.max(h_old) - np.min(h_old))
+        if span <= 0.0:                             # 上一步已是常量: 无从归一, 直接放行
+            return True
+        if float(np.dot(delta, delta)) / span < 0.001:
+            return True
+        with np.errstate(divide="ignore", invalid="ignore"):
+            std = float(np.sum((delta / h) ** 2))
+        return std < 0.2
 
 
-def _zero_cross_count(x: np.ndarray) -> int:
-    """过零计数 (PyEMD ``indzer`` 同口径): 严格符号积 <0 加零点段中点。"""
-    s1, s2 = x[:-1], x[1:]
-    n = int(np.sum(s1 * s2 < 0))
-    if np.any(x == 0):
-        indz = np.nonzero(x == 0)[0]
-        if np.any(np.diff(indz) == 1):  # 存在零点段才做段合并 (PyEMD 同款条件)
-            z = x == 0
-            dz = np.diff(np.concatenate(([0], z, [0])))
-            debz = np.nonzero(dz == 1)[0]
-            n += int(debz.size)
-    return n
+def f_EMD(S: list | np.ndarray, *, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, **kwargs):
+    emd = EMD(num_imf=num_imf, nbsym=nbsym, internal_delta=internal_delta, internal_iter=internal_iter, res_energy=res_energy, faster=faster, store_iter_info=store_iter_info, **kwargs)
+    return emd.decompose(S)
+
+"""
+other function for module
+"""
+...

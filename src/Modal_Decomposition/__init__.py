@@ -21,35 +21,17 @@ concept (SSA, VMD).
 未安装该可选依赖时不影响其余方法。
 """
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
-
-from . import \
-(
-    CEEFD,
-    CEEMD,
-    CEEMDAN,
-    EEMD,
-    EFD,
-    EMD,
-    EWT,
-    FMD,
-    ICEEMDAN,
-    LMD,
-    MEMD,
-    RPSEMD,
-    SSA,
-    SVMD,
-    VMD
-)  # noqa: F401  (registration side effects)
-
-from ._Registry import _ClassRegistry
 from .Base import *
 from .Utils import *
+from .Error import *
+from .Define import *
+from .Operator import *
+
+from .EMD import EMD, f_EMD, EMDConfig
 
 __all__ = [
     "Class",
     "Function",
-    "SIZE"
     "__version__",
     "__author__",
     "__email__",
@@ -58,11 +40,7 @@ __all__ = [
     "__description__",
 ]
 
-try:
-    __version__ = _pkg_version("Modal-Decomposition")
-except PackageNotFoundError:
-    __version__ = "0.2.1+src"
-
+__version__ = "0.4.0"
 __author__ = "a-raining-day(Mao)"
 __email__ = "2215269365@qq.com"
 __license__ = "Apache 2.0"
@@ -70,94 +48,8 @@ __url__ = "https://github.com/a-raining-day/Modal-Decomposition"
 __description__ = "A comprehensive modal decomposition library"
 
 
-class Namespace:
-    """
-    Read-only namespace over a registry snapshot.
-    """
+class Class:
+    EMD = EMD
 
-    def __init__(self, entries):
-        self.__dict__.update(entries)
-
-
-def _compose_doc(name: str, cls: type) -> str:
-    """
-    Compose the facade docstring from the class, its __init__ and the
-    metadata tables.
-    """
-    import inspect
-
-    full_name = Name.get(name, name)
-    reference = Reference.get(name)
-
-    class_doc = (cls.__doc__ or "").strip()
-    init_doc = (cls.__init__.__doc__ or "").strip()
-
-    parts = [full_name]
-
-    if class_doc:
-        parts.append(class_doc)
-
-    if init_doc:
-        parts.append("Parameters\n----------\n" + init_doc)
-
-    parts.append(
-        "Returns\n"
-        "-------\n"
-        "DecompositionResult\n"
-        "    .IMFs   : np.ndarray\n"
-        "        decomposed modes\n"
-        "    .Res    : np.ndarray | None\n"
-        "        residual\n"
-        "    .info   : dict\n"
-        "        method-specific diagnostics\n"
-        "    .config : " + name + "Config\n"
-        "        effective parameter snapshot of this run"
-    )
-
-    if reference:
-        parts.append("References\n----------\n" + reference)
-
-    if "seed" in inspect.signature(cls.__init__).parameters:
-        parts.append(
-            "Random seed\n"
-            "-----------\n"
-            "If Modal_Decomposition.set_seed was called with a non-None value, "
-            "the global seed overrides this method's local seed and a "
-            "UserWarning is emitted."
-        )
-
-    return "\n\n".join(parts)
-
-
-def _make_facade(name: str, cls: type):
-    """
-    Build Function.X from Class.X.
-
-    ``decompose`` 自身的具名参数 (如 ``EWT`` 的 ``fs``) 会从 kwargs 里分离出来
-    转交给 ``decompose``, 而不是被构造函数吞掉 —— 否则
-    ``Function.EWT(S, fs=1000)`` 会被静默忽略并退回 ``fs=1.0``
-    (构造函数的 ``**kwargs`` 接住了它, 却没有任何用处)。
-    """
-    import inspect
-
-    decompose_params = {
-        p.name
-        for p in inspect.signature(cls.decompose).parameters.values()
-        if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
-        and p.name not in ("self", "S", "T")
-    }
-
-    def facade(S, T=None, **kwargs):
-        decompose_kwargs = {k: kwargs.pop(k) for k in list(kwargs) if k in decompose_params}
-        return cls(**kwargs).decompose(S, T, **decompose_kwargs)
-
-    facade.__name__ = name
-    facade.__qualname__ = f"Function.{name}"
-    facade.__doc__ = _compose_doc(name, cls)
-    return facade
-
-
-Class = Namespace(_ClassRegistry.items())
-Function = Namespace(
-    {k: _make_facade(k, v) for k, v in sorted(_ClassRegistry.items())}
-)  # Function 需要重写，先实例化类，再调用.decompose。参数则是.decompose的在前，其他的在后
+class Function:
+    EMD = f_EMD

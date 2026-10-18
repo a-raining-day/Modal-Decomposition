@@ -1,5 +1,7 @@
 # EMD（原生引擎）验证、调参与内存报告
 
+> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md)
+>
 > 对象：`src/Modal_Decomposition/EMD.py` —— 库内原生 EMD 引擎。本轮之前它以
 > `EMD_NEW.py` 的名字做原型验证，现已在重构中**转正为正式的 `EMD.py`**（旧包装版
 > `EMD.py` 已删除）。全文简称 **EMD（原生）**。
@@ -664,6 +666,27 @@ case B 本身含二次趋势，一个"巨量对消"的退化解也能给出 `IO 
 | 6 | `EMD` 尚未 `register_class("EMD")` | 旧 `EMD.py` 已删除，"EMD" 这个注册键现在**空出来了**，建议补上装饰器，否则 `Class.EMD` / `Function.EMD` 仍然取不到该引擎 |
 | 7 | `IO` 在含大趋势的信号上不是可靠判据 | 见 §6.3（巨量对消的退化解也能给出 `IO ≈ −1`，EMD_OLD 同样如此） |
 | 8 | scipy 的 `_codata.py` 仍是坏的 | 本轮用内存修复绕过；**环境层面需要重装 scipy**，否则任何新进程仍会踩到 |
+
+### 11.1 同族一致性（跨 `EMD` / `EEMD` / `CEEMD`）
+
+三个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
+
+| # | 不一致项 | 现状 |
+|---|---|---|
+| 1 | **`num_imf`** | `EMD` / `EEMD` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
+| 2 | **噪声参数命名与口径** | `EMD` 无噪声参数；`EEMD` / `CEEMD` 用 `noise_amp`（**绝对**标准差）。旧基线（0.3.0 wheel）与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径：`noise_width · \|max−min\|`）。跨库对比前必须先换算，否则噪声强度会差 `\|max−min\|` 倍 |
+| 3 | **注册机制** | 三个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它。所以上文 #6「建议补上注册装饰器」目前**无法落地** —— `register_class` 本身已不存在 |
+
+**已经一致的部分**（供核对）：
+
+- **`dtype` 默认值**：三个类现在都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
+  `EEMD` / `CEEMD` 之所以能真正做到这一点，靠的是它们各自修掉了「噪声是 float64、`S + w`
+  会把工作数组升格」的问题（`.astype(S.dtype, copy=False)`）。
+- **残差语义**：三者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
+- **`info` 的键名**：三者都有 `rows` / `min row` / `EMD info`（`EMD` 另有 `final_sd`，
+  `EEMD` / `CEEMD` 另有 `noise_amp`）；但 `CEEMD` 的 `rows` 与 `EMD info` 是复合结构。
+- **内层 EMD 透传**：`EEMD` / `CEEMD` 都用同一套 16 个 `emd_*` 参数，默认值即本报告的
+  Pareto 拐点。
 
 ---
 

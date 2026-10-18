@@ -13,7 +13,7 @@ from typing import Optional, Any, Type, Literal
 
 import numpy as np
 
-from ..Define import DEFAULT_NUMPY_TYPE, SIZE, SAFE_MODS
+from ..Define import DEFAULT_NUMPY_TYPE, SIZE, SAFE_MODS, SAFE_ARGS
 from ..Base import CHUNK_MOD, Chunk, should_use_memmap, temp_memmap
 
 
@@ -398,6 +398,7 @@ class Check:
 
 def Check_Time_and_Signal(
     S, T=None,
+    safe: SAFE_ARGS | SAFE_MODS = "unknown",
     ndim=None,
     method: str = "",
     default_T: bool = True,
@@ -461,8 +462,10 @@ def Check_Time_and_Signal(
     """
     from .Monotonicity import monotonic
 
+    safe = Check.validate_safe(safe)
+
     S: list | tuple | np.ndarray | np.memmap = _load(S, target_dtype=dtype)  # load
-    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype, safe="unknown", ndim=ndim)  # transform the (list, tuple, set) to np.ndarray or np.memmap
+    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype, safe=safe, ndim=ndim)  # transform the (list, tuple, set) to np.ndarray or np.memmap
 
     N = S.shape[-1]
     if Check.is_empty(S):

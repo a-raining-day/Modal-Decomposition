@@ -27,44 +27,44 @@ def total_cpu() -> int:
 
     return cpu_num
 
-def set_allocable(value: int | float) -> int:
-        """
-        set allocable_cpu_num.
-        int means cpu num, [1, total];
-        float means cpu ratio, (0, 1];
-        -1 means all.
-        :param value:
-        :return:
-        """
-        global cpu_num, allocable_cpu_num
+def set_allocable(value: int | float) -> int:  # TODO: 还没有处理如果多个线程分配 cpu 的问题
+    """
+    set allocable_cpu_num.
+    int means cpu num, [1, total];
+    float means cpu ratio, (0, 1];
+    -1 means all.
+    :param value:
+    :return:
+    """
+    global cpu_num, allocable_cpu_num
 
-        if isinstance(value, bool):
-            raise TypeError(f"value must be int or float, got {value!r}")
+    if isinstance(value, bool):
+        raise TypeError(f"value must be int or float, got {value!r}")
 
-        if isinstance(value, int):
-            # 0 < value <= total, -1 means all.
-            if value == -1:
-                allocable_cpu_num = cpu_num
-                return allocable_cpu_num
-
-            if value <= 0 or value > cpu_num:
-                raise ValueError(f"num of value must in (0, {cpu_num})]")
-
-            allocable_cpu_num = value
+    if isinstance(value, int):
+        # 0 < value <= total, -1 means all.
+        if value == -1:
+            allocable_cpu_num = cpu_num
             return allocable_cpu_num
 
-        if isinstance(value, float):
-            if not (0.0 < value <= 1.0):
-                raise ValueError(f"ratio of value must in (0, 1], got {value!r}")
+        if value <= 0 or value > cpu_num:
+            raise ValueError(f"num of value must in (0, {cpu_num})]")
 
-            allocable_cpu_num = int(cpu_num * value)
-            if allocable_cpu_num < 1:
-                allocable_cpu_num = 1
+        allocable_cpu_num = value
+        return allocable_cpu_num
 
-            allocable_cpu_num = allocable_cpu_num
-            return allocable_cpu_num
+    if isinstance(value, float):
+        if not (0.0 < value <= 1.0):
+            raise ValueError(f"ratio of value must in (0, 1], got {value!r}")
 
-        raise TypeError(f"value must be int or float, got {type(value)!r}")
+        allocable_cpu_num = int(cpu_num * value)
+        if allocable_cpu_num < 1:
+            allocable_cpu_num = 1
+
+        allocable_cpu_num = allocable_cpu_num
+        return allocable_cpu_num
+
+    raise TypeError(f"value must be int or float, got {type(value)!r}")
 
 if cpu_num is None:
     total_cpu()

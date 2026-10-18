@@ -77,8 +77,8 @@ class EMD(Decomposer):
 
         self.param_check()
 
-        self.imfs = None
-        self.res  = None
+        self.imfs: np.ndarray = None
+        self.res:  np.ndarray = None
 
         self.temp_imf_arr: List[np.ndarray] = [] if self.store_iter_info else None
         self.iter_convergence: List[bool] = [] if self.store_iter_info else None
@@ -152,7 +152,7 @@ class EMD(Decomposer):
         if not isinstance(self.faster, bool):
             raise TypeError("the `faster` must be bool.")
 
-    def config_generate(self) -> Config:
+    def config_generate(self) -> EMDConfig:
         return EMDConfig(
             num_imf=self.num_imf,
             nbsym=self.nbsym,
@@ -174,7 +174,7 @@ class EMD(Decomposer):
     def decompose(self, S: list | np.ndarray) -> DecompositionResult:
         si = Cache.import_module("scipy.interpolate")
 
-        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False)
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, safe=self.safe)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
             S = Check.to_dtype(S, np.dtype(np.float64))
@@ -417,10 +417,19 @@ class EMD(Decomposer):
 
 
 def f_EMD(S: list | np.ndarray, *, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, **kwargs):
-    emd = EMD(num_imf=num_imf, nbsym=nbsym, internal_delta=internal_delta, internal_iter=internal_iter, res_energy=res_energy, faster=faster, store_iter_info=store_iter_info, **kwargs)
+    emd = EMD(
+        num_imf=num_imf,
+        nbsym=nbsym,
+        internal_delta=internal_delta,
+        internal_iter=internal_iter,
+        res_energy=res_energy,
+        faster=faster,
+        store_iter_info=store_iter_info,
+        **kwargs
+    )
+
     return emd.decompose(S)
 
 """
 other function for module
 """
-...

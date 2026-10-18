@@ -4,18 +4,31 @@
 便于复现与追责。所有计时口径为**同进程/同脚本中位计时**（预热后测量），
 跨日绝对耗时仅作参考。
 
-## 1. EMD 相关实验
+## 1. EMD 家族（EMD / EEMD / CEEMD）原生引擎验证
 
-| 主题 | 实验脚本 | 原始产物 | docs 报告 |
-|---|---|---|---|
-| **EMD（原生引擎）验证轮**：三方对照、Pareto 调参与默认值选择、`faster` 门、`nbsym` 口径对齐、`mirror_mod` 评测、内存轴 | `.scratch/emd_new/t00`–`t28`（脚本清单见数据目录 README） | `tests/comparison/results/emd_new/*.json` | `docs/test/EMD_Native_Engine_Report.md` |
-| EEMD 原生 vs PyEMD 包装（trials / 长度 / noise_width 扫描） | `comparison/bench_eemd_native.py` | `comparison/results/eemd_native_raw.json` | `docs/EEMD_Native_vs_PyEMD_Report.md` |
+三代引擎各有一轮独立验证，报告与数据一一对应：
+
+| 引擎 | 验证内容 | 实验脚本 | 原始产物 | docs 报告 |
+|---|---|---|---|---|
+| **EMD** | 基线重建与可复现性、三方（EMD_OLD / PyEMD）质量与计时、架构与返回契约、`faster` 门、`nbsym` 口径对齐、`mirror_mod` 评测、内存轴 | `.scratch/emd_new/t00`–`t28`（脚本清单见数据目录 `README.md`） | `tests/comparison/results/emd_new/*.json` | `docs/test/EMD_Native_Engine_Report.md` |
+| **EEMD** | 四方对照（本库新 / 旧原生 / PyEMD / PySDKit）、噪声口径对齐、残差恒等式与 0.3.0 wheel 包装缺陷、内层 EMD 档位消融、Pareto 调参与默认值选择、开箱默认对比、并行实现 | `.scratch/eemd_new/bench.py`、`legacy_eemd.py`、`figs.py`、`pareto.py`、`fig_pareto.py`、`defaults_cmp.py`、`verify_fixes.py`、`test_worker_crash.py` | `tests/comparison/results/eemd_new/{compare,inner_tiers,pareto_sweep,defaults}.json` | `docs/test/EEMD_Native_Engine_Report.md` |
+| **CEEMD** | 旧版可运行性重建与**算法差异辨析**、并行实现补齐、退化输入与 `dtype` 修复、开箱默认对比、互补性收益、Pareto 调参与默认值选择、并行崩溃检测 | `.scratch/eemd_new/ceemd_bench.py`、`legacy_ceemd.py`、`fig_ceemd.py`、`pareto.py`、`test_ceemd.py`、`test_ceemd_robust.py` | `tests/comparison/results/ceemd_new/{compare,pareto_sweep}.json` | `docs/test/CEEMD_Native_Engine_Report.md` |
+
+> 三份报告开头都有互换链接，且各含一节「同族一致性」，统一列出跨三个类的已知不一致
+> （`num_imf` 默认值、噪声参数口径、`register_class` 缺失）。
 
 > 本表其余行引用的 EMD 脚本与报告（`bench_emd_faster.py`、`bench_emd_stopping_variants.py`、
 > `bench_emd_vs_pyemd_alignment.py`、`bench_emd_validation.py`、`refresh_emd_validation_md.py`、
 > `bench_emd_new.py`，以及 `docs/EMD_*.md` 全部报告）已在本次重构中删除；其历史结论仅存于
 > git 历史与 `comparison/results/_legacy_pyemd_wrapper/`，**不再作为现行依据**。计时与内存轴的
-> 现行数字并入上方 `EMD_Native_Engine_Report.md`（§3 计时、§9 内存）。
+> 现行数字并入 `EMD_Native_Engine_Report.md`（§3 计时、§9 内存）。
+>
+> EEMD 一侧同理：`comparison/bench_eemd_native.py`、`comparison/results/eemd_native_raw.json`、
+> `comparison/results/_eemd_*`、`tests/test_eemd.py` 与 `docs/EEMD_Native_vs_PyEMD_Report.md`
+> 已删除，现行数字并入 `EEMD_Native_Engine_Report.md`。
+>
+> CEEMD 此前没有独立的基准脚本或报告，因此**没有删除记录**；旧 `CEEMD.py` 仍在仓库里
+> （跑不起来，作为新旧算法对照的基线使用，见 `CEEMD_Native_Engine_Report.md` §2.1）。
 
 ## 2. 其它方法实验
 
@@ -43,10 +56,10 @@
 | 项 | 状态 |
 |---|---|
 | `comparison/verify_envelope_modes.py`、`comparison/verify_lmd_recon.py` | 控制台验证脚本（无独立结果文件）；结论并入 `docs/Decomposition_Methods_Timing_Report.md` |
-| 3GB 与 ≥1GB 随机噪声内存格 | 推迟记录：`comparison/POSTPONED_3GB.md`；状态汇总见 `docs/EMD_Large_Signal_Memory_Report.md` §2 |
+| 3GB 与 ≥1GB 随机噪声内存格 | 推迟记录：`comparison/POSTPONED_3GB.md`；内存轴现行为见 `docs/test/EMD_Native_Engine_Report.md` §9（原 `docs/EMD_Large_Signal_Memory_Report.md` 已删除） |
 | 历史（PyEMD 包装时代）计时/内存结论 | 数据归档于 `comparison/results/_legacy_pyemd_wrapper/`；结论文档 `comparison/REPORT_EMD_MD_vs_PySDKit.md`（头部已加归档路径说明） |
 | `ssa/results/*`（SSA 结果快照） | 已报告：`docs/SSA_Stride_and_Signal_Validation_Report.md` |
-| `test_memory` 的 `_runs/*.report.json`（逐格原始报告） | 作为 `docs/EMD_Large_Signal_Memory_Report.md` 的底层证据保留，不单独出报告 |
+| `test_memory` 的 `_runs/*.report.json`（逐格原始报告） | 作为内存轴的底层证据保留，不单独出报告；现行结论见 `docs/test/EMD_Native_Engine_Report.md` §9（原 `docs/EMD_Large_Signal_Memory_Report.md` 已删除） |
 
 ## 5. tests/ 清理记录
 

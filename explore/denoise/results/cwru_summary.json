@@ -1,0 +1,325 @@
+{
+  "bpfi": 162.18524,
+  "rows": [
+    {
+      "method": "Butter100",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 80.0,
+      "env_peak_snr": 1.108661273997807,
+      "bpfi_snr": 1.0052343380976934,
+      "kurtosis": 645.791761936428,
+      "std": 0.0022688632326553406
+    },
+    {
+      "method": "Butter100",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 80.0,
+      "env_peak_snr": 1.1021299428101579,
+      "bpfi_snr": 1.0049368652004136,
+      "kurtosis": 3.277217928213868,
+      "std": 0.019014629154190454
+    },
+    {
+      "method": "Butter100",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 80.0,
+      "env_peak_snr": 1.1210054333571073,
+      "bpfi_snr": 1.0058864698054901,
+      "kurtosis": 4.600858066479964,
+      "std": 0.026066994810969014
+    },
+    {
+      "method": "Butter100",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 80.0,
+      "env_peak_snr": 1.1025165792417984,
+      "bpfi_snr": 1.0049590519110854,
+      "kurtosis": 6.096462156667182,
+      "std": 0.03250242636133044
+    },
+    {
+      "method": "Butter3000",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 63.51151284385351,
+      "bpfi_snr": 63.51151284385351,
+      "kurtosis": 5.111547906697405,
+      "std": 0.19346093972645398
+    },
+    {
+      "method": "Butter3000",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 39.78988087921322,
+      "bpfi_snr": 39.78988087921322,
+      "kurtosis": 4.332524196581261,
+      "std": 0.2172056762463487
+    },
+    {
+      "method": "Butter3000",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 31.021208962320642,
+      "bpfi_snr": 31.021208962320642,
+      "kurtosis": 3.906108956318708,
+      "std": 0.23876643681614385
+    },
+    {
+      "method": "Butter3000",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 25.152389807277423,
+      "bpfi_snr": 25.152389807277423,
+      "kurtosis": 3.5613466411630004,
+      "std": 0.2622046826086204
+    },
+    {
+      "method": "MorphAvg5",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 27.81997591562004,
+      "bpfi_snr": 27.81997591562004,
+      "kurtosis": 5.224485269436657,
+      "std": 0.08183505868198156
+    },
+    {
+      "method": "MorphAvg5",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 20.43993056970132,
+      "bpfi_snr": 20.43993056970132,
+      "kurtosis": 3.8170901218475737,
+      "std": 0.10122391496295487
+    },
+    {
+      "method": "MorphAvg5",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 16.16246771398601,
+      "bpfi_snr": 16.16246771398601,
+      "kurtosis": 3.5486928617334126,
+      "std": 0.11742106163994309
+    },
+    {
+      "method": "MorphAvg5",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 12.988412711754549,
+      "bpfi_snr": 12.988412711754549,
+      "kurtosis": 3.2594113508848577,
+      "std": 0.13550983576231487
+    },
+    {
+      "method": "P-K1-M64-a0.5",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 221.5,
+      "env_peak_snr": 14.705809771443064,
+      "bpfi_snr": 9.082983575578377,
+      "kurtosis": 4.488304892123158,
+      "std": 0.0998028080786555
+    },
+    {
+      "method": "P-K1-M64-a0.5",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 221.5,
+      "env_peak_snr": 5.838406333260974,
+      "bpfi_snr": 5.545782853357123,
+      "kurtosis": 3.4721792326809666,
+      "std": 0.1265625000350956
+    },
+    {
+      "method": "P-K1-M64-a0.5",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 4.357617446148891,
+      "bpfi_snr": 4.211951062489205,
+      "kurtosis": 3.6862772909874613,
+      "std": 0.14755033561350742
+    },
+    {
+      "method": "P-K1-M64-a0.5",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 162.0,
+      "env_peak_snr": 3.771824611991042,
+      "bpfi_snr": 3.143838411406565,
+      "kurtosis": 3.1985603307975605,
+      "std": 0.16986891646897756
+    },
+    {
+      "method": "P-K2-M64-a0.5",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 221.5,
+      "env_peak_snr": 8.208085416886249,
+      "bpfi_snr": 4.893540352999624,
+      "kurtosis": 6.392274180189387,
+      "std": 0.06206379202969712
+    },
+    {
+      "method": "P-K2-M64-a0.5",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 8.237003655757645,
+      "bpfi_snr": 8.237003655757645,
+      "kurtosis": 3.6795683104457546,
+      "std": 0.08621886406565557
+    },
+    {
+      "method": "P-K2-M64-a0.5",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 7.6713952148075455,
+      "bpfi_snr": 7.6713952148075455,
+      "kurtosis": 2.9013320211233764,
+      "std": 0.10410334561836836
+    },
+    {
+      "method": "P-K2-M64-a0.5",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 5.641791882895751,
+      "bpfi_snr": 5.641791882895751,
+      "kurtosis": 3.051916664865703,
+      "std": 0.12464423119864368
+    },
+    {
+      "method": "P-K2-M64-a0.6",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 221.5,
+      "env_peak_snr": 8.280672799383261,
+      "bpfi_snr": 5.296715623978594,
+      "kurtosis": 3.533805897636958,
+      "std": 0.06580397714115968
+    },
+    {
+      "method": "P-K2-M64-a0.6",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 7.814827617911057,
+      "bpfi_snr": 7.814827617911057,
+      "kurtosis": 3.1673157755058345,
+      "std": 0.0900831821243301
+    },
+    {
+      "method": "P-K2-M64-a0.6",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 7.016284025645457,
+      "bpfi_snr": 7.016284025645457,
+      "kurtosis": 2.9018298079240163,
+      "std": 0.10788738449547682
+    },
+    {
+      "method": "P-K2-M64-a0.6",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 5.685774538570775,
+      "bpfi_snr": 5.685774538570775,
+      "kurtosis": 2.894329613222596,
+      "std": 0.12904488475572073
+    },
+    {
+      "method": "SG11",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 64.1463159477036,
+      "bpfi_snr": 64.1463159477036,
+      "kurtosis": 4.056575443660639,
+      "std": 0.10231736221172393
+    },
+    {
+      "method": "SG11",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 43.88533079830176,
+      "bpfi_snr": 43.88533079830176,
+      "kurtosis": 3.521237397467051,
+      "std": 0.12181498579896563
+    },
+    {
+      "method": "SG11",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 35.39478165774867,
+      "bpfi_snr": 35.39478165774867,
+      "kurtosis": 3.3237477064785845,
+      "std": 0.1377149178299113
+    },
+    {
+      "method": "SG11",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 30.335517050851745,
+      "bpfi_snr": 30.335517050851745,
+      "kurtosis": 3.1819297131617787,
+      "std": 0.1563844753137263
+    },
+    {
+      "method": "raw",
+      "noise_level": 0.0,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 63.34113806890269,
+      "bpfi_snr": 63.34113806890269,
+      "kurtosis": 5.3761966964749925,
+      "std": 0.29087267019902335
+    },
+    {
+      "method": "raw",
+      "noise_level": 0.5,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 45.37772537251571,
+      "bpfi_snr": 45.37772537251571,
+      "kurtosis": 4.504593222212892,
+      "std": 0.3258406859265847
+    },
+    {
+      "method": "raw",
+      "noise_level": 0.7,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 34.68208370790814,
+      "bpfi_snr": 34.68208370790814,
+      "kurtosis": 4.144984940128981,
+      "std": 0.35691662980180605
+    },
+    {
+      "method": "raw",
+      "noise_level": 0.9,
+      "n": 5,
+      "env_peak_freq": 161.5,
+      "env_peak_snr": 30.684880954501686,
+      "bpfi_snr": 30.684880954501686,
+      "kurtosis": 3.7100324886915175,
+      "std": 0.39134000989049533
+    }
+  ]
+}

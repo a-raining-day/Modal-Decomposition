@@ -1,10 +1,12 @@
 # CEEMD（原生引擎）验证与调参报告
 
-> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md)
+> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md) · [CEEMDAN](./CEEMDAN_Native_Engine_Report.md) · [ICEEMDAN](./ICEEMDAN_Native_Engine_Report.md)
 >
-> 对象：`src/Modal_Decomposition/CEEMD_NEW.py` —— 库内原生互补集总经验模态分解（CEEMD）
-> 引擎，尚未转正为 `CEEMD.py`（旧 `CEEMD.py` 仍在，但它跑不起来，见 §2）。全文简称
-> **CEEMD（原生）** 或 **新 CEEMD**。
+> 对象：`src/Modal_Decomposition/CEEMD.py` —— 库内原生互补集总经验模态分解（CEEMD）引擎。
+> 本轮之前它以 `CEEMD_NEW.py` 的名字做原型验证，现已在重构中**转正为正式的 `CEEMD.py`**
+> （旧的原生 `CEEMD.py` 被覆盖；它最后停留在提交 **`dd547f2`**（149 行、含 `_Registry`），
+> 只能从 `git show dd547f2:src/Modal_Decomposition/CEEMD.py` 取回 —— **现行 HEAD 里已经是
+> 新引擎**）。全文简称 **CEEMD（原生）** 或 **新 CEEMD**。
 >
 > 报告覆盖面：旧 CEEMD 为什么跑不起来、本轮补齐的并行实现与修复、新旧 CEEMD 的**算法差异**
 > （二者不是同一件东西）、开箱默认对比、互补性收益、Pareto 扫描与默认值选择、架构与参数、
@@ -62,7 +64,7 @@
 
 ### 2.1 旧 CEEMD 跑不起来，而且它是**另一套算法**
 
-旧 `src/Modal_Decomposition/CEEMD.py`（4297 B / 148 行）在当前代码树上**完全无法运行**，
+旧 `CEEMD.py`（提交 `dd547f2` 里的版本，4297 B / 149 行）在当前代码树上**完全无法运行**，
 共有 5 处运行期/导入期故障加 1 处接口缺失：
 
 | # | 位置 | 失败原因 |
@@ -83,10 +85,10 @@
 
 ### 2.2 现在的状态
 
-`src/Modal_Decomposition/CEEMD_NEW.py` 现为 **346 行**：
+`src/Modal_Decomposition/CEEMD.py` 现为 **353 行**（原型阶段叫 `CEEMD_NEW.py`，346 行）：
 
 - 类成员：`['__init__', 'param_check', 'config_generate', 'decompose', 'parallel_decompose']`
-- **模块级函数：无**
+- 模块级函数：`f_CEEMD`（函数式入口，与 `EMD` / `EEMD` 的 `f_*` 一致）
 
 本轮之前它只有串行分支，且 `decompose` 在串行循环结束后**直接结束**（既没有 `config`/`info`
 构造，也没有 `return`）。本轮补齐的正是后半段。
@@ -143,10 +145,10 @@
 
 这一点必须单列，否则会误读 §5 的对照表。
 
-| 维度 | 旧 `CEEMD.py` | 新 `CEEMD_NEW.py` |
+| 维度 | 旧 `CEEMD.py`（`dd547f2`） | 新 `CEEMD.py` |
 |---|---|---|
 | 分解对象 | **逐阶**：每次只从当前残差里取 **1 个** IMF（`EMD(num_imf=1)`） | **整个信号**：对 `S+w` 与 `S−w` 各做一次完整 EMD |
-| 噪声强度 | `beta` 相对**当前残差**的 std | `noise_amp` 相对**整信号**的 std（绝对值口径） |
+| 噪声强度 | `beta` 相对**当前残差**的 std | `noise_amp` 是**幅值系数**（`σ̂ = noise_amp · std(S)`，相对整信号） |
 | 集总方式 | 每阶 `N_whitenoise` 次实现的平均 | `M` 对互补信号的逐阶平均 |
 | 计算量 | 约 `N_imf × N_whitenoise` 次"单阶"EMD | `2M` 次完整 EMD |
 | 残差语义 | 主体能量留在残差（`leak` 0.87–0.89） | `Res = S − ΣIMFs`，能量主要落进 IMFs（`leak` 0.003） |
@@ -184,8 +186,9 @@
 | C/4096 | PyEMD.EEMD | 3523.6 | 12 | 4/12 | — | — | 0.1542 | 0.034 | 0.3297 | 1.39e-17 |
 | C/4096 | PySDKit.EEMD | 3992.8 | 12 | 4/12 | — | — | 0.1584 | 0.042 | 0.3297 | 1.39e-17 |
 
-> **表注**：`sigma` 列是各实现**实际注入**的噪声标准差，不是名义参数。新 CEEMD 用绝对
-> 标准差口径（`0.3·std(S)`）；旧 CEEMD / PyEMD / PySDKit 的名义参数是**峰峰值口径**
+> **表注**：`sigma` 列是各实现**实际注入**的噪声标准差，不是名义参数。新 CEEMD 的
+> `noise_amp` 是**幅值系数**（实际 `σ̂ = noise_amp · std(S)`，默认系数 0.3）；旧 CEEMD /
+> PyEMD / PySDKit 的名义参数是**峰峰值口径**
 > （`noise_width · |max(S) − min(S)|`）。所以这几家的 `sigma` 不同，本表**不是等口径对照**，
 > 这也是本轮统一采用"各家用自己的默认"的原因。
 
@@ -236,7 +239,7 @@ CEEMD 的设计意图是**让同一份噪声的正负两次分解互相对消**�
 
 ### 7.1 扫描面与质量指标
 
-- `M ∈ {10, 25, 50, 100}` × `alpha = noise_amp / std(S) ∈ {0.1, 0.2, 0.3, 0.4}`，共 **16 组**。
+- `M ∈ {10, 25, 50, 100}` × `alpha = noise_amp`（**幅值系数**，等价于 `σ̂/std(S)`）`∈ {0.1, 0.2, 0.3, 0.4}`，共 **16 组**。
 - 质量指标与 EMD / EEMD 两轮同定义：`Q = (q_A + q_C + q_B) / 3`
   - `q_A` = A/4096 与 A/16384 上 `0.5·(c37 + c113)` 的均值
   - `q_C` = C/4096 的 IMF 行级窄带合规率
@@ -317,7 +320,7 @@ CEEMD 的设计意图是**让同一份噪声的正负两次分解互相对消**�
 
 后者**更便宜且质量更高**，所以 `(0.3, 50)` 不在前沿上。而 `(0.3, 25)` 用一半的成本拿到
 几乎相同的 `Q`（0.7091 vs 0.7106），于是最终把默认定为 **`M = 25`**（噪声强度沿用
-`0.3·std(S)`）。
+幅值系数 `0.3`，即 `σ̂ = 0.3·std(S)`）。
 
 ---
 
@@ -328,11 +331,13 @@ CEEMD 的设计意图是**让同一份噪声的正负两次分解互相对消**�
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `num_imf` | **必填** | 不传就报错（与 `EMD`/`EEMD` 的 `-1` 默认不同，见 §10.3） |
-| `noise_amp` | `None` | `None` → 自动取 `0.3·std(S)`（**绝对**标准差，尺度不变） |
+| `noise_amp` | `None` | **幅值系数**（无量纲）；实际噪声 `σ̂ = noise_amp · std(S)`。`None` → 自动取系数 **`0.3`**（尺度不变） |
 | `M` | **25** | 互补对数；一次试验 = **2 次**内层 EMD，总计算量 `2M` 次 |
 | `parallel` | `False` | 走进程池 |
 | `num_workers` | `1` | `int` = 进程数；`float` = 比例；`-1` = 全部；经 `Base.set_allocable` 归一 |
 | `dtype` | `None` | `None` = 保持输入精度（`float32` 全程 `float32`）；也可显式指定 float dtype |
+| `copy` | `True` | 是否让 `Check_Time_and_Signal` 交回信号副本。CEEMD 全程不写入 `S`，故 `copy=False` 也安全（省一份 `N` 长数组并保留 memmap 支撑） |
+| `peaks_backend` | `"numpy"` | **本类自身** `find_peaks`（退化守卫）的后端，`Check.validate_mod(..., PEAKS_BACKEND)` 校验；`numpy` / `scipy` 实测结果逐位相同、非法值 `ValueError`。**内层 EMD 仍用 `emd_peaks_backend`**，两者独立（本轮补齐，见 `ICEEMDAN_Native_Engine_Report.md` §8.3） |
 
 另有一组 `emd_*` 透传参数（16 个），原样交给内层 `EMD`，默认值即 EMD 轮的 Pareto 拐点：
 `emd_nbsym=4`、`emd_internal_delta=0.2`、`emd_internal_iter=50`、`emd_faster=True`、
@@ -344,9 +349,10 @@ CEEMD 的设计意图是**让同一份噪声的正负两次分解互相对消**�
 ```
 Check_Time_and_Signal(need_T=False) → 工作精度归一 (int/bool/f16 → f64)
   → 重置 self.imfs / self.res
-  → noise_amp = self.noise_amp 或 0.3·std(S)
+  → noise_amp = self.noise_amp 或 0.3            # 幅值系数
+  → noise_std = noise_amp · std(S)               # 实际注入的绝对标准差
   → 退化守卫: 极值 < 2 → 直接返回空 IMF 集 (k=0)
-  → 串行: for m in range(M):  w = N(0, noise_amp)
+  → 串行: for m in range(M):  w = N(0, noise_std)
                               IMFs = (EMD(S+w) + EMD(S−w)) / 2
                               累积求和, 逐次取 min_row
   → 并行: M/num_workers 均分 → 子进程各跑一段 → mp.Queue 回传累积和
@@ -363,7 +369,8 @@ Check_Time_and_Signal(need_T=False) → 工作精度归一 (int/bool/f16 → f64
 | `Res` | `(N,)`，**恒有 `Res = S − ΣIMFs`**（实测 `recon` 为 0，即逐位精确） |
 | `info["rows"]` | 每次试验一项，**是三元组 `(k_plus, k_minus, k_avg)`** —— 与 `EEMD` 的标量不同 |
 | `info["min row"]` | `min(r[2] for r in rows)`，即最终 `k` 的上限来源 |
-| `info["noise_amp"]` | **本次实际使用的绝对标准差**（`None` 时即自动推断值，便于追溯） |
+| `info["noise_amp"]` | 本次使用的**幅值系数**（`None` 时即自动档的 0.3，便于追溯） |
+| `info["noise_std"]` | 本次**实际注入的绝对噪声标准差** `= noise_amp · std(S)` |
 | `info["EMD info"]` | 每次试验一项，**是 `(plus_info, minus_info)` 一对** —— 与 `EEMD` 的单个 `info` 不同 |
 | `config` | `CEEMDConfig`，含嵌套 `EMDConfig` |
 
@@ -386,7 +393,7 @@ num_workers = min(self.num_workers, self.M)              # 进程数不超过试
 trial_seeds = np.random.randint(0, 2**31-1, size=self.M) # 父进程派生种子
 base, extra = divmod(self.M, num_workers)                # M / num_workers 均分
 task = {"index": p, "start": left, "end": right, "seeds": trial_seeds[left:right]}
-mp.Process(target=self.parallel_decompose, args=(S, noise_amp, queue, task))
+mp.Process(target=self.parallel_decompose, args=(S, noise_std, queue, task))
 queue.put((index, acc, n, rows, infos))                  # 子进程回传累积和
 queue.put(("error", index, "类型: 描述"))                 # 出错时先回传原因再 raise
 # 父进程: 轮询收 num_workers 条 → 崩溃即 raise → 按 index 排序 → 取 min_row → 累加 → /= M
@@ -439,30 +446,33 @@ queue.put(("error", index, "类型: 描述"))                 # 出错时先回�
 |---|---|---|
 | 1 | `q_C` 只有 0/7、1/7 的粗分辨率 | 使 `Q` 出现 0.0476 量级的跳变假象，非单调（§7.3）。要根治需把 C 网格加密或改用「合规行数/总行数」的池化口径 |
 | 2 | `CEEMDConfig.dtype` **显式传 `dtype` 时**存的是 `np.float32` / `np.float64` **类对象**，而非 `np.dtype` 实例 | 此时 `config.to_dict()` 无法 JSON 序列化会抛 `TypeError`；默认 `dtype=None` 时不受影响 |
-| 3 | `CEEMD_NEW.py` 尚未转正为 `CEEMD.py` | 旧 `CEEMD.py` 仍在（且跑不起来，§2.1），直接替换前需确认没有外部依赖旧算法语义 |
-| 4 | 三个类都未 `register_class` | `_Registry.py` 已删除，注册机制整体不存在 |
+| 3 | 旧算法与现役 `CEEMD.py` **同名不同物** | 现役 `CEEMD.py` 已是新引擎，旧实现只能从 `git show dd547f2:src/Modal_Decomposition/CEEMD.py` 取回（**不是 HEAD**，HEAD 里已是新版），调用方若依赖旧算法语义需显式重建（§11.2） |
+| 4 | 五个类都未 `register_class` | `_Registry.py` 已删除，注册机制整体不存在 |
 | 5 | 15 个兄弟模块仍 `from ._Registry import register_class` **且** `from .Base import Config` | 按需 import 即失败（`ImportError: cannot import name 'Config'`），整包 `import Modal_Decomposition` 能过只是因为 `__init__` 不主动加载 |
 | 6 | `LMD.py` 有语法错误 | `IndentationError: unexpected indent (line 412)` |
 
-### 10.3 同族一致性（跨 `EMD` / `EEMD` / `CEEMD`）
+### 10.3 同族一致性（跨 `EMD` / `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN`）
 
-三个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
+五个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
 
 | # | 不一致项 | 现状 |
 |---|---|---|
-| 1 | **`num_imf`** | `EMD` / `EEMD` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
-| 2 | **噪声参数命名与口径** | `EMD` 无噪声参数；`EEMD` / `CEEMD` 用 `noise_amp`（**绝对**标准差）。旧基线（0.3.0 wheel）与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径：`noise_width · \|max−min\|`）。跨库对比前必须先换算，否则噪声强度会差 `\|max−min\|` 倍 |
-| 3 | **注册机制** | 三个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它 |
+| 1 | **噪声参数口径** | `EMD` 无噪声参数；**`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 的 `noise_amp` 都是「幅值系数」**（`σ = noise_amp · std(S)`，无量纲），默认值分别是 **0.3 / 0.3 / 0.3 / 0.2**。`ICEEMDAN` 的 `noise_amp` 就是 `β_k` 里的 ε₀：第 1 阶注入幅值同为 `noise_amp · std(S)`，之后按 `std(r_{k−1})` 自适应。旧基线（0.3.0 wheel）与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径 `noise_width · \|max−min\|`）。跨库对比前必须先换算，否则噪声强度会差 `\|max−min\| / std(S)` 倍 |
+| 2 | **`num_imf` 是否必填** | `EMD` / `EEMD` / `CEEMDAN` / `ICEEMDAN` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
+| 3 | **`info` 键名** | `EMD`：无噪声键（有 `final_sd`）；`EEMD` / `CEEMD`：`noise_amp`（系数）**+** `noise_std`（绝对标准差）；**`CEEMDAN` / `ICEEMDAN`：只有 `noise_std`，没有 `noise_amp`**。另外 `CEEMD` 的 `rows` 是三元组、`EMD info` 是一对（§8.3）；`ICEEMDAN` 的 `info["emd info"]` **恒为空列表**（内层局部均值 EMD 的 info 未收集） |
+| 4 | **注册机制** | 五个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它 |
+| 5 | **并行能力** | 只有 `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 有 `parallel`；`EMD` 无多进程路径，且 **`CEEMDAN` / `ICEEMDAN` 的并行当前无收益**（`spawn` 固定开销摊不平，见 `CEEMDAN_Native_Engine_Report.md` §9.2 与 `ICEEMDAN_Native_Engine_Report.md` §4.3） |
 
 **已经一致的部分**（供核对）：
 
-- **`dtype` 默认值**：三个类现在都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
-  EEMD / CEEMD 之所以能真正做到这一点，靠的是本轮修的 `.astype(S.dtype)` —— 修复前
-  `np.random.normal(...)` 是 float64，`S + w` 会把工作数组整体升格。
-- **残差语义**：三者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
-- **`info` 的键名**：三者都有 `rows` / `min row` / `noise_amp` / `EMD info`（`EMD` 无
-  `noise_amp`）；但 `CEEMD` 的 `rows` 与 `EMD info` 是复合结构（§8.3）。
-- **内层 EMD 透传**：`EEMD` / `CEEMD` 都用同一套 16 个 `emd_*` 参数。
+- **`dtype` 默认值**：五个类都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
+  `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 之所以能真正做到这一点，靠的是本轮修的 `.astype(S.dtype)` ——
+  修复前 `np.random.normal(...)` 是 float64，`S + w` 会把工作数组整体升格。
+- **残差语义**：五者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
+- **内层 EMD 透传**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 都用同一套 `emd_*` 参数。
+- **`peaks_backend`**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 现在都有顶层 `peaks_backend`
+  （默认 `"numpy"`，`Check.validate_mod(..., PEAKS_BACKEND)` 校验），内层 EMD 仍用
+  `emd_peaks_backend`；`EMD` 只有 `peaks_backend` 一个（它就是内层）。
 
 ---
 
@@ -483,11 +493,15 @@ queue.put(("error", index, "类型: 描述"))                 # 出错时先回�
 
 ### 11.2 旧 CEEMD 基线是怎么造出来的
 
-`.scratch/eemd_new/legacy_ceemd.py` 读取仓库里的 `src/Modal_Decomposition/CEEMD.py`，按 §2.1
-的 6 条做等价补丁（去掉 `register_class` 装饰器、把 `resolve_seed` 换成等价实现、
-`max_imf` → `num_imf`、`decompose(S_plus, T)` → `decompose(S_plus)`、`need_T=True`、
-补 `param_check` / `config_generate`），然后把补丁后的源码 `exec` 进一个**动态模块**。
-**不往仓库写任何文件**。
+`.scratch/eemd_new/legacy_ceemd.py` 按 §2.1 的 6 条做等价补丁（去掉 `register_class` 装饰器、
+把 `resolve_seed` 换成等价实现、`max_imf` → `num_imf`、`decompose(S_plus, T)` →
+`decompose(S_plus)`、`need_T=True`、补 `param_check` / `config_generate`），然后把补丁后的
+源码 `exec` 进一个**动态模块**。**不往仓库写任何文件**。
+
+> **取源注意**：旧实现必须从提交 **`dd547f2`** 取
+> （`git show dd547f2:src/Modal_Decomposition/CEEMD.py`，149 行、含 `_Registry`）。
+> 工作区与**现行 HEAD** 里的同名文件都已经是新引擎，直接读会拿到新代码、复现不出旧基线。
+> 脚本目前读的是工作区路径，要复现旧基线需先按该提交取源。
 
 ### 11.3 运行方式
 

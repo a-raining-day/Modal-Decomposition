@@ -11,8 +11,8 @@
 | `pareto_sweep.json` | 实验 3：`M` × `alpha` 二维 Pareto 扫描 | 10/25/50/100/200 | 0.05–0.40 | 25 | `.scratch/eemd_new/pareto.py` |
 | `defaults.json` | 实验 4：开箱默认对比（每家用它自己的默认参数） | 各自默认 | 各自默认 | 16 | `.scratch/eemd_new/defaults_cmp.py` |
 
-`α` 的含义：目标噪声标准差 `σ̂ = α · std(S)`，**绝对标准差**口径。各引擎的传参换算见报告 §4
-（本库 `noise_amp = σ̂`；PyEMD / PySDKit / 旧原生都是峰峰值口径 `noise_width = σ̂ / |max(S)−min(S)|`）。
+`α` 的含义：`alpha` **就是本库的幅值系数 `noise_amp`**，实际噪声 `σ̂ = α · std(S)`。各引擎的传参换算见报告 §4
+（本库 `noise_amp = α = σ̂ / std(S)`；PyEMD / PySDKit / 旧原生都是峰峰值口径 `noise_width = σ̂ / |max(S)−min(S)|`）。
 
 > ⚠️ 实验 1/2/3 是**统一 α 的同口径对照**；**实验 4 不是** —— 它让每家走自己的默认
 > （本库 `alpha=0.3`、另三家 `noise_width=0.05` 峰峰值），所以 `defaults.json` 每行额外记了
@@ -78,8 +78,8 @@
 ## ⚠️ 读数据前必看的两个前提
 
 1. **四列已是同口径数据（口径）**。`compare.json` 的四方对比统一取 `σ̂ = α·std(S)`：
-   本库 EEMD 的 `noise_amp` 是**绝对标准差**，而旧原生 / PyEMD / PySDKit 的 `noise_width`
-   是**峰峰值口径**，须传 `σ̂ / |max(S)−min(S)|`。
+   本库 EEMD 的 `noise_amp` 是**相对 `std(S)` 的幅值系数**（`σ̂ = noise_amp · std(S)`），
+   而旧原生 / PyEMD / PySDKit 的 `noise_width` 是**峰峰值口径**，须传 `σ̂ / |max(S)−min(S)|`。
    > 留档：本文件**首版**的 `run_pysdkit` 曾误传 `noise_width = σ̂`，而 pysdkit
    > （`.venv/Lib/site-packages/pysdkit/_emd/eemd.py:244`）内部会再乘一次峰峰值
    > （`scale = noise_width * |max−min|`），导致该列噪声被放大 |max−min| 倍、分解提前停，

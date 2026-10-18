@@ -6,7 +6,7 @@ from .EMD import EMD, EMDConfig
 
 from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
 from .Base import Cache, set_allocable
-from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal
+from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal, PEAKS_BACKEND
 
 """
 Config
@@ -28,15 +28,16 @@ Class and Function of decomposer
 class CEEMD(Decomposer):
     name = "CEEMD"
 
-    def __init__(self, num_imf: int = -1, noise_amp: float = None, M: int = 25, parallel: bool = False, num_workers: int | float = 1, **kwargs) -> None:
+    def __init__(self, num_imf: int = -1, noise_amp: float = 0.1, M: int = 25, parallel: bool = False, num_workers: int | float = 1, copy: bool = False, **kwargs) -> None:
         self.num_imf = num_imf
         self.noise_amp: float = noise_amp
         self.M: int = M
         self.parallel: bool = parallel
         self.num_workers: int | float = num_workers
+        self.copy: bool = copy
 
         unknown = set(kwargs) - {
-            "dtype",
+            "dtype", "peaks_backend",
             "emd_num_imf", "emd_nbsym", "emd_internal_delta", "emd_internal_iter",
             "emd_res_energy", "emd_faster", "emd_store_iter_info", "emd_pre_num_imfs",
             "emd_dtype", "emd_safe", "emd_need_squeeze", "emd_mirror_mod",
@@ -62,6 +63,7 @@ class CEEMD(Decomposer):
         self.emd_poly_order: int = kwargs.get("emd_poly_order", 2)
         self.emd_time_poly_order: int = kwargs.get("emd_time_poly_order", 2)
         self.emd_peaks_backend: str = kwargs.get("emd_peaks_backend", "numpy")
+        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")   # 本类自己 find_peaks 用的后端
 
         self.param_check()
 
@@ -94,11 +96,11 @@ class CEEMD(Decomposer):
             if not (self.num_imf > 0):
                 raise ValueError("num_imf must > 0")
 
-        if self.noise_amp is not None:
-            if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
-                raise TypeError("noise_amp must be float or None")
-            if not (self.noise_amp > 0):
-                raise ValueError("noise_amp must > 0")
+        if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
+            raise TypeError("noise_amp must be float or None")
+
+        if not (self.noise_amp > 0):
+            raise ValueError("noise_amp must > 0")
 
         if not isinstance(self.M, int) or isinstance(self.M, bool):
             raise TypeError("M must be an int")
@@ -108,6 +110,9 @@ class CEEMD(Decomposer):
 
         if not isinstance(self.parallel, bool):
             raise TypeError("parallel must be bool")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
 
         if not isinstance(self.num_workers, (int, float)) or isinstance(self.num_workers, bool):
             raise TypeError("num_workers must be an int or float")
@@ -130,6 +135,8 @@ class CEEMD(Decomposer):
             if self.emd_num_imf != -1:
                 self.emd_num_imf = self.num_imf if self.emd_num_imf < self.num_imf else self.emd_num_imf
 
+        self.peaks_backend = Check.validate_mod(self.peaks_backend, PEAKS_BACKEND)
+
     def config_generate(self) -> CEEMDConfig:
         return CEEMDConfig(
             num_imf=self.num_imf,
@@ -143,7 +150,7 @@ class CEEMD(Decomposer):
 
 
     def decompose(self, S: List[int | float] | np.ndarray) -> DecompositionResult:
-        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False)
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, copy=self.copy)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
             S = Check.to_dtype(S, np.dtype(np.float64))
@@ -152,17 +159,16 @@ class CEEMD(Decomposer):
         self.imfs = None
         self.res = None
 
-        # 自动档取 0.3·std(S): EEMD 的 Pareto 扫描显示弱音调捕获在 alpha≈0.3 处饱和; CEEMD 的互补噪声对消掉大部分残余, 同一强度下残余更小, 故沿用同一阈值
-        noise_amp = self.noise_amp if self.noise_amp is not None else float(S.std() * 0.3)
+        noise_std = self.noise_amp * S.std()          # 实际噪声标准差, 便于追溯
 
-        _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.emd_peaks_backend)
+        _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.peaks_backend)
         if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
             self.imfs = np.empty((0, N), dtype=S.dtype)
             self.res = S
             return DecompositionResult(
                 IMFs=self.imfs,
                 Res=self.res,
-                info={"rows": [], "min row": 0, "noise_amp": noise_amp, "EMD info": []},
+                info={"rows": [], "min row": 0, "noise_std": noise_std, "EMD info": []},
                 config=self.config_generate()
             )
 
@@ -171,7 +177,7 @@ class CEEMD(Decomposer):
 
         if not self.parallel:
             for m in range(self.M):
-                w = np.random.normal(loc=0, scale=noise_amp, size=S.size).astype(S.dtype, copy=False)  # 只生成一次
+                w = np.random.normal(loc=0, scale=noise_std, size=S.size).astype(S.dtype, copy=False)  # 只生成一次
                 S_plus_noisy = S + w
                 S_minus_noisy = S - w
 
@@ -222,7 +228,7 @@ class CEEMD(Decomposer):
 
             for task in tasks:
                 parallel_process[task["index"]] = mp.Process(
-                    target=self.parallel_decompose, args=(S, noise_amp, queue, task))
+                    target=self.parallel_decompose, args=(S, noise_std, queue, task))
                 parallel_process[task["index"]].start()
 
             # 用"轮询 + 存活检查": 超时只是轮询间隔, 不对健康进程设截止时间, 所以耗时长的正常试验不会被误杀; 一旦发现 worker 已退出, 立刻清场并抛错。
@@ -282,8 +288,7 @@ class CEEMD(Decomposer):
             self.res = S - self.imfs.sum(axis=0)
 
         config = self.config_generate()
-        info = {"rows": rows, "min row": min(r[2] for r in rows),
-                "noise_amp": noise_amp, "EMD info": EMD_info}
+        info = {"rows": rows, "min row": min(r[2] for r in rows),"noise_std": noise_std, "EMD info": EMD_info}
 
         return DecompositionResult(
             IMFs=self.imfs,
@@ -292,7 +297,7 @@ class CEEMD(Decomposer):
             config=config
         )
 
-    def parallel_decompose(self, S, noise_amp, pointer, task):
+    def parallel_decompose(self, S, noise_std, pointer, task):
         """
         单个工作进程: 只负责自己那段试验 (task["start"] .. task["end"])。
 
@@ -312,7 +317,7 @@ class CEEMD(Decomposer):
                 # spawn 启动的子进程 RNG 与父进程无关, 用父进程派生的种子保证可复现
                 np.random.seed(int(task["seeds"][m - task["start"]]))
 
-                w = np.random.normal(loc=0, scale=noise_amp, size=S.size).astype(S.dtype, copy=False)  # 只生成一次, 正负共用
+                w = np.random.normal(loc=0, scale=noise_std, size=S.size).astype(S.dtype, copy=False)  # 只生成一次, 正负共用
                 plus_EMDResult = self.EMD.decompose(S + w)
                 minus_EMDResult = self.EMD.decompose(S - w)
 

@@ -34,7 +34,7 @@ Class and Function of decomposer
 class EMD(Decomposer):
     name = "EMD"
 
-    def __init__(self, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, **kwargs):
+    def __init__(self, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, copy: bool = True, **kwargs):
         """
 
         :param num_imf:
@@ -44,6 +44,10 @@ class EMD(Decomposer):
         :param res_energy:
         :param faster:
         :param store_iter_info:
+        :param copy: 是否让 ``Check_Time_and_Signal`` 交回一份归本函数所有的信号副本。
+                     默认 True: 残差可以直接原地 ``S -= imf``, 不必每轮分配等长数组,
+                     调用方的输入也不会被改写。传 ``False`` 时不复制 (省一份 N 长数组,
+                     且保留 memmap 支撑), 但 ``decompose`` 会**原地覆盖调用方的输入数组**。
         :param kwargs:
         """
 
@@ -54,6 +58,7 @@ class EMD(Decomposer):
         self.res_energy: float = res_energy
         self.faster: bool = faster
         self.store_iter_info: bool = store_iter_info
+        self.copy: bool = copy
 
         unknown = set(kwargs) - {
             "pre_num_imfs", "dtype", "safe", "need_squeeze",
@@ -125,6 +130,9 @@ class EMD(Decomposer):
         if not isinstance(self.store_iter_info, bool):
             raise TypeError("the `store_iter_info` must be bool.")
 
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool.")
+
         if self.dtype is not None and np.dtype(self.dtype).kind != "f":
             raise ValueError("the `dtype` must be a float numpy dtype or None.")
 
@@ -174,27 +182,16 @@ class EMD(Decomposer):
     def decompose(self, S: list | np.ndarray) -> DecompositionResult:
         si = Cache.import_module("scipy.interpolate")
 
-        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, safe=self.safe)
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
             S = Check.to_dtype(S, np.dtype(np.float64))
 
         # 能量一律用 dot 而非 sum(x**2) 避免每次都要分配一份与信号等长的临时数组
         original_energy = np.dot(S, S)
-        # 索引网格延迟到真正要筛分时再建 (N 长 float64): 单调/常量/极值不足的信号
-        # 在第一次停止判据就退出, 不该为它们先垫一份 N 长的网格。
-        # 必须是 float64 —— scipy 的 CubicSpline.__call__ 会把非 float 的求值点再拷一份
-        # (实测 int64 网格每调用一次多分配一份 N 长 float64, 而内层每轮要调两次)。
+
         grid = None
 
-        # IMF 缓冲: 行数按需增长
-        #   num_imf > 0 : 一次性按请求量 K 定尺 —— 精确到行, 既不会过冲, 也没有
-        #                 扩容峰值 (若改成"先给 pre_num_imfs 行再补", 扩容那一瞬
-        #                 要同时持有旧行与新行, 实测 n=65536/K=12 峰值反而由
-        #                 27xN 升到 37xN)。
-        #   num_imf == -1: 先给 pre_num_imfs 行, 之后按 pre_num_imfs 成块增长。
-        # 用 empty 而非 zeros: 每一行在被读取前都会被 self.imfs[num_imf, :] 写入,
-        # 末尾又按 num_imf 截断, 所以 initial_rows × N 的全量清零是纯浪费。
         if self.num_imf == -1:
             initial_rows = self.pre_num_imfs
         else:
@@ -203,9 +200,7 @@ class EMD(Decomposer):
         total_imfs = initial_rows
         num_imf = 0
         self.res = None
-        # 残差缓冲是否已归本函数所有: 输入数组可能属于调用方 (Check 的内存策略在
-        # 未触发 memmap 时原样返回), 首轮相减把副本拿到手之后才能就地更新。
-        owns_res = False
+
 
         iterations: List[int] = []
         final_sds: List[float] = []
@@ -251,8 +246,7 @@ class EMD(Decomposer):
                         mirror_x, mirror_arr, mirror_max = mirror(h, safe="safe", nbsym=self.nbsym, mod=self.mirror_mod, peaks_backend=self.peaks_backend, poly_order=self.poly_order,time_poly_order=self.time_poly_order)
                     except ValueError as exc:
                         msg = str(exc)
-                        if ("nbsym must be <=" in msg) or ("no extrema" in msg) \
-                                or ("at least 2 extrema" in msg) or ("needs both the maxima" in msg):
+                        if ("nbsym must be <=" in msg) or ("no extrema" in msg) or ("at least 2 extrema" in msg) or ("needs both the maxima" in msg):
                             mirror_x, mirror_arr, mirror_max = peak_x, peak_arr, peak_max
                         else:
                             raise
@@ -309,24 +303,14 @@ class EMD(Decomposer):
             final_sds.append(last_sd)
 
             if num_imf >= total_imfs:
-                # np.resize 直接把缓冲扩到目标行数 (峰值 = 旧 + 新);
-                # np.concatenate((self.imfs, np.empty((pre, N)))) 还要再多一份
-                # 只为凑行数而存在的 pre×N 空数组, 峰值 = 旧 + 空 + 新。
-                # 新增行随后会被 self.imfs[num_imf, :] 覆盖, 且末尾按 num_imf 截断,
-                # 因此 np.resize 的重复填充不会外泄 (已用 pre_num_imfs=2/3/10/50
-                # 逐位比对确认)。num_imf > 0 时缓冲已一次定尺, 这里不会触发。
                 self.imfs = np.resize(self.imfs, (total_imfs + self.pre_num_imfs, N))
                 total_imfs += self.pre_num_imfs
             self.imfs[num_imf, :] = imf
             num_imf += 1
 
-            # 残差就地更新: 首轮相减同时把副本拿到手 (S 从此归本函数所有), 之后
-            # S -= imf 原地做 —— 每轮省下一次 N 长数组的分配/释放与随之而来的页错误。
-            if owns_res:
-                S -= imf
-            else:
-                S = S - imf
-                owns_res = True
+            # 残差就地更新: S 是 Check_Time_and_Signal(copy=True) 交回的副本, 归本函数所有,
+            # 每轮原地相减, 省下一次 N 长数组的分配/释放与随之而来的页错误。
+            S -= imf
 
             if self.store_iter_info:
                 self.temp_imf_arr.append(this_temp_imfs)

@@ -4,18 +4,20 @@
 便于复现与追责。所有计时口径为**同进程/同脚本中位计时**（预热后测量），
 跨日绝对耗时仅作参考。
 
-## 1. EMD 家族（EMD / EEMD / CEEMD）原生引擎验证
+## 1. EMD 家族（EMD / EEMD / CEEMD / CEEMDAN / ICEEMDAN）原生引擎验证
 
-三代引擎各有一轮独立验证，报告与数据一一对应：
+五代引擎各有一轮独立验证，报告与数据一一对应：
 
 | 引擎 | 验证内容 | 实验脚本 | 原始产物 | docs 报告 |
 |---|---|---|---|---|
 | **EMD** | 基线重建与可复现性、三方（EMD_OLD / PyEMD）质量与计时、架构与返回契约、`faster` 门、`nbsym` 口径对齐、`mirror_mod` 评测、内存轴 | `.scratch/emd_new/t00`–`t28`（脚本清单见数据目录 `README.md`） | `tests/comparison/results/emd_new/*.json` | `docs/test/EMD_Native_Engine_Report.md` |
 | **EEMD** | 四方对照（本库新 / 旧原生 / PyEMD / PySDKit）、噪声口径对齐、残差恒等式与 0.3.0 wheel 包装缺陷、内层 EMD 档位消融、Pareto 调参与默认值选择、开箱默认对比、并行实现 | `.scratch/eemd_new/bench.py`、`legacy_eemd.py`、`figs.py`、`pareto.py`、`fig_pareto.py`、`defaults_cmp.py`、`verify_fixes.py`、`test_worker_crash.py` | `tests/comparison/results/eemd_new/{compare,inner_tiers,pareto_sweep,defaults}.json` | `docs/test/EEMD_Native_Engine_Report.md` |
 | **CEEMD** | 旧版可运行性重建与**算法差异辨析**、并行实现补齐、退化输入与 `dtype` 修复、开箱默认对比、互补性收益、Pareto 调参与默认值选择、并行崩溃检测 | `.scratch/eemd_new/ceemd_bench.py`、`legacy_ceemd.py`、`fig_ceemd.py`、`pareto.py`、`test_ceemd.py`、`test_ceemd_robust.py` | `tests/comparison/results/ceemd_new/{compare,pareto_sweep}.json` | `docs/test/CEEMD_Native_Engine_Report.md` |
+| **CEEMDAN** | 半成品补齐（10 项修复 + 3 处注释位）、**每阶 spawn 的并行分支**、四方等口径对比、`valid` 偏低成因、**主导旋钮为 `M` 的 Pareto 调参与默认值选择**、并行性能实测 | `.scratch/eemd_new/ceemdan_bench.py`、`legacy_ceemdan.py`、`fig_ceemdan.py`、`pareto.py`、`test_ceemdan.py`、`test_ceemdan_parallel.py`、`test_ceemdan_speed.py` | `tests/comparison/results/ceemdan_new/{compare,pareto_sweep}.json` | `docs/test/CEEMDAN_Native_Engine_Report.md` |
+| **ICEEMDAN** | **局部均值算子 `M(·)` 口径探针**（`x − E_1(x)` vs 单次包络平均）、半成品补齐（10 项修复 + 3 处补齐）、**每阶 spawn 的并行分支与一处竞态修复**、四方对比（旧原生是唯一同类对照）、Pareto 调参与默认值选择（`ε₀=0.2`、`M=100`）、`peaks_backend` 补齐 | `.scratch/eemd_new/iceemdan_bench.py`、`legacy_iceemdan.py`、`fig_iceemdan.py`、`test_iceemdan.py`、`test_iceemdan_parallel.py`、`probe_local_mean.py`、`probe_mirror.py` | `tests/comparison/results/iceemdan_new/{compare,pareto_sweep,local_mean_probe}.json` | `docs/test/ICEEMDAN_Native_Engine_Report.md` |
 
-> 三份报告开头都有互换链接，且各含一节「同族一致性」，统一列出跨三个类的已知不一致
-> （`num_imf` 默认值、噪声参数口径、`register_class` 缺失）。
+> 五份报告开头都有互换链接，且各含一节「同族一致性」，统一列出跨五个类的已知不一致
+> （噪声参数口径、`num_imf` 是否必填、`info` 键名、`register_class` 缺失、并行能力）。
 
 > 本表其余行引用的 EMD 脚本与报告（`bench_emd_faster.py`、`bench_emd_stopping_variants.py`、
 > `bench_emd_vs_pyemd_alignment.py`、`bench_emd_validation.py`、`refresh_emd_validation_md.py`、
@@ -29,6 +31,23 @@
 >
 > CEEMD 此前没有独立的基准脚本或报告，因此**没有删除记录**；旧 `CEEMD.py` 仍在仓库里
 > （跑不起来，作为新旧算法对照的基线使用，见 `CEEMD_Native_Engine_Report.md` §2.1）。
+>
+> CEEMDAN 同理**没有删除记录**：旧 `CEEMDAN.py`（595 行）跑不起来，同样作为
+> 新旧算法对照的基线使用（见 `CEEMDAN_Native_Engine_Report.md` §2.1）；新引擎已由
+> `CEEMDAN_NEW.py` **转正为 `CEEMDAN.py`**，旧实现可从提交 **`dd547f2`** 取回。
+>
+> ICEEMDAN 同理**没有删除记录**：旧的 `ICEEMDAN.py`（255 行、含 `_Registry`）**仍在工作区**，
+> 在当前代码树上直接 import 就跑不起来（`ImportError`、抽象方法未实现），需
+> `.scratch/eemd_new/legacy_iceemdan.py` 打补丁复活，才能作为新旧算法对照的基线（见
+> `ICEEMDAN_Native_Engine_Report.md` §11.2）。本轮的新引擎仍叫 `ICEEMDAN_NEW.py`（568 行，
+> **尚未转正为 `ICEEMDAN.py`**），所以 `tests/comparison/results/iceemdan_new/` 与
+> `docs/test/ICEEMDAN_Native_Engine_Report.md` 的对象都是这个 `_NEW` 文件。
+>
+> **旧原生基线取源注意**：EEMD / CEEMD 的旧原生实现要从未转正前的提交
+> **`dd547f2`** 取回（`git show dd547f2:src/Modal_Decomposition/{EEMD,CEEMD}.py`，
+> 分别 479 / 149 行、含 `_Registry`）。`d3eec7e` 及之后的 HEAD 里 `EEMD.py` / `CEEMD.py`
+> 已是转正后的新引擎，按 HEAD 取源**无法复现**旧基线。CEEMDAN 同理：旧 595 行实现在
+> **`dd547f2`**（`git show dd547f2:src/Modal_Decomposition/CEEMDAN.py`），转正后工作区已无旧文件。
 
 ## 2. 其它方法实验
 

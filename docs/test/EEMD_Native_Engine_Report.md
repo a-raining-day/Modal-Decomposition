@@ -1,10 +1,11 @@
 # EEMD（原生引擎）验证与三方对照报告
 
-> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md)
+> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md) · [CEEMDAN](./CEEMDAN_Native_Engine_Report.md) · [ICEEMDAN](./ICEEMDAN_Native_Engine_Report.md)
 >
 > 对象：`src/Modal_Decomposition/EEMD.py` —— 库内原生 EEMD 引擎。本轮之前它以
 > `EEMD_NEW.py` 的名字做原型验证，现已在重构中**转正为正式的 `EEMD.py`**（旧的原生
-> `EEMD.py` 被覆盖，其源码只能从 `git show HEAD:src/Modal_Decomposition/EEMD.py` 取回）。
+> `EEMD.py` 被覆盖；它最后停留在提交 **`dd547f2`**（479 行、含 `_Registry`），只能从
+> `git show dd547f2:src/Modal_Decomposition/EEMD.py` 取回 —— **现行 HEAD 里已经是新引擎**）。
 > 全文简称 **EEMD（原生）**。
 >
 > 报告覆盖面：重构背景与可运行性、本轮 9 条修复及其验证、**噪声口径对齐**（最易比错、
@@ -119,11 +120,11 @@ Res  = result[-1]
 
 | 检查项 | 结果 |
 |---|---|
-| `EEMD()` 默认构造 | ✅ 可用；自动推断 `noise_amp = 0.159328`，与 `S.std()*0.2` **完全一致** |
+| `EEMD()` 默认构造 | ✅ 可用；自动档系数 `noise_amp = 0.3`，`info["noise_std"] = noise_amp · std(S)`（实测 `std(S)=0.701036` → `noise_std=0.210311`，比值恰为 **0.3000**） |
 | kwargs 白名单 | ✅ `dtype` / `emd_faster` / `emd_need_squeeze` / `emd_nbsym`+`emd_internal_iter` 均通过；旧名 `need_squeeze` 被正确拒绝 |
 | 串行是否为真算术平均（M=3，固定种子，手工复现同一 RNG 流） | ✅ `\|算术平均 − 实测\| = 0.000e+00` |
 | 状态重置（同实例、同种子两次） | ✅ 逐位相同 |
-| 信号切换是否残留 `noise_amp` | ✅ 信号放大 100× → `noise_amp` 由 0.1593 变 15.9328，**比值 100.0** |
+| 信号切换是否残留 `noise_amp` | ✅ 信号放大 100× 后系数 `noise_amp` **保持 0.3**、`noise_std` 由 0.210311 变 **21.0311**（×100）—— 说明按新信号重新推断，没有沿用旧值 |
 | 并行 M=3 / num_workers=3（父进程派生种子，逐位复现） | ✅ 重构 5.55e-17；`\|手工算术平均 − 并行实测\| = 0.000e+00` |
 | 并行不均匀切分 M=5 / num_workers=3 | ✅ `rows=[6,6,7,6,6]`、5 条 EMD info、重构 5.55e-17 |
 | 并行可复现性 | ✅ 设种子两次逐位相同；不设种子两次不同 |
@@ -133,18 +134,23 @@ Res  = result[-1]
 
 ## 4. 噪声口径对齐（最易比错的地方）
 
-EEMD 的核心参数是「往信号里加多强的噪声」。三家库对同一件事用了**两种不同的单位**，
+EEMD 的核心参数是「往信号里加多强的噪声」。各家库对同一件事用了**两种不同的归一基准**，
 直接照抄数字必然比错。
 
-| 实现 | 参数名 | 单位 | 注入的噪声标准差 |
+| 实现 | 参数名 | 归一基准 | 注入的噪声标准差 |
 |---|---|---|---|
-| **本库 EEMD（原生）** | `noise_amp` | **绝对标准差** | `σ̂ = noise_amp`（直接传给 `np.random.normal(scale=...)`） |
-| 本库旧原生 EEMD | `noise_width` | 峰峰值归一 | `σ̂ = noise_width · \|max(S) − min(S)\|` |
-| PyEMD 1.9 `EEMD` | `noise_width` | 峰峰值归一 | `σ̂ = noise_width · \|max(S) − min(S)\|` |
-| PySDKit 0.5 `EEMD` | `noise_width` | 峰峰值归一 | `σ̂ = noise_width · \|max(S) − min(S)\|` |
+| **本库 EEMD（原生）** | `noise_amp` | **信号标准差 `std(S)`**（无量纲**幅值系数**） | `σ̂ = noise_amp · std(S)` |
+| 本库旧原生 EEMD | `noise_width` | 峰峰值 | `σ̂ = noise_width · \|max(S) − min(S)\|` |
+| PyEMD 1.9 `EEMD` | `noise_width` | 峰峰值 | `σ̂ = noise_width · \|max(S) − min(S)\|` |
+| PySDKit 0.5 `EEMD` | `noise_width` | 峰峰值 | `σ̂ = noise_width · \|max(S) − min(S)\|` |
 
 依据（读源码确认，不是推测）：
 
+- **本库** `EEMD.decompose`：`noise_std = noise_amp * S.std()`，随后
+  `S + noise_amp * np.random.normal(0, S.std(), N)`；`noise_amp=None` 时取系数 `0.3`。
+  所以 `noise_amp` 是**幅值系数**：信号整体放大 `k` 倍时它**不变**，而 `noise_std` 跟着放大
+  `k` 倍（实测：`std(S)=0.701036` 时 `noise_amp=0.3`、`noise_std=0.210311`，比值恰为 0.3000；
+  信号放大 100× 后 `noise_amp` 仍是 0.3、`noise_std` 变为 21.0311）。
 - **PyEMD** `PyEMD/EEMD.py` 的 `noise_width` 文档串：`σ̂ = σ·|max(S) − min(S)|`，其中
   `σ` 即 `noise_width`。
 - **PySDKit** `pysdkit/_emd/eemd.py:244`：`scale = self.noise_width * np.abs(np.max(signal) - np.min(signal))`，
@@ -158,7 +164,7 @@ EEMD 的核心参数是「往信号里加多强的噪声」。三家库对同一
 设目标噪声标准差为 `σ̂`：
 
 ```text
-本库 EEMD      : noise_amp   = σ̂
+本库 EEMD        : noise_amp   = σ̂ / std(S)          (即幅值系数 α)
 旧原生 / PyEMD  : noise_width = σ̂ / |max(S) − min(S)|
 PySDKit        : noise_width = σ̂ / |max(S) − min(S)|
 ```
@@ -177,15 +183,21 @@ PySDKit        : noise_width = σ̂ / |max(S) − min(S)|
 σ̂ = α · std(S),  α = 0.2
 ```
 
-即**相对信号标准差**，而非相对峰峰值。实测脚本里的换算：
+即**相对信号标准差**，而非相对峰峰值。在本库的新参数化下这恰好等于 `noise_amp = α`。
+实测脚本里的换算：
 
 | 实现 | 实际传参 |
 |---|---|
-| 本库 EEMD（新） | `noise_amp = σ̂` |
+| 本库 EEMD（新） | `noise_amp = σ̂ / std(S) = α` |
 | 本库旧原生 | `noise_width = σ̂ / \|max(S) − min(S)\|` |
 | wheel 包装（PyEMD 基） | `noise_width = σ̂ / \|max(S) − min(S)\|` |
 | PyEMD | `noise_width = σ̂ / \|max(S) − min(S)\|` |
 | **PySDKit** | `noise_width = σ̂ / \|max(S) − min(S)\|` |
+
+> **口径变更留痕**：本库 `noise_amp` 的含义在成文后改过一次 —— 由「绝对标准差」改为
+> 「幅值系数」。**有效噪声强度没有变**：旧写法 `noise_amp = σ̂` 与新写法
+> `noise_amp = σ̂ / std(S)` 描述的是同一个 `σ̂`，所以 §5 起的全部实测数字无需改动，
+> 只是参数标签从 σ̂ 变成了 α。
 
 #### 本轮初版的口径错误（已修正并重跑，留档）
 
@@ -377,7 +389,7 @@ PyEMD（0.9937–0.9977）互有胜负，差距都在 0.005 以内。**强分量
 **用户什么都不调、直接 `EEMD().fit(...)`，会拿到什么。**
 
 > ⚠️ **本节不是等口径数据。** 各家用的是自己的默认噪声强度：
-> 新 EEMD 默认 `alpha = 0.3` → A/4096 上 `σ = 0.2386`；另三家默认 `noise_width = 0.05`
+> 新 EEMD 默认幅值系数 `alpha = 0.3` → A/4096 上实际 `σ = 0.2386`；另三家默认 `noise_width = 0.05`
 > （峰峰值口径）→ `σ = 0.1731`（A/4096）/ `0.1777`（A/16384）。所以本节比的是
 > **「默认配置的整体表现」**，不是「同一噪声强度下的算法差异」。等口径结论请看 §5.1–§5.3。
 
@@ -483,7 +495,7 @@ EEMD 有两个「该调多少」的问题：**加多强的噪声（`alpha`）** 
 
 ### 7.1 扫描面与质量指标
 
-- **扫描面**：`M ∈ {10, 25, 50, 100, 200}` × `alpha = noise_amp / std(S) ∈ {0.05, 0.10, 0.20, 0.30, 0.40}`，
+- **扫描面**：`M ∈ {10, 25, 50, 100, 200}` × `alpha = noise_amp`（**幅值系数**，等价于 `σ̂/std(S)`）`∈ {0.05, 0.10, 0.20, 0.30, 0.40}`，
   共 **25 组**。
 - **质量指标 `Q`**（与 EMD 轮同定义）：
 
@@ -617,7 +629,7 @@ EEMD 的理论性质是「噪声按 `1/√M` 衰减」。实测 25 组的 `leak 
 | 项 | 旧 | 新 | 依据 |
 |---|---|---|---|
 | `M` | `100` | **`50`** | §7.2：`M` 从 50 到 200，`Q` 只涨 0.0012 而耗时 ×4 |
-| 自动噪声系数（`noise_amp=None` 时） | `0.2·std(S)` | **`0.3·std(S)`** | §7.3：弱音调在 `alpha≈0.3` 饱和；再高只多噪声 |
+| 自动噪声系数（`noise_amp=None` 时） | 系数 `0.2`（即 `σ̂ = 0.2·std(S)`） | **系数 `0.3`**（即 `σ̂ = 0.3·std(S)`） | §7.3：弱音调在 `alpha≈0.3` 饱和；再高只多噪声 |
 
 `noise_amp=None` 的**自适应/尺度不变语义保持不变** —— 只是系数从 0.2 换成 0.3，
 仍然按输入信号自身的标准差推断，不引入绝对能量阈值。
@@ -691,16 +703,18 @@ EEMD 的每一阶都由内层 EMD 筛出来，所以内层用什么档位会直�
 ### 9.1 参数表
 
 ```python
-EEMD(num_imf=-1, noise_amp=None, M=50, parallel=False, num_workers=1, **emd_*)
+EEMD(num_imf=-1, noise_amp=None, M=50, parallel=False, num_workers=1, copy=True, **emd_*)
 ```
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `num_imf` | `-1` | 最终保留的 IMF 行数；`-1` 表示「分解到不能分为止」 |
-| `noise_amp` | `None` | **绝对标准差** σ̂；`None` → 运行时取 **`0.3·std(S)`**（依据见 §7.3 的饱和点） |
+| `noise_amp` | `None` | **幅值系数**（无量纲）；实际噪声 `σ̂ = noise_amp · std(S)`。`None` → 运行时取系数 **`0.3`**（依据见 §7.3 的饱和点） |
 | `M` | **`50`** | 集成次数（trial 数）。默认由 100 降到 50 的依据见 §7.2／§7.6：`M` 从 50 到 200 只换来 `Q` +0.0012，耗时却 ×4 |
 | `parallel` | `False` | 是否多进程 |
 | `num_workers` | `1` | 进程数；int 为个数、float 为比例、`-1` 为全部核（经 `set_allocable`） |
+| `copy` | `True` | 是否让 `Check_Time_and_Signal` 交回信号副本。EEMD 全程不写入 `S`，故 `copy=False` 也安全（省一份 `N` 长数组并保留 memmap 支撑） |
+| `peaks_backend` | `"numpy"` | **本类自身** `find_peaks`（退化守卫）的后端，`Check.validate_mod(..., PEAKS_BACKEND)` 校验；`numpy` / `scipy` 实测结果逐位相同、非法值 `ValueError`。**内层 EMD 仍用 `emd_peaks_backend`**，两者独立（本轮补齐，见 `ICEEMDAN_Native_Engine_Report.md` §8.3） |
 
 `emd_*` 是**内层 EMD 的透传参数**（共 15 个），默认值即 EMD 轮的 Pareto 拐点：
 
@@ -751,10 +765,11 @@ else:
   ↓ Check_Time_and_Signal(need_T=False)            # 校验 + memmap 策略
   ↓ 非 f32/f64 则转 float64                        # int/bool/f16 兜底
   ↓ 重置 self.imfs / self.res = None               # 修复 #4
-  ↓ noise_amp = self.noise_amp 或 0.3·std(S)       # 局部变量, 不回写 (修复 #5)
+  ↓ noise_amp = self.noise_amp 或 0.3          # 幅值系数; 局部变量, 不回写 (修复 #5)
+  ↓ noise_std = noise_amp · std(S)             # 实际注入的噪声标准差
   ├─ parallel=False ────────────────────────────────────────────────┐
   │   for m in 1..M:                                                │
-  │       S_noisy = S + N(0, noise_amp)                             │
+  │       S_noisy = S + noise_amp · N(0, std(S))                    │
   │       IMFs = self.EMD.decompose(S_noisy).IMFs                   │
   │       累积求和 (跨 trial 取 min_row 对齐)                        │
   │   self.imfs /= M           # 算术平均                            │
@@ -766,7 +781,7 @@ else:
   │   父进程收齐 → 按 index 排序 → 跨进程取 min_row → 累加 → /= M    │
   └─────────────────────────────────────────────────────────────────┘
   ↓ config_generate() → EEMDConfig(含嵌套 EMDConfig)
-  ↓ info = {rows, min row, noise_amp, EMD info}
+  ↓ info = {rows, min row, noise_amp, noise_std, EMD info}   # amp=系数, std=绝对标准差
   ↓ DecompositionResult(IMFs, Res, info, config)
 ```
 
@@ -778,7 +793,8 @@ else:
 | `Res` | `(N,)`，**恒有 `Res = S − ΣIMFs`**（`recon` ≤ 1.2e-16，浮点舍入量级） |
 | `info["rows"]` | 每次试验各自的 IMF 阶数（串行 M 个、并行跨进程按 worker 顺序拼接） |
 | `info["min row"]` | `min(rows)`，也是最终 `k` 的上限来源 |
-| `info["noise_amp"]` | **本次实际使用的绝对标准差**（`None` 时即自动推断值，便于追溯） |
+| `info["noise_amp"]` | 本次使用的**幅值系数**（`None` 时即自动档的 0.3，便于追溯） |
+| `info["noise_std"]` | 本次**实际注入的绝对噪声标准差** `= noise_amp · std(S)`（实测 `std(S)=0.701036` → 0.210311，比值 0.3000） |
 | `info["EMD info"]` | 每次试验内层 `EMD.decompose` 返回的 `info`（含 `iterations` / `final_sd`） |
 | `config` | `EEMDConfig`，含嵌套 `EMDConfig`；见 §11 的 JSON 序列化注意事项 |
 
@@ -884,26 +900,29 @@ EWT / FMD / ICEEMDAN / LMD / MEMD / RPSEMD / SSA / SVMD / VMD`。它们同时还
 `from .Base import Config`（`Config` 已搬到 `.Define`）。因此**按需导入这些模块会立刻失败**，
 需要统一改成 `.Define` 并移除注册装饰器才能恢复。
 
-### 11.4 同族一致性（跨 `EMD` / `EEMD` / `CEEMD`）
+### 11.4 同族一致性（跨 `EMD` / `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN`）
 
-三个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
+五个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
 
 | # | 不一致项 | 现状 |
 |---|---|---|
-| 1 | **`num_imf`** | `EMD` / `EEMD` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
-| 2 | **噪声参数命名与口径** | `EMD` 无噪声参数；`EEMD` / `CEEMD` 用 `noise_amp`（**绝对**标准差）。旧基线与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径：`noise_width · \|max−min\|`，见 §4）。跨库对比前必须先换算，否则噪声强度会差 `\|max−min\|` 倍 |
-| 3 | **注册机制** | 三个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它（§11.3） |
+| 1 | **噪声参数口径** | `EMD` 无噪声参数；**`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 的 `noise_amp` 都是「幅值系数」**（`σ = noise_amp · std(S)`，无量纲），默认值分别是 **0.3 / 0.3 / 0.3 / 0.2**。`ICEEMDAN` 的 `noise_amp` 就是 `β_k` 里的 ε₀：第 1 阶注入幅值同为 `noise_amp · std(S)`，之后按 `std(r_{k−1})` 自适应。旧基线与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径 `noise_width · \|max−min\|`，见 §4）。跨库对比前必须先换算，否则噪声强度会差 `\|max−min\| / std(S)` 倍 |
+| 2 | **`num_imf` 是否必填** | `EMD` / `EEMD` / `CEEMDAN` / `ICEEMDAN` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
+| 3 | **`info` 键名** | `EMD`：无噪声键（有 `final_sd`）；`EEMD` / `CEEMD`：`noise_amp`（系数）**+** `noise_std`（绝对标准差）；**`CEEMDAN` / `ICEEMDAN`：只有 `noise_std`，没有 `noise_amp`**。另外 `ICEEMDAN` 的 `info["emd info"]` **恒为空列表**（内层局部均值 EMD 的 info 未收集） |
+| 4 | **注册机制** | 五个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它（§11.3） |
+| 5 | **并行能力** | 只有 `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 有 `parallel`；`EMD` 无多进程路径，且 **`CEEMDAN` / `ICEEMDAN` 的并行当前无收益**（`spawn` 固定开销摊不平，见 `CEEMDAN_Native_Engine_Report.md` §9.2 与 `ICEEMDAN_Native_Engine_Report.md` §4.3） |
 
 **已经一致的部分**（供核对）：
 
-- **`dtype` 默认值**：三个类现在都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
-  EEMD / CEEMD 之所以能真正做到这一点，靠的是 §11.2 #7 修的 `.astype(S.dtype)`。
-- **残差语义**：三者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
-- **`info` 的键名**：三者都有 `rows` / `min row` / `EMD info`（`EMD` 另有 `final_sd`，
-  `EEMD` / `CEEMD` 另有 `noise_amp`）；但 `CEEMD` 的 `rows` 是 `(k_plus, k_minus, k_avg)`
-  三元组、`EMD info` 是 `(plus_info, minus_info)` 一对，结构更深一层。
-- **内层 EMD 透传**：`EEMD` / `CEEMD` 都用同一套 16 个 `emd_*` 参数，默认值即 EMD 轮的
+- **`dtype` 默认值**：五个类都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
+  `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 之所以能真正做到这一点，靠的是 §11.2 #7 修的
+  `.astype(S.dtype)`。
+- **残差语义**：五者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
+- **内层 EMD 透传**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 都用同一套 `emd_*` 参数，默认值即 EMD 轮的
   Pareto 拐点。
+- **`peaks_backend`**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 现在都有顶层 `peaks_backend`
+  （默认 `"numpy"`，`Check.validate_mod(..., PEAKS_BACKEND)` 校验），内层 EMD 仍用
+  `emd_peaks_backend`；`EMD` 只有 `peaks_backend` 一个（它就是内层）。
 
 ---
 
@@ -937,10 +956,11 @@ EWT / FMD / ICEEMDAN / LMD / MEMD / RPSEMD / SSA / SVMD / VMD`。它们同时还
 
 旧 `EEMD.py` 因两处导入不可用（§2.1），因此**不能直接 import**。构建方式是：
 
-1. 从 git 取源：
+1. 从 git 取源 —— **必须用提交 `dd547f2`**（它最后包含 479 行、带 `_Registry` 的旧原生实现；
+   现行 HEAD 里 `EEMD.py` 已是转正后的新引擎，按 HEAD 取源复现不出旧基线）：
 
    ```text
-   git show HEAD:src/Modal_Decomposition/EEMD.py
+   git show dd547f2:src/Modal_Decomposition/EEMD.py
    ```
 
 2. 把其中不可解析的导入替掉，注入一个 `resolve_workers` 的等价实现（原 `_trial_worker`

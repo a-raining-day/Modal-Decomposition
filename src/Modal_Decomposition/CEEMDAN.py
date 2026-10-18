@@ -1,595 +1,564 @@
-"""
-Complete Ensemble Empirical Mode Decomposition with Adaptive Noise
-—— 原生实现 (PyEMD-free)。
-
-CEEMDAN 的原生实现, 注册键 ``"CEEMDAN"`` (自 0.3.0 起, 原 ``CEEMDAN_new``)。
-``pyemd=True`` 保留一条到第三方 PyEMD 的过渡通道 (``**kwargs`` 接收 PyEMD
-专属参数), 供逐点对拍使用。
-
-算法 (Torres 2011)
-------------------
-记 ``E_j(·)`` 为原生 ``EMD`` 引擎提取的第 ``j`` 阶 IMF, ``w_i`` 为第 ``i`` 条
-白噪声实现, ``M = trials``, ``ε`` = 注噪幅度:
-
-    c_1 = (1/M) Σ_i E_1( r_0 + ε·w_i )                         r_0 = S
-    c_k = (1/M) Σ_i E_1( r_{k-1} + ε·E_k(w_i) )     (k ≥ 2)
-    r_k = r_{k-1} − c_k
-
-与 EEMD 的唯一区别在第 2 式: 每阶注入的是**噪声自身的第 k 阶 IMF** ``E_k(w_i)``,
-而不是原始白噪声。EEMD 用同一份白噪声去打每一阶, 高频噪声会在低频阶上引入虚假
-模态 (模态混叠); CEEMDAN 改成"本级频段的噪声", 于是每一阶的辅助扰动都落在该阶
-将要提取的频段上, 模态混叠显著降低, 且所需 ``trials`` 远小于 EEMD。
-
-``E_k(w_i)`` 由同一批噪声实现一次性**预分解**得到并跨阶复用 (见 ``info`` 的
-``noise_imfs``); 各实现的可用阶数可能不同, 本实现按阶动态跳过阶数不足的实现
-(见 ``info`` 的 ``trials_used``)。
-
-与 PyEMD 版 (`pyemd=True`) 的有意差异
--------------------------------------
-* **算法版本**: PyEMD 实现的是 Colominas 2014 改进版 (每阶只算**一组**局部均值并
-  递归展开, 见 ``PyEMD/CEEMDAN.py`` 的 ``local_mean`` 分支), 而不是 Torres 2011
-  原文。该改进版在本库已有原生实现 ``ICEEMDAN``, 故本实现走 Torres 2011 规范式,
-  与 ``ICEEMDAN`` 形成真正的两种算法; 需要 PyEMD 语义时用 ``pyemd=True`` 分支
-  逐位对拍。
-* **注噪幅度可控**: PyEMD 的 ``noise_scale`` 在 ``beta_progress=True`` (其默认) 下
-  被"按首阶 IMF 的 std 归一化"整项约掉 —— 实测 ``noise_scale`` 1.0 与 100.0 的
-  输出差仅 4.4e-16, 真正的幅度旋钮是它未暴露的 ``epsilon=0.005``。本实现把幅度
-  统一成单一参数 ``noise_width``, 逐点对拍时二者关系为 ``noise_width ≈ epsilon``。
-* **原生引擎参数可控**: ``spline_kind`` / ``nbsym`` 显式暴露 (对齐 ``ICEEMDAN`` /
-  ``RPSEMD`` / ``EEMD`` 的范式), 取代 PyEMD 专属的 ``ext_EMD`` /
-  ``extrema_detection`` / ``noise_kind`` 口子; ``spline_kind`` 用 ``Utils.Spline``
-  的 canonical 名, 不再是 PyEMD 的 ``"cubic"``/``"pchip"`` 拼写。
-* **``range_thr`` / ``total_power_thr`` 在同一尺度上判定**: 递归整体在单位标准差的
-  信号上进行 (与 PyEMD 相同做法), 故两个阈值对任意幅度的信号含义一致。
-* **残差语义**: 按库内契约取 ``Res = S − ΣIMFs``, 硬性保证
-  ``IMFs.sum(axis=0) + Res == S``。
-* **``info`` 有诊断**: 每阶实际参与平均的 trial 数、各噪声实现的可用阶数、停机
-  原因一并外露, 取代 PyEMD 分支的空 ``info``。
-
-串行执行 (无并行空间)
---------------------
-CEEMDAN 是**残差链迭代**, 整条链串行, 不存在可并行的维度:
-
-* 各阶之间：``r_k = r_{k-1} − c_k`` 是链式依赖, 第 k 阶必须等第 k−1 阶算完;
-* 同一阶内：全部 ``M`` 次试验共用**同一个** ``r_{k-1}``。它们看似互相独立, 但这
-  一批只能在"第 k 阶的残差已经就位"之后才开始, 而下一批又要等这一批的均值
-  ``c_k`` 定下来才算得出 ``r_k`` —— 批与批之间仍被链卡住, 并行只发生在批内部;
-* 噪声池的预分解 ``E_k(w_i)`` 确实与主链无关, 但那是一次性 ``(M, N)`` 批量操作,
-  摊到每阶后只剩查表。
-
-因此在阶内强上进程池, 省下的只是单次 EMD (几千点上毫秒级) 的耗时, 而每阶都要
-重开一次池并同步一轮, 开销直接盖过收益。本实现不做并行分支。
-
-这与 ``EEMD`` 有本质区别: EEMD 的每次试验都在**原始信号**上独立完成
-(embarrassingly parallel, ``parallel=True`` 有意义), CEEMDAN 没有这个性质。
-
-References
-----------
-10.1109/ICASSP.2011.5947265
-"""
-
 import numpy as np
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import List
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
-from .EMD import EMD
-from .Utils import Check_Time_and_Signal, is_monotonic, resolve_seed
+from .EMD import EMD, EMDConfig
 
-__all__ = ["CEEMDAN", "CEEMDANConfig"]
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Base import Cache, set_allocable
+from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal, PEAKS_BACKEND
 
-#: 包络后端 (与 ``EMD`` 的 canonical 取值一致; "linear" = np.interp 特例)。
-_SPLINE_KINDS = ("CubicSpline", "PCHIP", "linear")
-
-#: 极值检测后端 (``Utils.Peaks.find_peaks`` 的 ``mod``）。
-_PEAKS_MODS = ("scipy", "numpy", "numba")
-
-#: ``pyemd=True`` 时透传给 ``PyEMD.CEEMDAN`` 的专属参数 (即旧包装的完整参数面;
-#: ``trials`` / ``max_imf`` / ``seed`` 由本类同名形参映射, 不在此列)。
-_PYEMD_KWARGS = (
-    "noise_scale", "noise_kind", "extrema_detection", "parallel", "processes",
-)
-
-
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class CEEMDANConfig(Config):
-    """
-    Effective parameters of a ``CEEMDAN`` run.
+    num_imf: int
+    noise_amp: float
+    M: int
+    pre_decompose_noise: bool
+    parallel: bool
+    num_workers: int
+    dtype: type | np.dtype | None
+    EMD_config: EMDConfig
+    pre_decompose_EMD_config: EMDConfig | None
 
-    引擎参数 (``spline_kind`` / ``nbsym`` / ``max_iter`` / ``sd_thr`` /
-    ``find_peaks_mod`` / ``faster``) 直接透传给内层 ``EMD``, 语义与其同名参数
-    完全一致 (见 ``EMDConfig``)。
-    """
-    trials: int
-    noise_width: float
-    max_imf: int
-    seed: int | None
-    spline_kind: str
-    nbsym: int
-    max_iter: int
-    sd_thr: float
-    find_peaks_mod: str
-    faster: bool
-    range_thr: float
-    total_power_thr: float
-
-
-@register_class("CEEMDAN")
+"""
+Class and Function of decomposer
+"""
 class CEEMDAN(Decomposer):
-    """
-    Complete Ensemble Empirical Mode Decomposition with Adaptive Noise
-    (native, PyEMD-free).
+    name = "CEEMDAN"
 
-    Stage ``k`` extracts its mode as the ensemble average of the first IMF of
-    ``M`` perturbed copies of the residual, where the perturbation is the
-    ``k``-th IMF of the noise realization itself (see the module docstring for
-    the recursion). Use as ``Class.CEEMDAN(**params).decompose(S, T)`` /
-    ``Function.CEEMDAN(S, T, **params)``; every result carries a frozen
-    ``CEEMDANConfig`` snapshot.
+    def __init__(self, num_imf: int = -1, noise_amp: float = 0.3, res_energy: float = 1e-6, M: int = 50, pre_decompose_noise: bool = False, parallel: bool = False, num_workers: int = 1, faster: bool = True, copy: bool = True, **kwargs):
+        self.num_imf: int = num_imf
+        self.noise_amp: float = noise_amp
+        self.res_energy: float = res_energy
+        self.M: int = M
+        self.pre_decompose_noise: bool = pre_decompose_noise
+        self.parallel: bool = parallel
+        self.num_workers: int = num_workers
+        self.faster: bool = faster
+        self.copy: bool = copy
 
-    ``IMFs`` has shape ``(K, N)``; ``Res`` is the true remainder
-    ``S − ΣIMFs`` (shape ``(N,)``), so ``reconstruct()`` reproduces the input
-    exactly.
-    """
-
-    name: ClassVar[str] = "CEEMDAN"
-
-    def __init__(
-        self,
-        trials: int = 100,
-        noise_width: float = 0.005,
-        max_imf: int = -1,
-        seed: int | None = None,
-        spline_kind: Literal["CubicSpline", "PCHIP", "linear"] = "CubicSpline",
-        nbsym: int = 2,
-        max_iter: int = 100,
-        sd_thr: float = 0.01,
-        find_peaks_mod: Literal["scipy", "numpy", "numba"] = "numpy",
-        faster: bool = True,
-        range_thr: float = 0.01,
-        total_power_thr: float = 0.05,
-        rich_info: bool = False,
-        pyemd: bool = False,
-        **kwargs,
-    ):
-        """
-        Parameters
-        ----------
-        trials : int
-            Number of ensemble realizations per stage (``M``, >= 1). CEEMDAN
-            needs far fewer than EEMD (its noise is stage-matched), so 50-100
-            is usually enough.
-        noise_width : float
-            Relative amplitude ``ε`` of the injected noise (>= 0). Stage ``k``
-            perturbs the residual with ``ε · E_k(w_i)``. Defaults to the
-            canonical Torres-2011 value ``0.005`` (the ``ε`` of the reference
-            implementation); larger values trade residual purity for a
-            stronger separation of close modes. ``0`` disables the noise
-            assist entirely (the recursion degenerates to repeated
-            ``max_imf=1`` sifting on the plain residual).
-        max_imf : int
-            Maximum number of IMFs; -1 decomposes completely.
-        seed : int | None
-            Local random seed. Overridden by a global seed when both are set.
-        spline_kind : {"CubicSpline", "PCHIP", "linear"}
-            Envelope backend of the internal native ``EMD``.
-        nbsym : int
-            Number of mirrored extrema at each boundary for the internal EMD.
-        max_iter : int
-            Sifting iterations per IMF of the internal EMD (>= 1). Same meaning
-            as ``EMD(max_iter=...)``.
-        sd_thr : float
-            Cauchy SD stopping threshold ``Σm² / Σh_prev²`` of the internal EMD,
-            in ``(0, 1]``. Same meaning as ``EMD(sd_thr=...)``.
-        find_peaks_mod : {"scipy", "numpy", "numba"}
-            Peak-detection backend of ``Utils.Peaks`` used by the internal EMD.
-        faster : bool
-            Stopping-policy branch of the internal EMD. Defaults to **True**
-            (energy-Cauchy branch), which differs from a plain ``EMD`` run
-            (``faster=False``, the quality branch). Rationale: CEEMDAN calls
-            the engine ``trials`` times per stage purely to read *one* IMF off
-            a noise-perturbed residual, and the ensemble average over
-            ``trials`` realizations largely absorbs the per-realization row
-            purity that the narrowband gate ``|zc − ext| ≤ 1`` would have
-            bought. Measured on ``trials`` x median of 5 runs, ``faster=False``
-            costs up to ~3x more (N=1024/trials=30: 1.28 s vs 0.38 s) and is
-            never faster here. Set ``faster=False`` if you want the internal
-            engine to match the plain ``EMD`` default exactly.
-        range_thr : float
-            Stop when the residual range ``max(r) − min(r)`` falls below this
-            value (>= 0). The recursion runs on the unit-standard-deviation
-            signal, so the threshold is independent of the signal's amplitude.
-        total_power_thr : float
-            Stop when the residual total power ``Σ|r|`` falls below this value
-            (>= 0, same normalized scale as ``range_thr``).
-        rich_info : bool
-            When True, ``info`` additionally carries ``ensemble_std``
-            (per-stage pointwise standard deviation across the trials that
-            entered the average — the ``ensemble_std`` semantics of PyEMD).
-            Off by default because it costs one extra ``(M, N)`` reduction per
-            stage.
-        pyemd : bool
-            ``False`` (default): use the native engine. ``True``: delegate to
-            the third-party PyEMD package (its Colominas-2014 variant).
-            Requires ``EMD-signal``; the option is transitional and will be
-            removed when PyEMD support is dropped.
-        **kwargs
-            PyEMD 专属参数, 仅在 ``pyemd=True`` 时透传给 ``PyEMD.CEEMDAN``;
-            原生路径下出现这些键会报错 (它们对原生实现没有意义)。当前透传的是
-            旧包装的全部参数面: ``noise_scale`` / ``noise_kind`` /
-            ``extrema_detection`` / ``parallel`` / ``processes``。
-
-            注: PyEMD 的 ``noise_scale`` 在其默认 ``beta_progress=True`` 下会被
-            "按首阶 IMF 的 std 归一化"整项约掉 (实测 1.0 与 100.0 的输出差仅
-            1 ulp), 真正的幅度旋钮是它未暴露的 ``epsilon`` (默认 ``0.005``)。
-            故原生路径用 ``noise_width`` (默认 ``0.005`` ≈ ``epsilon``) 作为
-            唯一的幅度参数。
-
-        Raises
-        ------
-        ValueError
-            On out-of-range ``trials`` / ``noise_width`` / ``max_imf`` /
-            ``range_thr`` / ``total_power_thr`` / ``max_iter`` / ``sd_thr`` /
-            ``spline_kind`` / ``nbsym`` / ``find_peaks_mod`` / ``faster`` /
-            ``rich_info``, or on ``**kwargs`` keys while ``pyemd=False``.
-        """
-        if isinstance(trials, bool) or not isinstance(trials, (int, np.integer)):
-            raise ValueError(f"trials must be an int >= 1, got {trials!r}")
-        if int(trials) < 1:
-            raise ValueError(f"trials must be >= 1, got {trials!r}")
-
-        if isinstance(noise_width, bool) or not isinstance(
-            noise_width, (int, float, np.floating)
-        ):
-            raise ValueError(f"noise_width must be a number >= 0, got {noise_width!r}")
-        if not np.isfinite(float(noise_width)) or float(noise_width) < 0.0:
-            raise ValueError(f"noise_width must be finite and >= 0, got {noise_width!r}")
-
-        if isinstance(max_imf, bool) or not isinstance(max_imf, (int, np.integer)):
-            raise ValueError(f"max_imf must be -1 or >= 1, got {max_imf!r}")
-        if int(max_imf) != -1 and int(max_imf) < 1:
-            raise ValueError(f"max_imf must be -1 or >= 1, got {max_imf!r}")
-
-        # --- 内层 EMD 引擎参数 (与 EMDConfig 同名同语义) -------------------- #
-        if isinstance(max_iter, bool) or not isinstance(max_iter, (int, np.integer)):
-            raise ValueError(f"max_iter must be an int >= 1, got {max_iter!r}")
-        if int(max_iter) < 1:
-            raise ValueError(f"max_iter must be >= 1, got {max_iter!r}")
-
-        if isinstance(sd_thr, bool) or not isinstance(sd_thr, (int, float, np.floating)):
-            raise ValueError(f"sd_thr must be a number in (0, 1], got {sd_thr!r}")
-        if not np.isfinite(float(sd_thr)) or not (0.0 < float(sd_thr) <= 1.0):
-            raise ValueError(f"sd_thr must be in (0, 1], got {sd_thr!r}")
-
-        if find_peaks_mod not in _PEAKS_MODS:
-            raise ValueError(
-                f"find_peaks_mod must be one of {_PEAKS_MODS}, got {find_peaks_mod!r}"
-            )
-        if not isinstance(faster, bool):
-            raise ValueError(f"faster must be a bool, got {faster!r}")
-
-        for _name, _value in (
-            ("range_thr", range_thr),
-            ("total_power_thr", total_power_thr),
-        ):
-            if isinstance(_value, bool) or not isinstance(
-                _value, (int, float, np.floating)
-            ):
-                raise ValueError(f"{_name} must be a number >= 0, got {_value!r}")
-            if not np.isfinite(float(_value)) or float(_value) < 0.0:
-                raise ValueError(f"{_name} must be finite and >= 0, got {_value!r}")
-
-        if not isinstance(rich_info, bool):
-            raise ValueError(f"rich_info must be a bool, got {rich_info!r}")
-        if not isinstance(pyemd, bool):
-            raise ValueError(f"pyemd must be a bool, got {pyemd!r}")
-
-        if spline_kind not in _SPLINE_KINDS:
-            raise ValueError(
-                f"spline_kind must be one of {_SPLINE_KINDS}, got {spline_kind!r}"
-            )
-        if isinstance(nbsym, bool) or not isinstance(nbsym, (int, np.integer)):
-            raise ValueError(f"nbsym must be an int >= 0, got {nbsym!r}")
-        if int(nbsym) < 0:
-            raise ValueError(f"nbsym must be >= 0, got {nbsym!r}")
-
-        # **kwargs 只服务 pyemd 分支 (PyEMD 专属参数)。原生路径下出现即报错 ——
-        # 静默忽略正是这个库里已经被修过多次的坏味道。
-        unknown = sorted(set(kwargs) - set(_PYEMD_KWARGS))
+        unknown = set(kwargs) - {
+            "dtype", "peaks_backend",
+            "emd_nbsym", "emd_internal_delta", "emd_internal_iter",
+            "emd_res_energy", "emd_faster", "emd_store_iter_info", "emd_pre_num_imfs",
+            "emd_dtype", "emd_safe", "emd_need_squeeze", "emd_mirror_mod",
+            "emd_poly_order", "emd_time_poly_order", "emd_peaks_backend",
+        }
         if unknown:
-            raise ValueError(
-                f"unrecognized keyword argument(s) {unknown}; "
-                f"pyemd=True accepts {list(_PYEMD_KWARGS)}"
-            )
-        if kwargs and not pyemd:
-            raise ValueError(
-                f"keyword argument(s) {sorted(kwargs)} are PyEMD-only and require "
-                f"pyemd=True; the native engine takes its knobs as explicit "
-                f"parameters (max_iter / sd_thr / find_peaks_mod / faster)"
-            )
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
 
-        self.trials = int(trials)
-        self.noise_width = float(noise_width)
-        self.max_imf = int(max_imf)
-        self.seed = seed
-        self.spline_kind = spline_kind
-        self.nbsym = int(nbsym)
-        self.max_iter = int(max_iter)
-        self.sd_thr = float(sd_thr)
-        self.find_peaks_mod = find_peaks_mod
-        self.faster = faster
-        self.range_thr = float(range_thr)
-        self.total_power_thr = float(total_power_thr)
-        self.rich_info = rich_info
-        self.pyemd = pyemd
-        self.pyemd_kwargs = dict(kwargs)
+        self.dtype: type | np.dtype | None = kwargs.get("dtype", None)
 
-    def __call__(self, S, T=None) -> DecompositionResult:
-        return self.decompose(S, T)
+        # 内层 EMD 只取 1 阶 (CEEMDAN 每次只剥一阶); 噪声预分解要留下 k-1 阶
+        self.emd_num_imf: int = 1
+        self.emd_pre_decompose_num_imf: int = (
+            self.num_imf if self.num_imf == -1 else max(1, self.num_imf - 1)
+        )
+        self.emd_nbsym: int = kwargs.get("emd_nbsym", 4)
+        self.emd_internal_delta: float = kwargs.get("emd_internal_delta", 0.2)
+        self.emd_internal_iter: int = kwargs.get("emd_internal_iter", 50)
+        self.emd_res_energy: float = kwargs.get("emd_res_energy", 1e-6)
+        self.emd_faster: bool = kwargs.get("emd_faster", True)
+        self.emd_store_iter_info: bool = kwargs.get("emd_store_iter_info", False)
+        self.emd_pre_num_imfs: int = kwargs.get("emd_pre_num_imfs", 10)
+        self.emd_dtype: type | np.dtype | None = kwargs.get("emd_dtype", None)
+        self.emd_safe: str = kwargs.get("emd_safe", "safe")
+        self.emd_need_squeeze: bool = kwargs.get("emd_need_squeeze", True)
+        self.emd_mirror_mod: str = kwargs.get("emd_mirror_mod", "extrema")
+        self.emd_poly_order: int = kwargs.get("emd_poly_order", 2)
+        self.emd_time_poly_order: int = kwargs.get("emd_time_poly_order", 2)
+        self.emd_peaks_backend: str = kwargs.get("emd_peaks_backend", "numpy")
+        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")   # 本类自己 find_peaks 用的后端
 
-    # ------------------------------------------------------------------ #
-    # helpers
-    # ------------------------------------------------------------------ #
-    def _engine(self, max_imf: int) -> EMD:
-        """
-        Build the internal sifting engine with this run's effective EMD knobs.
+        self.param_check()
 
-        引擎参数全部由本类显式持有并透传 (``spline_kind`` / ``nbsym`` /
-        ``max_iter`` / ``sd_thr`` / ``find_peaks_mod`` / ``faster``), 不依赖
-        ``EMD`` 的默认值 —— 否则 CEEMDAN 的配置快照将无法解释内层行为。
-        """
-        return EMD(
-            spline_kind=self.spline_kind,
-            nbsym=self.nbsym,
-            max_imf=max_imf,
-            max_iter=self.max_iter,
-            sd_thr=self.sd_thr,
-            find_peaks_mod=self.find_peaks_mod,
-            faster=self.faster,
+        self.EMD = EMD(
+            num_imf=self.emd_num_imf,
+            nbsym=self.emd_nbsym,
+            internal_delta=self.emd_internal_delta,
+            internal_iter=self.emd_internal_iter,
+            res_energy=self.emd_res_energy,
+            faster=self.emd_faster,
+            store_iter_info=self.emd_store_iter_info,
+            pre_num_imfs=self.emd_pre_num_imfs,
+            dtype=self.emd_dtype,
+            safe=self.emd_safe,
+            need_squeeze=self.emd_need_squeeze,
+            mirror_mod=self.emd_mirror_mod,
+            poly_order=self.emd_poly_order,
+            time_poly_order=self.emd_time_poly_order,
+            peaks_backend=self.emd_peaks_backend
         )
 
-    def _snapshot(self, effective_seed) -> CEEMDANConfig:
-        """Build the frozen config snapshot with the effective seed."""
+        # 噪声预分解器: pre_decompose_noise=True 时需要; parallel=True 也需要 (worker 无状态,
+        # 每阶的噪声 IMF 必须在阶段循环开始前就备好)。这里无条件构造, 只在用不到时闲着。
+        self.pre_decompose_EMD = EMD(
+            num_imf=self.emd_pre_decompose_num_imf,
+            nbsym=self.emd_nbsym,
+            internal_delta=self.emd_internal_delta,
+            internal_iter=self.emd_internal_iter,
+            res_energy=self.emd_res_energy,
+            faster=self.emd_faster,
+            store_iter_info=self.emd_store_iter_info,
+            pre_num_imfs=self.emd_pre_num_imfs,
+            dtype=self.emd_dtype,
+            safe=self.emd_safe,
+            need_squeeze=self.emd_need_squeeze,
+            mirror_mod=self.emd_mirror_mod,
+            poly_order=self.emd_poly_order,
+            time_poly_order=self.emd_time_poly_order,
+            peaks_backend=self.emd_peaks_backend
+        )
+
+        self.imfs: np.ndarray = None
+        self.res:  np.ndarray = None
+
+    def param_check(self) -> None:
+        if not isinstance(self.num_imf, int) or isinstance(self.num_imf, bool):
+            raise TypeError("num_imf must be an int")
+
+        if self.num_imf != -1:
+            if not (self.num_imf > 0):
+                raise ValueError("num_imf must > 0")
+
+        if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
+            raise TypeError("noise_amp must be float or int")
+
+        if not (self.noise_amp > 0):
+            raise ValueError("noise_amp must > 0")
+
+        if not isinstance(self.M, int) or isinstance(self.M, bool):
+            raise TypeError("M must be an int")
+
+        if not (self.M > 0):
+            raise ValueError("M must > 0")
+
+        if not isinstance(self.parallel, bool):
+            raise TypeError("parallel must be bool")
+
+        if not isinstance(self.num_workers, (int, float)) or isinstance(self.num_workers, bool):
+            raise TypeError("num_workers must be an int or float")
+
+        self.num_workers: int = set_allocable(self.num_workers)
+
+        if self.dtype is not None and np.dtype(self.dtype).kind != "f":
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if not isinstance(self.pre_decompose_noise, bool):
+            raise TypeError("the `pre_decompose_noise` must be bool")
+
+        if not isinstance(self.faster, bool):
+            raise TypeError("the `faster` must be bool")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
+
+        if not isinstance(self.res_energy, float):
+            raise TypeError("the `res_energy` must be float.")
+
+        if not (self.res_energy >= 0):
+            raise ValueError("the `res_energy` must >= 0.")
+
+        self.peaks_backend = Check.validate_mod(self.peaks_backend, PEAKS_BACKEND)
+
+    def config_generate(self) -> CEEMDANConfig:
         return CEEMDANConfig(
-            trials=self.trials,
-            noise_width=self.noise_width,
-            max_imf=self.max_imf,
-            seed=effective_seed,
-            spline_kind=self.spline_kind,
-            nbsym=self.nbsym,
-            max_iter=self.max_iter,
-            sd_thr=self.sd_thr,
-            find_peaks_mod=self.find_peaks_mod,
-            faster=self.faster,
-            range_thr=self.range_thr,
-            total_power_thr=self.total_power_thr,
+            num_imf=self.num_imf,
+            noise_amp=self.noise_amp,
+            M=self.M,
+            pre_decompose_noise=self.pre_decompose_noise,
+            parallel=self.parallel,
+            num_workers=self.num_workers,
+            dtype=self.dtype,
+            EMD_config=self.EMD.config_generate(),
+            pre_decompose_EMD_config=self.pre_decompose_EMD.config_generate() if self.pre_decompose_noise else None
         )
 
-    # ------------------------------------------------------------------ #
-    # decompose
-    # ------------------------------------------------------------------ #
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S: List[int | float] | np.ndarray) -> DecompositionResult:
         """
-        Decompose the signal into IMFs and a residual.
+        Complementary EEMD with Adaptive Noise (CEEMDAN)。
 
-        Returns
-        -------
-        DecompositionResult
-            ``IMFs`` (K, N); ``Res`` (N,) with ``S == IMFs.sum(axis=0) + Res``;
-            ``info`` with ``trials`` (realizations requested), ``trials_used``
-            (per-stage count that actually entered the average — it has ``K+1``
-            entries when the run stopped on a stage that produced no mode, and
-            fewer than ``trials`` when some noise realization lacked that IMF
-            order), ``noise_imfs`` (available IMF orders per noise realization),
-            ``stop_reason`` and ``n_imfs``, plus ``ensemble_std`` (per-stage,
-            stacked) when ``rich_info`` is True.
+        第 1 阶      ``IMF_1 = (1/M) Σ_m E_1(S + w_m)``
+        第 k (k>=2)  ``IMF_k = (1/M) Σ_m E_1(r_{k-1} + E_k(w_m))``,  ``r_k = r_{k-1} - IMF_k``
+
+        ``E_1(·)`` 就是内层 ``EMD(num_imf=1)``, 每次只剥一阶; ``E_k(w_m)`` 是第 m 个噪声实现的
+        第 k 阶 IMF。噪声口径与 EEMD/CEEMD 一致: ``noise_amp`` 是**幅值系数**, 实际噪声为
+        ``noise_amp × N(0, std(S))``。因此第 1 阶加的是原始噪声、第 k 阶加的是噪声自己的第 k 阶
+        IMF —— 两者都不再额外缩放 (原实现里的 ``noises[m] / noise_amp * S.std()`` 会把系数约掉,
+        等于该参数失效, 且与第 k 阶不缩放的做法不自洽)。
         """
-        S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, copy=self.copy)
 
-        if N < 4:
-            raise ValueError(f"CEEMDAN: signal length {N} is too short (need >= 4)")
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
+            S = Check.to_dtype(S, np.dtype(np.float64))
 
-        effective_seed, _ = resolve_seed(self.seed, self.name)
+        # 每次调用都从干净状态开始: 否则第二次 decompose 会把上一次的累积结果当成初值
+        self.imfs = None
+        self.res  = None
 
-        if self.pyemd:
-            return self._decompose_pyemd(S, T, effective_seed)
+        noise_std = self.noise_amp * S.std()          # 实际噪声标准差, 便于追溯
 
-        rng = np.random.default_rng(effective_seed)
-
-        config = self._snapshot(effective_seed)
-
-        # 递归在单位标准差的信号上进行 (与 PyEMD 同做法): ε 与两个阈值因此对任意
-        # 幅度的信号含义一致; 求得的模态与残差最后统一乘回原尺度。
-        S = np.asarray(S, dtype=np.float64)
-        scale = float(np.std(S))
-        if scale == 0.0:
-            # 常量信号: 无 IMF, 全部进入残差 (精确重构仍成立)。
+        # 退化输入 (常量/全零/线性趋势/单峰/过短): 信号本身极大或极小不足 2 个, 内层 EMD 一个 IMF
+        # 也分不出来; 若照常加噪, 分出来的全是"我们加进去的噪声"。直接返回空 IMF 集, 与 EMD 对齐。
+        _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.peaks_backend)
+        if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
+            self.imfs = np.empty((0, N), dtype=S.dtype)
+            self.res = S
             return DecompositionResult(
-                np.empty((0, N), dtype=np.float64),
-                S.copy(),
-                {
-                    "trials": self.trials,
-                    "trials_used": [],
-                    "noise_imfs": [],
-                    "stop_reason": "constant_signal",
-                    "n_imfs": 0,
-                },
-                config,
+                IMFs=self.imfs,
+                Res=self.res,
+                info={"noise_std": noise_std,
+                      "emd info": [], "noise emd info": [], "rows": []},
+                config=self.config_generate()
             )
 
-        work = S / scale
+        original_energy = np.dot(S, S)
 
-        # --- 噪声池: 一次生成 (M, N), 逐行预分解, 逐阶复用第 k 阶 IMF -------- #
-        # 全程按行索引 ndarray, 不为 trial 包元组列表 —— 元组列表既多一份 Python
-        # 对象开销, 也切断了大数组的连续内存访问。
-        noise = rng.normal(loc=0.0, scale=1.0, size=(self.trials, N))
-        # 单实例复用: EMD.decompose 不携带跨调用状态, 无需逐 trial 重建。
-        noise_engine = self._engine(max_imf=-1)
+        # 噪声按输入精度生成: np.random.normal 是 float64, 不转会把 f32 工作数组整体升格
+        noises: np.ndarray = np.random.normal(loc=0, scale=noise_std, size=(self.M, N)).astype(S.dtype, copy=False)
 
-        noise_imfs: list = []
-        for w in noise:
-            noise_imfs.append(noise_engine.decompose(w).IMFs)
+        EMD_info: List[dict] = []
+        noisy_EMD_info: List[dict] = []
+        rows: List[int] = []
 
-        noise_orders = np.fromiter(
-            (imfs.shape[0] for imfs in noise_imfs), dtype=np.int64, count=self.trials
-        )
-        max_order = int(noise_orders.max()) if noise_orders.size else 0
+        # num_imf=-1 与 EMD / EEMD / CEEMD 完全一致: **不设阶段上限**, 阶数由停止判据决定
+        # (内层 EMD 剥不出 IMF / 残差单调 / 能量耗尽 / faster=False 的极值门)。
+        # 显式 num_imf 时, 在阶数到点后 break。
+        # 保底: 逐阶渐进的噪声序列是有限的 (每剥一阶都在缩小, 直到内层 EMD 一阶也剥不出),
+        # 所以循环必然终止, 不需要人为数字。
 
-        # 逐阶挑出"阶数足够"的实现下标; E_k(w_i) 直接由 (下标, k) 索引取用,
-        # 不再另建切片表。
-        eligible = [np.flatnonzero(noise_orders > k) for k in range(max_order)]
+        # 单次 IMF 的"无进展"门限: 与 EMD 的口径一致 (相对信号的均方根)
+        scale_floor: float = 1e-12 * max(np.sqrt(original_energy / N), np.finfo(float).tiny)
 
-        # 逐阶注入的信号是 ε·E_k(w_i): ε 是常数, 预先乘进噪声池, 主循环里就只剩
-        # 一次加法 (M×K 次标量乘法不值得留在热路径上)。
-        scaled_noise = [imfs * self.noise_width for imfs in noise_imfs]
+        if not self.parallel:
+            noise_imfs: np.ndarray = None       # 只有 pre_decompose_noise=True 时才有
 
-        imfs_out: list = []
-        trials_used: list = []
-        ensemble_std: list = []
-        residual = work.copy()
-        stop_reason = "max_imf"
-        first_engine = self._engine(max_imf=1)
+            if self.pre_decompose_noise:
+                stacked: List[np.ndarray] = []
+                min_rows: int = None
 
-        while self.max_imf == -1 or len(imfs_out) < self.max_imf:
-            stage = len(imfs_out) + 1          # 1-based: 本阶提取第 stage 阶 IMF
-            if stage > max_order:
-                stop_reason = "noise_exhausted"
-                break
+                for m in range(self.M):
+                    noise_result = self.pre_decompose_EMD.decompose(noises[m, :])
+                    noisy_EMD_info.append(noise_result.info)
 
-            # 该阶注入"噪声自身的第 stage 阶 IMF", 而不是原始白噪声 —— 这正是
-            # CEEMDAN 相对 EEMD 的关键改动 (stage-matched 辅助扰动)。
-            idx = eligible[stage - 1]
-            stacked = np.empty((idx.size, N), dtype=np.float64)
-            perturbed = np.empty(N, dtype=np.float64)   # 复用: 每次只改内容
-            used = 0
-            for i in idx:
-                # 原地写入, 省掉 M×K 次临时数组分配。
-                np.add(residual, scaled_noise[i][stage - 1], out=perturbed)
-                imfs = first_engine.decompose(perturbed).IMFs
-                if imfs.shape[0] == 0:
-                    continue
-                stacked[used] = imfs[0]
-                used += 1
+                    imfs_m = noise_result.IMFs
+                    min_rows = imfs_m.shape[0] if min_rows is None else min(min_rows, imfs_m.shape[0])
 
-            if used == 0:
-                # 该阶全部扰动都取不到 IMF ⇒ 残差已经没有可提取的极值了
-                # (同时覆盖"引擎在个别实现上失败", 那种情况用 valid_trials 记录)。
-                stop_reason = "residual_no_extrema"
-                break
+                    stacked.append(imfs_m)
 
-            stacked = stacked[:used]
-            mode = stacked.mean(axis=0)
-            imfs_out.append(mode)
-            trials_used.append(used)
-            if self.rich_info:
-                ensemble_std.append(stacked.std(axis=0))
+                if min_rows is None or min_rows < 1:
+                    self.imfs = np.empty((0, N), dtype=S.dtype)
+                    self.res = S
+                    return DecompositionResult(
+                        IMFs=self.imfs,
+                        Res=self.res,
+                        info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
+                        config=self.config_generate()
+                    )
 
-            residual = residual - mode
+                # [M, min rows, N] —— 各实现的阶数可能不同, 统一截到最小的那个;
+                # 第 k 阶要用噪声的第 k-1 阶, 所以最多只能做到 min_rows + 1 阶
+                noise_imfs = np.array(stacked)[:, :min_rows, :].astype(S.dtype, copy=False)
 
-            # --- 停机判据 (在归一化残差上判定) ----------------------------- #
-            if is_monotonic(residual):
-                stop_reason = "residual_monotonic"
-                break
-            if float(np.max(residual) - np.min(residual)) < self.range_thr:
-                stop_reason = "range_thr"
-                break
-            if float(np.sum(np.abs(residual))) < self.total_power_thr:
-                stop_reason = "total_power_thr"
-                break
-            # 残差是否还有极值: 用**一次** EMD 探测回答, 而不是让下一阶的 M 次
-            # 试验去"发现"它 —— 后者在失败阶上要空耗 M 次完整 EMD。只要阶数
-            # K < M 就是净赚 (集成法恒满足: trials 通常 50~100, K 是个位数)。
-            # 实测 (trials=20, K=5): 有探测 125 次 EMD 调用
-            # (噪声池 20 + 主循环 5×20 + 6 次探测), 无探测 138 次
-            # (噪声池 20 + 失败阶再跑满 18 次) —— 且 K 越小优势越大。
-            if first_engine.decompose(residual).IMFs.shape[0] == 0:
-                stop_reason = "residual_no_extrema"
-                break
+            # 显式 num_imf 时预分配, 峰值只有一份 (num_imf, N);
+            # num_imf=-1 时阶数未知, 只能用 list 暂存, 最后一次性成阵
+            imfs_buf: np.ndarray = np.empty((self.num_imf, N), dtype=S.dtype) if self.num_imf != -1 else None
+            imfs: List[np.ndarray] = []
+            n_stage: int = 0
+            S_work: np.ndarray = S          # 逐步剥 IMF 的残差; S 是 Check_Time_and_Signal(copy=True) 给的副本, 可原地 -=
 
-        if imfs_out:
-            IMFs = np.asarray(imfs_out, dtype=np.float64) * scale
+            while True:
+                row_imf: np.ndarray = None
+                contrib: int = 0
+
+                for m in range(self.M):
+                    if n_stage == 0:
+                        # 第 1 阶: 直接加原始噪声
+                        result = self.EMD.decompose(S_work + noises[m, :])
+                        EMD_info.append(result.info)
+                        imf_m = result.IMFs
+                    elif self.pre_decompose_noise:
+                        # 第 k 阶: 加噪声自己的第 k-1 阶 IMF
+                        result = self.EMD.decompose(S_work + noise_imfs[m, n_stage - 1, :])
+                        EMD_info.append(result.info)
+                        imf_m = result.IMFs
+                    else:
+                        noise_result = self.EMD.decompose(noises[m, :])
+                        noisy_EMD_info.append(noise_result.info)
+                        imf_noise = noise_result.IMFs
+                        noises[m, :] = noise_result.Res
+
+                        if imf_noise.shape[0] < 1:
+                            continue
+
+                        result = self.EMD.decompose(S_work + imf_noise[0, :])
+                        EMD_info.append(result.info)
+                        imf_m = result.IMFs
+
+                    if imf_m.shape[0] < 1:
+                        continue                    # 该实现这一阶剥不出来, 跳过
+                    contrib += 1
+                    row_imf = imf_m if row_imf is None else row_imf + imf_m
+
+                if row_imf is None:
+                    break
+
+                # 每阶恰好剥出 1 个 IMF: squeeze 成一维, 否则 S_work(1-D) - row_imf(1,N) 会被广播成 2-D
+                imf_row = row_imf.squeeze() / self.M
+
+                # 无进展就收尾 (内层 EMD 一阶也剥不出时 row_imf 会先变成 None)
+                if np.max(np.abs(imf_row)) <= scale_floor:
+                    break
+
+                if imfs_buf is not None:
+                    imfs_buf[n_stage, :] = imf_row
+                else:
+                    imfs.append(imf_row)
+                rows.append(contrib)
+                S_work -= imf_row
+                n_stage += 1
+
+                # 显式 num_imf 到点就停 (-1 时永不触发)
+                if self.num_imf != -1 and n_stage >= self.num_imf:
+                    break
+
+                # 预分解噪声: 第 k 阶要用噪声的第 k-1 阶, 所以第 0..min_rows 阶都可用
+                if self.pre_decompose_noise and n_stage > noise_imfs.shape[1]:
+                    break
+
+                stop = monotonic(S_work, mod="monotonic", safe="safe") or np.dot(S_work, S_work) < self.res_energy * original_energy
+                if not self.faster and not stop:
+                    _, _, pm_res = find_peaks(S_work, mod="both", safe="safe", backend=self.peaks_backend)
+                    stop = int(np.sum(pm_res)) < 2 or int(np.sum(~pm_res)) < 2
+                if stop:
+                    break
+
+            self.imfs = imfs_buf[:n_stage, :] if imfs_buf is not None else \
+                (np.asarray(imfs, dtype=S.dtype) if imfs else np.empty((0, N), dtype=S.dtype))
+            # 无论跑到 num_imf / 噪声阶数用完, 还是被各种停止判据 break, S_work 就是当前残差
+            self.res = S_work
+
         else:
-            IMFs = np.empty((0, N), dtype=np.float64)
+            import multiprocessing as mp
 
-        # 残差由总和反推 —— 与 EEMD 同思路, 精确重构硬性成立。
-        Res = S - IMFs.sum(axis=0)
+            # 噪声必须先整体预分解: 本分支每阶 spawn 一批 worker, 而 spawn 出来的进程不带状态,
+            # 拿不到"上一阶留下的噪声残差", 所以只能一次性把每个噪声实现的前 k-1 阶 IMF 都备好。
+            stacked: List[np.ndarray] = []
+            min_rows: int = None
 
+            for m in range(self.M):
+                noise_result = self.pre_decompose_EMD.decompose(noises[m, :])
+                noisy_EMD_info.append(noise_result.info)
+
+                imfs_m = noise_result.IMFs
+                min_rows = imfs_m.shape[0] if min_rows is None else min(min_rows, imfs_m.shape[0])
+
+                stacked.append(imfs_m)
+
+            if min_rows is None or min_rows < 1:
+                self.imfs = np.empty((0, N), dtype=S.dtype)
+                self.res = S
+                return DecompositionResult(
+                    IMFs=self.imfs,
+                    Res=self.res,
+                    info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
+                    config=self.config_generate()
+                )
+
+            # [M, min rows, N] —— 第 k 阶要用噪声的第 k-1 阶, 所以最多只能做到 min_rows + 1 阶
+            noise_imfs: np.ndarray = np.stack([row[:min_rows] for row in stacked]).astype(S.dtype, copy=False)
+
+            # 试验按 M / num_workers 均分; 进程数不超过试验数 (否则进程会空转)
+            num_workers: int = min(self.num_workers, self.M)
+            base, extra = divmod(self.M, num_workers)
+            tasks: List[dict] = []
+            left = 0
+            for p in range(num_workers):
+                right = left + base + (1 if p < extra else 0)
+                tasks.append({"index": p, "start": left, "end": right})
+                left = right
+
+            # 显式 num_imf 时预分配, 峰值只有一份 (num_imf, N);
+            # num_imf=-1 时阶数未知, 只能用 list 暂存, 最后一次性成阵
+            imfs_buf: np.ndarray = np.empty((self.num_imf, N), dtype=S.dtype) if self.num_imf != -1 else None
+            imfs: List[np.ndarray] = []
+            n_stage: int = 0
+            S_work: np.ndarray = S
+
+            # 与串行分支的差别只在"本阶由谁算": 相邻阶是串行依赖的 (第 k 阶要第 k-1 阶的全局
+            # 平均残差), 所以不能像 EEMD/CEEMD 那样把整个分解交给一个 worker; 这里每阶 spawn
+            # 一批 worker, 收齐本阶的 M 个 E_1 之和后再进入下一阶。
+            from queue import Empty
+
+            while True:
+                # 第 1 阶给原始噪声, 其后给噪声自己的第 k-1 阶 IMF
+                noise_block_all: np.ndarray = noises if n_stage == 0 else noise_imfs[:, n_stage - 1, :]
+
+                queue = mp.Queue()
+                parallel_process: List[mp.Process | None] = [None for _ in range(num_workers)]
+                for task in tasks:
+                    parallel_process[task["index"]] = mp.Process(
+                        target=self.parallel_decompose,
+                        args=(S_work, noise_block_all[task["start"]:task["end"], :], queue, task))
+                    parallel_process[task["index"]].start()
+
+                # 用"轮询 + 存活检查": 超时只是轮询间隔, 不对健康进程设截止时间, 所以耗时长的正常
+                # 试验不会被误杀; 一旦发现 worker 已退出, 立刻清场并抛错。
+                parallel_result_points_list: List = []
+                worker_errors: List = []
+                while len(parallel_result_points_list) + len(worker_errors) < num_workers:
+                    try:
+                        item = queue.get(timeout=0.5)
+                    except Empty:
+                        if any(p is not None and not p.is_alive() for p in parallel_process):
+                            # 把已回传的记录先捞干净, 再统一报错
+                            while True:
+                                try:
+                                    item = queue.get_nowait()
+                                except Exception:
+                                    break
+                                if isinstance(item, tuple) and item and item[0] == "error":
+                                    worker_errors.append(item)
+                                else:
+                                    parallel_result_points_list.append(item)
+                            for p in parallel_process:
+                                if p is not None and p.is_alive():
+                                    p.terminate()
+                            for p in parallel_process:
+                                if p is not None:
+                                    p.join()
+                            codes = [p.exitcode for p in parallel_process if p is not None]
+                            raise RuntimeError(
+                                f"CEEMDAN: worker 异常退出, exitcode={codes}; 已回传的错误={worker_errors or '无'}") from None
+                        continue
+                    if isinstance(item, tuple) and item and item[0] == "error":
+                        worker_errors.append(item)
+                    else:
+                        parallel_result_points_list.append(item)
+
+                for p in range(num_workers):
+                    parallel_process[p].join()
+                queue.close()
+
+                codes = [p.exitcode for p in parallel_process if p is not None]
+                if worker_errors or any(c not in (0, None) for c in codes):
+                    raise RuntimeError(f"CEEMDAN: worker 报错, exitcode={codes}; 错误={worker_errors or '无'}")
+
+                parallel_result_points_list.sort(key=lambda it: it[0])
+
+                row_imf: np.ndarray = None
+                contrib: int = 0
+                for item in parallel_result_points_list:
+                    EMD_info.extend(item[3])
+                    contrib += int(item[2])
+
+                    acc = item[1]
+                    if acc is None or acc.shape[0] < 1:
+                        continue
+                    if row_imf is None:
+                        row_imf = acc
+                    else:
+                        min_row = min(row_imf.shape[0], acc.shape[0])
+                        row_imf = row_imf[:min_row] + acc[:min_row]
+
+                if row_imf is None:
+                    break
+
+                imf_row = row_imf.squeeze() / self.M
+
+                if np.max(np.abs(imf_row)) <= scale_floor:
+                    break
+
+                if imfs_buf is not None:
+                    imfs_buf[n_stage, :] = imf_row
+                else:
+                    imfs.append(imf_row)
+                rows.append(contrib)
+                S_work -= imf_row
+                n_stage += 1
+
+                # 显式 num_imf 到点就停 (-1 时永不触发)
+                if self.num_imf != -1 and n_stage >= self.num_imf:
+                    break
+                # 本分支必须预分解噪声: 第 k 阶要用噪声的第 k-1 阶, 所以第 0..min_rows 阶都可用
+                if n_stage > noise_imfs.shape[1]:
+                    break
+
+                stop = monotonic(S_work, mod="monotonic", safe="safe") or \
+                    np.dot(S_work, S_work) < self.res_energy * original_energy
+                if not self.faster and not stop:
+                    _, _, pm_res = find_peaks(S_work, mod="both", safe="safe", backend=self.peaks_backend)
+                    stop = int(np.sum(pm_res)) < 2 or int(np.sum(~pm_res)) < 2
+                if stop:
+                    break
+
+            self.imfs = imfs_buf[:n_stage, :] if imfs_buf is not None else \
+                (np.asarray(imfs, dtype=S.dtype) if imfs else np.empty((0, N), dtype=S.dtype))
+            self.res = S_work
+
+        config = self.config_generate()
         info = {
-            "backend": "native",
-            "trials": self.trials,
-            # 每阶实际进入平均的 trial 数 (噪声实现可用阶数不足时会小于 trials)。
-            "trials_used": trials_used,
-            # 各噪声实现预分解出的可用 IMF 阶数。
-            "noise_imfs": noise_orders.tolist(),
-            "stop_reason": stop_reason,
-            "n_imfs": len(imfs_out),
+            "noise_std": noise_std,
+            "emd info": EMD_info,
+            "noise emd info": noisy_EMD_info,
+            "rows": rows,
         }
-        if self.rich_info and ensemble_std:
-            # PyEMD 的 ensemble_std 语义: 同阶各试验结果逐点标准差 (按阶堆叠)。
-            info["ensemble_std"] = np.asarray(ensemble_std, dtype=np.float64)
 
-        return DecompositionResult(IMFs, Res, info, config)
-
-    # ------------------------------------------------------------------ #
-    # 过渡分支: 交回第三方 PyEMD (Colominas-2014 变体)
-    # ------------------------------------------------------------------ #
-    def _decompose_pyemd(self, S, T, effective_seed) -> DecompositionResult:
-        """
-        Delegate to the third-party PyEMD ``CEEMDAN`` (``pyemd=True``).
-
-        PyEMD is imported lazily through the process-wide import cache, so a
-        missing ``EMD-signal`` only affects this branch.
-
-        ``**kwargs`` (``noise_scale`` / ``noise_kind`` / ``extrema_detection`` /
-        ``parallel`` / ``processes``) 是 PyEMD 专属参数面, 在此原样透传;
-        ``trials`` / ``max_imf`` / ``seed`` 由本类同名形参映射。
-        PyEMD 的 ``ceemdan`` 返回 ``vstack(IMFs, residue)``, 即**最后一行本身
-        就是真残差** (与它的 ``eemd`` 不同), 故直接沿用。
-        """
-        from .Base.Cache import cache
-
-        try:
-            pyemd_module = cache.import_module(
-                "PyEMD",
-                description="PyEMD: 过渡期 EEMD/CEEMDAN 后端 (pyemd=True)",
-            )
-        except ImportError as exc:  # pragma: no cover - depends on environment
-            raise ImportError(
-                "CEEMDAN(pyemd=True) 需要第三方依赖 'EMD-signal' (导入名 'PyEMD'), "
-                "但它未安装; 请先安装:\n"
-                "    pip install EMD-signal\n"
-                "或改用原生实现 (默认 pyemd=False, 不需要 PyEMD):\n"
-                "    Class.CEEMDAN(...).decompose(S)"
-            ) from exc
-
-        kwargs = dict(self.pyemd_kwargs)
-        # PyEMD.CEEMDAN 的 parallel 默认是 **True**, 会在每个模态阶上开一次
-        # multiprocessing.Pool —— 本库不给它这个默认: 一是它与本库其余方法
-        # (默认串行) 不一致, 二是 Pool 在受限环境 (含部分 Windows / 沙箱) 直接
-        # PermissionError。需要并行时显式传 `pyemd=True, parallel=True`。
-        kwargs.setdefault("parallel", False)
-        if not kwargs.get("parallel", False):
-            # parallel=False 时 PyEMD 的 processes 无意义且会告警, 一并清掉。
-            kwargs.pop("processes", None)
-
-        decomposer = pyemd_module.CEEMDAN(
-            trials=self.trials,
-            seed=effective_seed,
-            spline_kind="cubic",          # PyEMD 用自身拼写; 原生路径用 canonical 名
-            nbsym=self.nbsym,
-            **kwargs,
+        return DecompositionResult(
+            IMFs=self.imfs,
+            Res=self.res,
+            info=info,
+            config=config
         )
 
-        stack = np.asarray(decomposer.ceemdan(S, T, self.max_imf))
+    def parallel_decompose(self, S, noise_block, pointer, task):
+        """
+        单个工作进程: 只负责本阶噪声块 ``noise_block`` 中自己那一段 (task["start"] .. task["end"])。
 
-        IMFs = np.asarray(stack[:-1, :], dtype=np.float64)
-        Res = np.asarray(stack[-1, :], dtype=np.float64)
+        CEEMDAN 的相邻阶是**串行依赖**的 (第 k 阶要第 k-1 阶的全局平均残差), 所以不能像 EEMD/CEEMD
+        那样把一个 worker 派去跑完整个分解; 父进程每阶 spawn 一批 worker, 收齐本阶的 M 个 E_1 之和
+        再进入下一阶。平均由父进程统一做。
 
-        info = {
-            "backend": "pyemd",
-            "trials": self.trials,
-            "n_imfs": int(IMFs.shape[0]),
-            "stop_reason": "pyemd",
-        }
-        return DecompositionResult(IMFs, Res, info, self._snapshot(effective_seed))
+        与 EEMD/CEEMD 的 ``parallel_decompose`` 一样, 把 (序号, 累积和, 有效数, EMD info) 通过
+        ``pointer`` (mp.Queue) 交回父进程。
+        """
+        acc = None
+        infos = []
+        n_ok = 0
+
+        # 任何异常都必须先回传一条错误记录再抛: 否则父进程只能靠"进程没了"来判断, 拿不到原因。
+        # 回传之后 re-raise, 让子进程以非零 exitcode 结束, 父进程两条路都能捕获。
+        try:
+            for j in range(noise_block.shape[0]):
+                result = self.EMD.decompose(S + noise_block[j, :])
+                infos.append(result.info)
+
+                imf_j = result.IMFs
+                if imf_j.shape[0] < 1:
+                    continue                    # 该实现这一阶剥不出来, 跳过
+                n_ok += 1
+                acc = imf_j if acc is None else acc + imf_j
+
+            pointer.put((task["index"], acc, n_ok, infos))
+        except BaseException as exc:
+            pointer.put(("error", task["index"], f"{type(exc).__name__}: {exc}"))
+            raise
+
+
+def f_CEEMDAN(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp: float = 0.3, res_energy: float = 1e-6, M: int = 50, pre_decompose_noise: bool = False, parallel: bool = False, num_workers: int = 1, faster: bool = True, **kwargs) -> DecompositionResult:
+    ceemdan = CEEMDAN(
+        num_imf=num_imf,
+        noise_amp=noise_amp,
+        res_energy=res_energy,
+        M=M,
+        pre_decompose_noise=pre_decompose_noise,
+        parallel=parallel,
+        num_workers=num_workers,
+        faster=faster,
+        **kwargs,
+    )
+
+    return ceemdan.decompose(S)

@@ -28,6 +28,9 @@ from .Define import *
 from .Operator import *
 
 from .EMD import EMD, f_EMD, EMDConfig
+from .CEEMD import CEEMD, f_CEEMD, CEEMDConfig
+from .CEEMDAN import CEEMDAN, f_CEEMDAN, CEEMDANConfig
+from .ICEEMDAN import ICEEMDAN, f_ICEEMDAN, ICEEMDANConfig
 
 __all__ = [
     "Class",
@@ -50,6 +53,12 @@ __description__ = "A comprehensive modal decomposition library"
 
 class Class:
     EMD = EMD
+    CEEMD = CEEMD
+    CEEMDAN = CEEMDAN
+    ICEEMDAN = ICEEMDAN
 
 class Function:
     EMD = f_EMD
+    CEEMD = f_CEEMD
+    CEEMDAN = f_CEEMDAN
+    ICEEMDAN = f_ICEEMDAN

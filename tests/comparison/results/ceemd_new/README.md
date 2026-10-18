@@ -37,15 +37,15 @@ CEEMD（原生）验证轮的原始数据。配套报告：`docs/test/CEEMD_Nati
 
 | `impl` | 说明 |
 |---|---|
-| `CEEMD (新, 默认)` | 本轮对象 `src/Modal_Decomposition/CEEMD_NEW.py`，默认 `num_imf=-1, noise_amp=None→0.3·std(S), M=25` |
+| `CEEMD (新, 默认)` | 本轮对象 `src/Modal_Decomposition/CEEMD.py`（原型阶段叫 `CEEMD_NEW.py`），默认 `num_imf=-1, noise_amp=None→系数 0.3, M=25` |
 | `CEEMD (旧, 默认)` | 旧 `CEEMD.py` 的可运行副本（另一套算法，见报告 §2.1 / §4），由 `.scratch/eemd_new/legacy_ceemd.py` 动态构建 |
 | `EEMD (同库, 默认)` | 同库 EEMD，作为"互补对到底带来多少收益"的参照 |
 | `PyEMD.EEMD (默认)` | `PyEMD.EEMD()`，`trials=100`、`noise_width=0.05`（峰峰值口径） |
 | `PySDKit.EEMD (默认)` | `pysdkit.EEMD()`，同上 |
 
 > **必看前提 1**：这一组是**各家用自己的默认参数**，**不是等口径对照**。新 CEEMD 的
-> `noise_amp` 是**绝对**标准差，另三家的 `noise_width` 是**峰峰值**口径，所以 `sigma` 列
-> 各不相同。报告 §5 表注写明了这一点。
+> `noise_amp` 是**幅值系数**（实际 `σ̂ = noise_amp · std(S)`），另三家的 `noise_width` 是
+> **峰峰值**口径，所以 `sigma` 列各不相同。报告 §5 表注写明了这一点。
 >
 > **必看前提 2**：旧 CEEMD 是**另一套算法**（逐阶只剥 1 个 IMF），它的 `k`=14–16 与
 > `leak`=0.87–0.89 不能当成新版的退化版本。
@@ -58,7 +58,7 @@ CEEMD（原生）验证轮的原始数据。配套报告：`docs/test/CEEMD_Nati
 |---|---|
 | `env` | 环境快照 |
 | `M_grid` | `[10, 25, 50, 100]` |
-| `alpha_grid` | `[0.1, 0.2, 0.3, 0.4]`，`alpha = noise_amp / std(S)` |
+| `alpha_grid` | `[0.1, 0.2, 0.3, 0.4]`，`alpha` 就是幅值系数 `noise_amp`（`σ̂ = alpha · std(S)`） |
 | `cost_case` | `["A", 16384]` —— 成本轴的信号 |
 | `leak_max` | `0.05`，可行性约束 |
 | `rows` | 16 组结果 |

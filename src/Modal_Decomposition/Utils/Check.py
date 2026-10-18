@@ -406,7 +406,8 @@ def Check_Time_and_Signal(
     axis: int = 0,
     need_T: bool = True,
     chunk_size: int = None,
-    temp_dir: Optional[str] = None
+    temp_dir: Optional[str] = None,
+    copy: bool = True
 ) -> tuple[np.ndarray, Optional[np.ndarray], int] | tuple[np.ndarray, int]:
     """
     Validate the signal and its now axis and return them in canonical form.
@@ -444,6 +445,11 @@ def Check_Time_and_Signal(
         the size of chunk
     temp_dir : str, optional
         the temporary dir of the tempfiles.
+    copy : bool, optional
+        默认 True: 返回 ``S`` 的**独立副本**, 归调用方所有, 可直接原地改写
+        (``S -= imf``), 不必每一轮再分配一份等长数组。取副本的成本是 ``N`` 个元素,
+        一次付清; 对 memmap 输入则会把内容**拉回 RAM**(不可写/只读映射无法原地改)。
+        只在确实不改写 ``S`` 且需要保留 memmap 支撑时传 ``False``。
 
     Returns
     -------
@@ -496,6 +502,10 @@ def Check_Time_and_Signal(
             idx = np.argsort(T)
             T = T[idx]
             S = S[..., idx]
+
+    # 独立副本: 交给调用方随意原地改写。放在最后一路转换之后, 只拷一次。
+    if copy:
+        S = np.array(S, copy=True)
 
     if need_T:
         return S, T, N

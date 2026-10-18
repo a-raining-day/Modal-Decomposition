@@ -10,16 +10,20 @@ References
 """
 
 import numpy as np
+import warnings
 from dataclasses import dataclass
 from typing import ClassVar
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
-from .Utils import Check_Time_and_Signal, resolve_seed
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, SAFE_MODS, SAFE_ARGS
+from .Base import Cache, Seed, Global_Seed
+from .Utils import Check, Check_Time_and_Signal
 
-__all__ = ["FMD", "FMDConfig"]
+__all__ = ["FMD", "FMDConfig", "f_FMD"]
 
 
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class FMDConfig(Config):
     """
@@ -32,9 +36,12 @@ class FMDConfig(Config):
     tol: float
     num_hand: int | None
     seed: int | None
+    dtype: type | np.dtype | None
 
 
-@register_class("FMD")
+"""
+Class and Function of decomposer
+"""
 class FMD(Decomposer):
     name: ClassVar[str] = "FMD"
 
@@ -47,6 +54,8 @@ class FMD(Decomposer):
         tol: float = 1e-6,
         num_hand: int | None = None,
         seed: int | None = None,
+        dtype: type | np.dtype | None = None,
+        **kwargs
     ):
         """
         Parameters
@@ -66,46 +75,130 @@ class FMD(Decomposer):
             automatically.
         seed : int | None
             Local random seed. Overridden by a global seed when both are set.
+        dtype : type | np.dtype | None
+            Working dtype of the returned modes. ``None`` keeps the input
+            precision; integer/bool inputs are promoted to float64.
         """
-        self.M = M
-        self.L_factor = L_factor
-        self.K = K
-        self.max_iter = max_iter
-        self.tol = tol
-        self.num_hand = num_hand
-        self.seed = seed
+        self.M: int | None = M
+        self.L_factor: int = L_factor
+        self.K: int = K
+        self.max_iter: int = max_iter
+        self.tol: float = tol
+        self.num_hand: int | None = num_hand
+        self.seed: int | None = seed
+        self.dtype: type | np.dtype | None = dtype
+
+        # 未知参数白名单: 只接受 safe / copy
+        unknown = set(kwargs) - {"safe", "copy"}
+        if unknown:
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
+
+        self.safe: SAFE_MODS | SAFE_ARGS = kwargs.get("safe", "unknown")
+        self.copy: bool = kwargs.get("copy", True)
+
+        self.param_check()
+
+    def param_check(self) -> None:
+        if self.M is not None:
+            if not isinstance(self.M, int) or isinstance(self.M, bool):
+                raise TypeError("the `M` must be int or None.")
+
+            if self.M < 1:
+                raise ValueError("the `M` must >= 1.")
+
+        if not isinstance(self.L_factor, int) or isinstance(self.L_factor, bool):
+            raise TypeError("the `L_factor` must be int.")
+
+        if self.L_factor < 1:
+            raise ValueError("the `L_factor` must >= 1.")
+
+        if not isinstance(self.K, int) or isinstance(self.K, bool):
+            raise TypeError("the `K` must be int.")
+
+        if self.K != -1 and self.K < 1:
+            raise ValueError("the `K` must be -1 or >= 1.")
+
+        if not isinstance(self.max_iter, int) or isinstance(self.max_iter, bool):
+            raise TypeError("the `max_iter` must be int.")
+
+        if self.max_iter < 1:
+            raise ValueError("the `max_iter` must >= 1.")
+
+        if not isinstance(self.tol, (int, float)) or isinstance(self.tol, bool):
+            raise TypeError("the `tol` must be int or float.")
+
+        if not (self.tol > 0):
+            raise ValueError("the `tol` must > 0.")
+
+        if self.num_hand is not None:
+            if not isinstance(self.num_hand, int) or isinstance(self.num_hand, bool):
+                raise TypeError("the `num_hand` must be int or None.")
+
+            if self.num_hand < 0:
+                raise ValueError("the `num_hand` must >= 0.")
+
+        if self.seed is not None:
+            # bool 是 int 的子类, 单独拒绝; numpy 整数一并接受并归一为 int
+            if isinstance(self.seed, bool) or not isinstance(self.seed, (int, np.integer)):
+                raise TypeError("the `seed` must be int or None.")
+
+            if int(self.seed) < 0:
+                raise ValueError("the `seed` must be non-negative.")
+
+            self.seed = int(self.seed)
+
+        if self.dtype is not None and np.dtype(self.dtype).kind != "f":
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
+
+        self.safe = Check.validate_safe(self.safe)
+
+    def config_generate(self) -> FMDConfig:
+        return FMDConfig(
+            M=self.M,
+            L_factor=self.L_factor,
+            K=self.K,
+            max_iter=self.max_iter,
+            tol=self.tol,
+            num_hand=self.num_hand,
+            seed=self.seed,
+            dtype=self.dtype,
+        )
 
     def decompose(self, S, T=None) -> DecompositionResult:
         """
         Decompose the signal into modes and a residual.
 
-        The time axis is validated but not used by the algorithm.
+        The time axis is validated but not used by the algorithm. FMD 把模态
+        全部累积在**局部变量**里 (实例上不存在 imfs/res 之类的跨调用状态),
+        所以同一实例的第二次调用天然从干净状态开始, 不会沿用上次结果。
         """
-        from scipy.signal import argrelextrema
-        from scipy.linalg import eigh, eig
+        scipy_signal = Cache.import_module("scipy.signal")
+        scipy_linalg = Cache.import_module("scipy.linalg")
 
-        S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
+        # FMD 是纯时域滤波方法, 不使用时间轴; need_T=False 省掉 arange(N) 那份临时数组
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name,
+                                     dtype=self.dtype, need_T=False,
+                                     safe=self.safe, copy=self.copy)
 
-        S = np.asarray(S, dtype=np.float64).ravel()
-        N = len(S)
-        S_original = S.copy()
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):
+            # int/bool 会让下面的浮点运算直接报错; f16 精度不足以撑住特征分解
+            S = Check.to_dtype(S, np.dtype(DEFAULT_NUMPY_TYPE))
 
-        effective_seed, _ = resolve_seed(self.seed, self.name)
+        S = np.asarray(S).ravel()  # 全程只读: 不改写调用方输入
+        N = int(S.size)
 
+        effective_seed: int | None = _resolve_seed(self.seed, self.name)
+
+        # 退化输入 (常量 / 全零): 没有任何可分离的周期成分, 直接返回空模态 + 原信号
         if N < 10 or np.allclose(S, S[0], atol=1e-8):
             return DecompositionResult(
-                np.empty((0, N)),
-                S_original,
-                {},
-                FMDConfig(
-                    M=self.M,
-                    L_factor=self.L_factor,
-                    K=self.K,
-                    max_iter=self.max_iter,
-                    tol=self.tol,
-                    num_hand=self.num_hand,
-                    seed=effective_seed,
-                ),
+                IMFs=np.empty((0, N), dtype=S.dtype),
+                Res=np.array(S, copy=True),
+                info={"M": None, "L": None, "num_hand": None, "modes": 0, "seed": effective_seed},
+                config=self.config_generate(),
             )
 
         rng = np.random.default_rng(effective_seed)
@@ -184,12 +277,12 @@ class FMD(Decomposer):
                 B_reg = B + reg * np.eye(L) + 1e-12 * np.eye(L)
 
                 try:
-                    eigvals, eigvecs = eigh(A, B_reg, subset_by_index=[L-1, L-1])
+                    eigvals, eigvecs = scipy_linalg.eigh(A, B_reg, subset_by_index=[L-1, L-1])
                     h_new = eigvecs[:, 0].real
                 except np.linalg.LinAlgError:
                     try:
                         B_inv = np.linalg.pinv(B_reg, rcond=1e-12)
-                        eig_vals, eig_vecs = eig(B_inv @ A)
+                        eig_vals, eig_vecs = scipy_linalg.eig(B_inv @ A)
                         max_idx = np.argmax(np.real(eig_vals))
                         h_new = np.real(eig_vecs[:, max_idx])
                     except np.linalg.LinAlgError:
@@ -209,6 +302,17 @@ class FMD(Decomposer):
 
             mode = _bounded_convolution(x, h)
 
+            # 单位范数的带通滤波器对窄带分量有约 sqrt(L) 的固有增益 (单音输入可放大
+            # 十几倍), 直接相减会让残差逐阶放大、最后数值发散 (512 点、K=10 时可放大
+            # 到 1e3 倍)。用最小二乘投影把模态标定回残差的量纲:
+            #     alpha = <x, mode> / <mode, mode>
+            # 于是 ||x - alpha*mode|| <= ||x||, 残差能量单调不增; 只改幅度, 不改模态
+            # 形状, 也不改算法结构。
+            mode_energy = float(np.dot(mode, mode))
+            if mode_energy <= 0:
+                break
+            mode = mode * (float(np.dot(x, mode)) / mode_energy)
+
             mode_norm = np.linalg.norm(mode)
             if mode_norm < 1e-12 or np.std(mode) < 1e-8:
                 break
@@ -220,28 +324,58 @@ class FMD(Decomposer):
             if np.sum(residual ** 2) < 1e-10 * np.sum(S_norm ** 2):
                 break
 
-            peaks_max = argrelextrema(residual, np.greater)[0]
-            peaks_min = argrelextrema(residual, np.less)[0]
+            peaks_max = scipy_signal.argrelextrema(residual, np.greater)[0]
+            peaks_min = scipy_signal.argrelextrema(residual, np.less)[0]
             if len(peaks_max) + len(peaks_min) < 3:
                 break
 
-        modes_array = np.array(modes_list, dtype=np.float64) * std_S if modes_list else np.empty((0, N))
-        residual_final = residual * std_S + mean_S
+        # 模态在归一化空间里算完, 再换回物理量纲与工作 dtype (f32 输入 -> f32 输出)
+        if modes_list:
+            IMFs = (np.asarray(modes_list) * std_S).astype(S.dtype, copy=False)
+        else:
+            IMFs = np.empty((0, N), dtype=S.dtype)
+
+        # 残差定义为 "原信号 - 各阶之和": 与算法内部的 residual 只差浮点尾数,
+        # 但能保证重构恒等式 IMFs.sum(0) + Res == S 在浮点运算下成立
+        Res = S - np.sum(IMFs, axis=0)
+
+        info = {
+            "M": M,
+            "L": L,
+            "num_hand": num_hand,
+            "modes": len(modes_list),
+            "seed": effective_seed,
+        }
 
         return DecompositionResult(
-            modes_array,
-            residual_final,
-            {},
-            FMDConfig(
-                M=M,
-                L_factor=self.L_factor,
-                K=self.K,
-                max_iter=self.max_iter,
-                tol=self.tol,
-                num_hand=num_hand,
-                seed=effective_seed,
-            ),
+            IMFs=IMFs,
+            Res=Res,
+            info=info,
+            config=self.config_generate(),
         )
+
+
+def _resolve_seed(local_seed: int | None, method: str) -> int | None:
+    """
+    两级随机种子解析 (全局 > 本地 > 默认), 对应已删除的 ``Utils.resolve_seed``。
+
+    ``Base.Seed`` 的 GLOBAL_SEED 恒定非 None (默认 42), 所以把 "仍等于导入时的
+    默认值" 视为 "全局种子没有被显式设置": 此时优先本地 seed, 两者都没有就退回
+    该默认值 —— 这样同一实例重复调用逐位可复现, 不依赖 ``np.random`` 的全局状态。
+    """
+    global_seed = Seed.get()
+
+    if global_seed is None or global_seed == Global_Seed:
+        return local_seed if local_seed is not None else global_seed
+
+    if local_seed is not None and int(local_seed) != int(global_seed):
+        warnings.warn(
+            f"global seed {global_seed} overrides local seed {local_seed} for method {method}",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    return global_seed
 
 
 def _auto_estimate_num_candidates(signal: np.ndarray, M: int, L: int, fs: float) -> int:
@@ -275,13 +409,15 @@ def _auto_estimate_num_candidates(signal: np.ndarray, M: int, L: int, fs: float)
 
 
 def _estimate_snr(signal: np.ndarray) -> float:
-    from scipy.signal import hilbert
+    scipy_signal = Cache.import_module("scipy.signal")
 
-    analytic = hilbert(signal)
+    analytic = scipy_signal.hilbert(signal)
     envelope = np.abs(analytic)
 
-    from scipy.signal import savgol_filter
-    envelope_smooth = savgol_filter(envelope, window_length=51, polyorder=3)
+    # savgol 的窗长必须是 <= N 的奇数: 短信号 (退化用例) 按信号长度收缩, 否则 scipy 报错
+    window_length = min(51, int(signal.size) if int(signal.size) % 2 == 1 else int(signal.size) - 1)
+    window_length = max(3, window_length)
+    envelope_smooth = scipy_signal.savgol_filter(envelope, window_length=window_length, polyorder=min(3, window_length - 1))
     noise_est = np.std(envelope - envelope_smooth)
     signal_est = np.std(envelope_smooth)
 
@@ -332,17 +468,17 @@ def _estimate_signal_complexity(signal: np.ndarray) -> float:
 
 
 def _robust_period_estimation(x: np.ndarray, fs: float) -> int:
-    from scipy.signal import find_peaks, hilbert
+    scipy_signal = Cache.import_module("scipy.signal")
 
     n = len(x)
     x = x - np.mean(x)
 
     max_lag = min(1000, n // 2)
     autocorr = np.correlate(x, x, mode='full')[n-1:n-1+max_lag]
-    peaks, _ = find_peaks(autocorr, distance=5, prominence=0.1*np.max(autocorr))
+    peaks, _ = scipy_signal.find_peaks(autocorr, distance=5, prominence=0.1*np.max(autocorr))
     period_ac = peaks[0] if len(peaks) > 0 and peaks[0] > 0 else 10
 
-    analytic = hilbert(x)
+    analytic = scipy_signal.hilbert(x)
     envelope = np.abs(analytic)
     n_fft = 2**int(np.ceil(np.log2(len(envelope))))
     spec = np.abs(np.fft.rfft(envelope, n=n_fft))
@@ -360,7 +496,7 @@ def _robust_period_estimation(x: np.ndarray, fs: float) -> int:
 
 
 def _advanced_filter_init(X_short: np.ndarray, X_shift: np.ndarray, num_hand: int = 10, rng=None) -> np.ndarray:
-    from scipy.linalg import svd
+    scipy_linalg = Cache.import_module("scipy.linalg")
 
     L = X_short.shape[1]
 
@@ -374,7 +510,7 @@ def _advanced_filter_init(X_short: np.ndarray, X_shift: np.ndarray, num_hand: in
         candidates.append(h)
 
     try:
-        _, _, Vh = svd(X_short, full_matrices=False)
+        _, _, Vh = scipy_linalg.svd(X_short, full_matrices=False)
         svd_h = Vh[0, :]
         candidates.append(svd_h)
     except Exception:
@@ -416,3 +552,22 @@ def _bounded_convolution(x: np.ndarray, h: np.ndarray) -> np.ndarray:
 
     start_idx = (len(y_pad) - N) // 2
     return y_pad[start_idx:start_idx+N]
+
+
+"""
+other function for module
+"""
+def f_FMD(S: list | np.ndarray, T=None, *, M: int | None = None, L_factor: int = 10, K: int = 10, max_iter: int = 50, tol: float = 1e-06, num_hand: int | None = None, seed: int | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+    fmd = FMD(
+        M=M,
+        L_factor=L_factor,
+        K=K,
+        max_iter=max_iter,
+        tol=tol,
+        num_hand=num_hand,
+        seed=seed,
+        dtype=dtype,
+        **kwargs
+    )
+
+    return fmd.decompose(S, T)

@@ -475,3 +475,25 @@ class RPSEMD(Decomposer):
         avg_y    = np.mean(y[target_mask])  # 平均幅值
 
         return center_x, avg_y, {"matrix": Z, "best_labels": best_labels, "target_label": target_label}
+
+
+"""
+other function for module
+"""
+def f_RPSEMD(S: List[int | float] | np.ndarray, *, num_imf: int = -1, separation_ratio: float = 1.5, max_clusters: int = 4, sin_smaple_num: int = 8, res_energy: float = 1e-06, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs) -> DecompositionResult:
+    rpsemd = RPSEMD(
+        num_imf=num_imf,
+        separation_ratio=separation_ratio,
+        max_clusters=max_clusters,
+        sin_smaple_num=sin_smaple_num,
+        res_energy=res_energy,
+        standard=standard,
+        cluster_weight=cluster_weight,
+        cluster_max_samples=cluster_max_samples,
+        hilbert_mod=hilbert_mod,
+        copy=copy,
+        store_more_info=store_more_info,
+        **kwargs
+    )
+
+    return rpsemd.decompose(S)

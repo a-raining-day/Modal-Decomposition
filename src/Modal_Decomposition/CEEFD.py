@@ -28,16 +28,19 @@ import numpy as np
 from dataclasses import dataclass
 from typing import ClassVar
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
-from .Utils import Check_Time_and_Signal
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Base import Cache
+from .Utils import Check, Check_Time_and_Signal
 
-__all__ = ["CEEFD", "CEEFDConfig"]
+__all__ = ["CEEFD", "CEEFDConfig", "f_CEEFD"]
 
 #: 谱包络平滑窗占单边谱长度的比例 (原实现写死 0.05)。
 _ENVELOP_WINDOW_FRACTION = 0.05
 
 
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class CEEFDConfig(Config):
     """
@@ -46,9 +49,12 @@ class CEEFDConfig(Config):
     fs: int | float
     min_peak_distance: int
     envelop_iter: int
+    dtype: type | np.dtype | None
 
 
-@register_class("CEEFD")
+"""
+Class and Function of decomposer
+"""
 class CEEFD(Decomposer):
     name: ClassVar[str] = "CEEFD"
 
@@ -57,6 +63,8 @@ class CEEFD(Decomposer):
         fs: int | float = 1.0,
         min_peak_distance: int = 10,
         envelop_iter: int = 3,
+        dtype: type | np.dtype | None = None,
+        **kwargs,
     ):
         """
         Parameters
@@ -71,49 +79,186 @@ class CEEFD(Decomposer):
         envelop_iter : int
             Number of envelope smoothing iterations (>= 0); 0 returns the raw
             magnitude spectrum as the envelope.
+        dtype : type | np.dtype | None
+            Working dtype of the returned modes. ``None`` keeps the input
+            precision; integer/bool inputs are promoted to float64.
+        kwargs
+            ``safe`` (输入校验强度) 与 ``copy`` (校验时是否复制调用方输入) 的透传;
+            ``copy=True`` (默认) 保证绝不改写调用方数组。
 
         Raises
         ------
         ValueError
             On a non-positive / non-finite ``fs``, a ``min_peak_distance`` below
-            1, or a negative ``envelop_iter``.
+            1, a negative ``envelop_iter``, or a non-float ``dtype``.
+        TypeError
+            On an unknown keyword argument or a non-bool ``copy``.
         """
-        if isinstance(fs, bool) or not isinstance(fs, (int, float, np.floating)):
-            raise ValueError(f"fs must be a number > 0, got {fs!r}")
-        fs = float(fs)
-        if not np.isfinite(fs) or fs <= 0.0:
-            raise ValueError(f"fs must be positive and finite, got {fs!r}")
+        self.fs: int | float = fs
+        self.min_peak_distance: int = min_peak_distance
+        self.envelop_iter: int = envelop_iter
+        self.dtype: type | np.dtype | None = dtype
 
-        if isinstance(min_peak_distance, bool) or not isinstance(
-            min_peak_distance, (int, np.integer)
+        unknown = set(kwargs) - {"safe", "copy"}
+        if unknown:
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
+
+        self.safe: str = kwargs.get("safe", "unknown")
+        self.copy: bool = kwargs.get("copy", True)
+
+        self.param_check()
+
+        # decompose 每次都会重置; 先建好属性, 免得未分解时读取抛 AttributeError
+        self.imfs: np.ndarray = None
+        self.res: np.ndarray = None
+
+    # ------------------------------------------------------------------ #
+    # params
+    # ------------------------------------------------------------------ #
+    def param_check(self) -> None:
+        if isinstance(self.fs, bool) or not isinstance(self.fs, (int, float, np.floating)):
+            raise ValueError(f"fs must be a number > 0, got {self.fs!r}")
+        fs = float(self.fs)
+        if not np.isfinite(fs) or fs <= 0.0:
+            raise ValueError(f"fs must be positive and finite, got {self.fs!r}")
+        self.fs = fs
+
+        if isinstance(self.min_peak_distance, bool) or not isinstance(
+            self.min_peak_distance, (int, np.integer)
         ):
-            raise ValueError(f"min_peak_distance must be an int, got {min_peak_distance!r}")
-        min_peak_distance = int(min_peak_distance)
+            raise ValueError(f"min_peak_distance must be an int, got {self.min_peak_distance!r}")
+        min_peak_distance = int(self.min_peak_distance)
         if min_peak_distance < 1:
             raise ValueError(
-                f"min_peak_distance must be >= 1, got {min_peak_distance!r}"
+                f"min_peak_distance must be >= 1, got {self.min_peak_distance!r}"
             )
-
-        if isinstance(envelop_iter, bool) or not isinstance(envelop_iter, (int, np.integer)):
-            raise ValueError(f"envelop_iter must be an int, got {envelop_iter!r}")
-        envelop_iter = int(envelop_iter)
-        if envelop_iter < 0:
-            raise ValueError(f"envelop_iter must be >= 0, got {envelop_iter!r}")
-
-        self.fs = fs
         self.min_peak_distance = min_peak_distance
+
+        if isinstance(self.envelop_iter, bool) or not isinstance(self.envelop_iter, (int, np.integer)):
+            raise ValueError(f"envelop_iter must be an int, got {self.envelop_iter!r}")
+        envelop_iter = int(self.envelop_iter)
+        if envelop_iter < 0:
+            raise ValueError(f"envelop_iter must be >= 0, got {self.envelop_iter!r}")
         self.envelop_iter = envelop_iter
 
-    # ------------------------------------------------------------------ #
-    # helpers
-    # ------------------------------------------------------------------ #
-    def _config(self) -> CEEFDConfig:
+        if self.dtype is not None and np.dtype(self.dtype).kind != "f":
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
+
+    def config_generate(self) -> CEEFDConfig:
         return CEEFDConfig(
             fs=self.fs,
             min_peak_distance=self.min_peak_distance,
             envelop_iter=self.envelop_iter,
+            dtype=self.dtype,
         )
 
+    # ------------------------------------------------------------------ #
+    # decompose
+    # ------------------------------------------------------------------ #
+    def decompose(self, S, T=None) -> DecompositionResult:
+        """
+        Decompose the signal into IMFs and a residual.
+
+        Returns
+        -------
+        DecompositionResult
+            ``IMFs`` (K, N) —— 由低到高排列的频带模态; ``Res`` (N,) 为精确余量
+            (``ΣIMFs + Res == S``); ``info`` 含 ``boundaries`` (bin 下标)、
+            ``boundaries_hz`` (物理频率)、``peaks``、``envelope``、``n_bands``。
+            无峰 (或所有频带都过窄) 时 ``IMFs`` 为空 ``(0, N)``、``Res == S``。
+        """
+        scipy_signal = Cache.import_module("scipy.signal")
+
+        # CEEFD 是纯频域方法, 不使用时间轴; 用 need_T=False 省掉 arange(N) 那份临时数组
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name,
+                                     dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
+
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):
+            S = Check.to_dtype(S, np.dtype(DEFAULT_NUMPY_TYPE))
+
+        # 每次调用都从干净状态开始: 实例上不留上一次的模态/残差
+        self.imfs = None
+        self.res = None
+
+        out_dtype = S.dtype
+
+        fft_signal = np.fft.fft(S)
+        half = N // 2 + 1
+        mag_spectrum = np.abs(fft_signal[:half])
+
+        envelope = self._compute_spectral_envelope(mag_spectrum)
+        peaks, _properties = scipy_signal.find_peaks(envelope, distance=self.min_peak_distance)
+
+        # 无峰: 无法分割 —— 按库内契约返回 0 个模态 + 整条信号作为残差。
+        if peaks.size == 0:
+            self.imfs = np.empty((0, N), dtype=out_dtype)
+            self.res = np.array(S, dtype=out_dtype, copy=True)
+            return DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info={
+                    "boundaries": np.array([0, half - 1], dtype=np.int64),
+                    "boundaries_hz": np.array([0.0, self.fs / 2.0]),
+                    "peaks": peaks,
+                    "envelope": envelope,
+                    "mag_spectrum": mag_spectrum,
+                    "n_bands": 0,
+                },
+                config=self.config_generate(),
+            )
+
+        # 边界: 首 = DC, 内部 = 相邻峰中点, 末 = Nyquist。整型下标。
+        boundaries = np.empty(peaks.size + 1, dtype=np.int64)
+        boundaries[0] = 0
+        boundaries[-1] = half - 1
+        if peaks.size > 1:
+            boundaries[1:-1] = (peaks[1:] + peaks[:-1]) // 2
+
+        # 逐频带重建。频带取闭区间 [a, b], 故各带恰好覆盖 0…half-1 一次。
+        modes: list = []
+        for i in range(boundaries.size - 1):
+            a = int(boundaries[i])
+            b = int(boundaries[i + 1])
+            if b - a < 1:
+                # 宽度不足 2 个 bin, 掩码会退化 —— 跳过该带 (其能量留在 Res)。
+                continue
+            modes.append(self._extract_mode(fft_signal, a, b))
+
+        if modes:
+            # 模态本身在 float64 上重建, 末端再回到工作精度
+            modes_f64 = np.asarray(modes, dtype=DEFAULT_NUMPY_TYPE)
+            IMFs = modes_f64.astype(out_dtype, copy=False)
+            # 残差由总和反推: 精确重构硬性成立 (数值精度内)。
+            Res = (np.asarray(S, dtype=DEFAULT_NUMPY_TYPE) - modes_f64.sum(axis=0)).astype(out_dtype, copy=False)
+        else:
+            IMFs = np.empty((0, N), dtype=out_dtype)
+            Res = np.array(S, dtype=out_dtype, copy=True)
+
+        self.imfs = IMFs
+        self.res = Res
+
+        info = {
+            "boundaries": boundaries,
+            "boundaries_hz": boundaries * (self.fs / N),
+            "peaks": peaks,
+            "envelope": envelope,
+            "mag_spectrum": mag_spectrum,
+            "n_bands": IMFs.shape[0],
+        }
+
+        return DecompositionResult(
+            IMFs=IMFs,
+            Res=Res,
+            info=info,
+            config=self.config_generate(),
+        )
+
+    # ------------------------------------------------------------------ #
+    # helpers
+    # ------------------------------------------------------------------ #
     def _compute_spectral_envelope(self, mag_spectrum: np.ndarray) -> np.ndarray:
         """
         谱包络: ``envelop_iter`` 轮"盒式平滑 + 取上包络"。
@@ -123,11 +268,11 @@ class CEEFD(Decomposer):
         (``np.convolve`` 抛 ``ValueError: v cannot be empty``), 某些 n 下
         ``0.05 * n`` 还带浮点误差使 ``int()`` 后仍非整型 (抛 ``TypeError``)。
         """
-        from scipy.signal import windows
+        scipy_signal = Cache.import_module("scipy.signal")
 
         n = int(mag_spectrum.size)
         window_size = max(1, int(_ENVELOP_WINDOW_FRACTION * n))
-        window = windows.boxcar(window_size)
+        window = scipy_signal.windows.boxcar(window_size)
         window = window / window.sum()          # 归一化, 与旧实现的 /window_size 等价
 
         envelope = np.array(mag_spectrum, dtype=np.float64, copy=True)
@@ -151,80 +296,17 @@ class CEEFD(Decomposer):
         mask[(N - bins) % N] = True
         return np.fft.ifft(np.where(mask, fft_signal, 0.0)).real
 
-    # ------------------------------------------------------------------ #
-    # decompose
-    # ------------------------------------------------------------------ #
-    def decompose(self, S, T=None) -> DecompositionResult:
-        """
-        Decompose the signal into IMFs and a residual.
 
-        Returns
-        -------
-        DecompositionResult
-            ``IMFs`` (K, N) —— 由低到高排列的频带模态; ``Res`` (N,) 为精确余量
-            (``ΣIMFs + Res == S``); ``info`` 含 ``boundaries`` (bin 下标)、
-            ``boundaries_hz`` (物理频率)、``peaks``、``envelope``、``n_bands``。
-            无峰 (或所有频带都过窄) 时 ``IMFs`` 为空 ``(0, N)``、``Res == S``。
-        """
-        from scipy.signal import find_peaks
+"""
+other function for module
+"""
+def f_CEEFD(S: list | np.ndarray, T=None, *, fs: int | float = 1.0, min_peak_distance: int = 10, envelop_iter: int = 3, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+    ceefd = CEEFD(
+        fs=fs,
+        min_peak_distance=min_peak_distance,
+        envelop_iter=envelop_iter,
+        dtype=dtype,
+        **kwargs
+    )
 
-        S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
-
-        fft_signal = np.fft.fft(S)
-        half = N // 2 + 1
-        mag_spectrum = np.abs(fft_signal[:half])
-
-        envelope = self._compute_spectral_envelope(mag_spectrum)
-        peaks, _properties = find_peaks(envelope, distance=self.min_peak_distance)
-
-        # 无峰: 无法分割 —— 按库内契约返回 0 个模态 + 整条信号作为残差。
-        if peaks.size == 0:
-            return DecompositionResult(
-                np.empty((0, N), dtype=np.float64),
-                np.array(S, dtype=np.float64, copy=True),
-                {
-                    "boundaries": np.array([0, half - 1], dtype=np.int64),
-                    "boundaries_hz": np.array([0.0, self.fs / 2.0]),
-                    "peaks": peaks,
-                    "envelope": envelope,
-                    "mag_spectrum": mag_spectrum,
-                    "n_bands": 0,
-                },
-                self._config(),
-            )
-
-        # 边界: 首 = DC, 内部 = 相邻峰中点, 末 = Nyquist。整型下标。
-        boundaries = np.empty(peaks.size + 1, dtype=np.int64)
-        boundaries[0] = 0
-        boundaries[-1] = half - 1
-        if peaks.size > 1:
-            boundaries[1:-1] = (peaks[1:] + peaks[:-1]) // 2
-
-        # 逐频带重建。频带取闭区间 [a, b], 故各带恰好覆盖 0…half-1 一次。
-        modes: list = []
-        for i in range(boundaries.size - 1):
-            a = int(boundaries[i])
-            b = int(boundaries[i + 1])
-            if b - a < 1:
-                # 宽度不足 2 个 bin, 掩码会退化 —— 跳过该带 (其能量留在 Res)。
-                continue
-            modes.append(self._extract_mode(fft_signal, a, b))
-
-        if modes:
-            IMFs = np.asarray(modes, dtype=np.float64)
-        else:
-            IMFs = np.empty((0, N), dtype=np.float64)
-
-        # 残差由总和反推: 精确重构硬性成立 (数值精度内)。
-        Res = np.asarray(S, dtype=np.float64) - IMFs.sum(axis=0)
-
-        info = {
-            "boundaries": boundaries,
-            "boundaries_hz": boundaries * (self.fs / N),
-            "peaks": peaks,
-            "envelope": envelope,
-            "mag_spectrum": mag_spectrum,
-            "n_bands": IMFs.shape[0],
-        }
-
-        return DecompositionResult(IMFs, Res, info, self._config())
+    return ceefd.decompose(S, T)

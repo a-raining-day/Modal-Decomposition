@@ -22,6 +22,18 @@ Gilles 2013 原文/ewtpy 的对应关系:
 (见 :meth:`EWT._resolve_band_factor`), 以保证相邻过渡带不交叠、``Σ H_k² ≡ 1``
 逐点成立 —— 显式传 float 则沿用固定宽度 (旧默认 ``0.15``)。
 
+参数类型约定
+------------
+字符串型分支参数一律采用项目既有的 ``Literal`` + ``Enum`` 约定 (同
+``Utils._Hilbert`` / ``Utils.Mirror`` / ``SVMD``): 模块全局先定义
+``EWT_*_MODS_ARGS = Literal[...]``, 紧跟 ``EWT_*_MODS(Enum)``; 形参注解写
+``EWT_*_MODS_ARGS | EWT_*_MODS``, 内部一律经 :meth:`Utils.Check.validate_mod`
+归一成 Enum 成员后再用 ``match`` 分支 (不直接比较字符串)。
+
+"数字或字符串" 混合语义的参数只有 ``band_factor``: 数值仍是过渡带宽度
+(原语义, 原样保留为 float), 只有字符串形态 (``"auto"``) 走
+``EWT_BAND_FACTOR_MODS``。
+
 References
 ----------
 10.48550/arXiv.2304.06274
@@ -29,143 +41,172 @@ References
 
 import numpy as np
 from dataclasses import dataclass
+from enum import Enum
 from typing import ClassVar, Literal, Sequence
 
-from .Base import Config, Decomposer, DecompositionResult
-from .Base.Cache import cache
-from src.Modal_Decomposition.Define.ConstDefine import (
+from .Define import (
     BIG_ARRAY,
-    CACHE_KEY,
+    DEFAULT_NUMPY_TYPE,
     EWT_CHUNK_WORK_BYTES,
     EWT_SLEPIAN_MAX_SAMPLES,
-    SPLINE_KIND,
+    Config,
+    Decomposer,
+    DecompositionResult,
 )
-from ._Registry import register_class
-from .Utils import (
-    Check_Time_and_Signal,
-    get_fft,
-    get_mirror,
-    get_peaks,
-    get_slepian,
-    get_spline,
-)
-from .Utils.Chunk import chunk_size, iter_chunks
+from .Base import Cache
+from .Utils import Check, Check_Time_and_Signal, find_peaks, mirror, slepian
 from .Operator import empirical_wavelet_arr
 
-__all__ = ["EWT", "EWTConfig"]
+__all__ = [
+    "EWT",
+    "EWTConfig",
+    "EWT_BOUNDARY_MODS",
+    "EWT_BOUNDARY_MODS_ARGS",
+    "EWT_BAND_FACTOR_MODS",
+    "EWT_BAND_FACTOR_MODS_ARGS",
+    "EWT_PRE_DEAL_MODS",
+    "EWT_PRE_DEAL_MODS_ARGS",
+    "EWT_NO_DC_TYPE_MODS",
+    "EWT_NO_DC_TYPE_MODS_ARGS",
+    "EWT_WINDOW_KIND_MODS",
+    "EWT_WINDOW_KIND_MODS_ARGS",
+    "EWT_SLEPIAN_MODS",
+    "EWT_SLEPIAN_MODS_ARGS",
+    "EWT_SMOOTH_KIND_MODS",
+    "EWT_SMOOTH_KIND_MODS_ARGS",
+    "EWT_MAX_MIN_FALLBACK_MODS",
+    "EWT_MAX_MIN_FALLBACK_MODS_ARGS",
+    "EWT_ENVELOPE_SPLINE_MODS",
+    "EWT_ENVELOPE_SPLINE_MODS_ARGS",
+    "f_EWT",
+]
 
-#: 分块滤波时算子每元素展开的 float64 临时量个数 (``np.select`` 的候选分支 +
-#: 掩码 + 输出): 用于把 ``EWT_CHUNK_WORK_BYTES`` 反推成块长 (元素数)。
-_OPERATOR_TMP_ELEMS = 12
+#: ``boundary_mod``: 谱边界检测策略 (四套规则见 :meth:`EWT.boundary`)。
+EWT_BOUNDARY_MODS_ARGS = Literal["maximum", "max-min", "scale-space", "envelope"]
+#: ``band_factor``: 只有字符串 ``"auto"`` 走 Enum; 数值仍是过渡带相对宽度 γ。
+EWT_BAND_FACTOR_MODS_ARGS = Literal["auto"]
+#: ``pre_deal``: 预处理分支名 (可传单个名或序列; 按 canonical 顺序施加)。
+EWT_PRE_DEAL_MODS_ARGS = Literal["no-dc", "no-trend", "window", "Slepian-Optimize", "Smooth"]
+#: ``no_dc_type``: ``scipy.signal.detrend`` 的 ``type``。
+EWT_NO_DC_TYPE_MODS_ARGS = Literal["linear", "constant"]
+#: ``window_kind``: 时域窗型 (``"hanning"`` 是 ``"hann"`` 的别名, 归一后再校验)。
+EWT_WINDOW_KIND_MODS_ARGS = Literal["hann", "hamming"]
+#: ``slepian_mod``: Slepian 后端 (``None`` = ``ConstDefine.SLEPIAN_BACKEND``)。
+EWT_SLEPIAN_MODS_ARGS = Literal["auto", "numpy", "scipy", "C"]
+#: ``smooth_kind``: 频域平滑窗型 (``Smooth`` 分支)。
+EWT_SMOOTH_KIND_MODS_ARGS = Literal["box", "gaussian"]
+#: ``max_min_fallback``: ``max-min`` 段内无极小时的边界回退方式。
+EWT_MAX_MIN_FALLBACK_MODS_ARGS = Literal["midpoint", "geometric"]
+#: ``envelope_spline``: 包络样条后端 (成员值即 ``_SPLINE_CTORS`` 的键)。
+EWT_ENVELOPE_SPLINE_MODS_ARGS = Literal["UnivariateSpline", "CubicSpline", "PCHIP", "Akima"]
 
-# --------------------------------------------------------------------------- #
-# 预处理分支登记与参数默认值
-# --------------------------------------------------------------------------- #
-#: 时域预处理分支 (施加在 ``Check_Time_and_Signal`` 之后的信号上)。
-PRE_DEAL_MOD_TIME = ("no-dc", "no-trend", "window")
-#: 频域预处理分支 (施加在 ``fft`` 之后的谱上; 只影响边界检测用的幅度谱)。
-#: 顺序即施加顺序: 先做多锥谱估计, 再对其结果做平滑。
-PRE_DEAL_MOD_FREQ = ("Slepian-Optimize", "Smooth")
+class EWT_BOUNDARY_MODS(Enum):
+    Maximum = "maximum"
+    MaxMin = "max-min"
+    ScaleSpace = "scale-space"
+    Envelope = "envelope"
 
-#: 分支名别名 → canonical 名 (大小写不敏感)。
-_PRE_DEAL_ALIAS = {
-    "nodc": "no-dc",
-    "no_dc": "no-dc",
-    "notrend": "no-trend",
-    "no_trend": "no-trend",
-    "slepian": "Slepian-Optimize",
-}
+class EWT_BAND_FACTOR_MODS(Enum):
+    Auto = "auto"
 
-#: 预处理分支参数默认值 (``__init__`` 的 kwargs 逐名覆盖; 未传入即用此值)。
-PRE_DEAL_DEFAULTS = {
-    "no_dc_type": "linear",        # scipy.signal.detrend 的 type: {"linear","constant"}
-    "no_dc_bp": 0,                 # detrend 断点 (仅 1-D; 0 = 不使用)
-    "no_trend_win": None,          # 移动平均窗长; None -> 自动 (约 N//20 的奇数, >= 3)
-    "window_kind": "hann",         # {"hann","hamming"} (接受 "hanning" 别名)
-    "slepian_nw": 3.0,             # dpss 时间-带宽积 NW
-    "slepian_k": None,             # dpss 锥数 K; None -> 2*NW-1
-    "slepian_mod": None,           # Slepian 后端; None -> ConstDefine.SLEPIAN_BACKEND
-    # 启用 Slepian 分支的样本上限 (时间预算): 默认取 ConstDefine 值 32768;
-    # 传 None 表示不设上限 (大 N 下每次 decompose 多付约 O(N) 的 dpss 时间)。
-    "slepian_max_samples": EWT_SLEPIAN_MAX_SAMPLES,
-    "smooth_kind": "box",          # 频域平滑窗 {"box","gaussian"} (Smooth 分支)
-    "smooth_width": 5,             # 平滑窗宽 (频点数): box = 窗长, gaussian = σ
-}
+class EWT_PRE_DEAL_MODS(Enum):
+    NoDC = "no-dc"
+    NoTrend = "no-trend"
+    Window = "window"
+    SlepianOptimize = "Slepian-Optimize"
+    Smooth = "Smooth"
 
-#: 边界策略参数默认值 (同样由 ``__init__`` 的 kwargs 覆盖)。
-BOUNDARY_DEFAULTS = {
-    "peak_distance": None,             # find_peaks 的 distance 过滤 (maximum / max-min)
-    "max_min_fallback": "midpoint",    # 段内无极小: {"midpoint","geometric"}
-    "scale_space_scales": 32,          # 尺度数 (几何级数)
-    "scale_space_sigma_min": 1.0,      # 最小高斯尺度 (样本)
-    "scale_space_sigma_max": 32.0,     # 最大高斯尺度 (样本)
-    "scale_space_otsu_bins": 64,       # 持久度 Otsu 直方图桶数
-    "scale_space_min_persist": 0.25,   # 持久度下限 (占尺度数的比例)
-    "envelope_spline": "CubicSpline",  # 包络样条后端 (Utils.Spline 的 canonical 名)
-    "envelope_noise_pct": 10.0,        # 噪底估计分位
-    "envelope_snr_db": 3.0,            # 硬阈值比峰值低多少 dB
-    "envelope_prominence": 0.05,       # 峰的相对突出度下限
-}
+class EWT_NO_DC_TYPE_MODS(Enum):
+    Linear = "linear"
+    Constant = "constant"
 
+class EWT_WINDOW_KIND_MODS(Enum):
+    Hann = "hann"
+    Hamming = "hamming"
 
-def _canon_pre_deal_one(mod) -> str:
-    """单个预处理分支名 → canonical 名 (大小写不敏感, 支持别名)。"""
-    key = str(mod).strip()
-    if key == "" or key.lower() == "none":
-        return "None"
-    table = {name.lower(): name for name in PRE_DEAL_MOD_TIME + PRE_DEAL_MOD_FREQ}
-    table.update(_PRE_DEAL_ALIAS)
-    low = key.lower()
-    if low not in table:
-        raise ValueError(
-            f"unsupported pre_deal mod {mod!r}; expected one of "
-            f"{list(PRE_DEAL_MOD_TIME + PRE_DEAL_MOD_FREQ)} or 'None'"
-        )
-    return table[low]
+class EWT_SLEPIAN_MODS(Enum):
+    Auto = "auto"
+    Numpy = "numpy"
+    Scipy = "scipy"
+    C = "C"
 
+class EWT_SMOOTH_KIND_MODS(Enum):
+    Box = "box"
+    Gaussian = "gaussian"
 
-def _canon_pre_deal_mods(pre_deal) -> tuple:
-    """单个名 / 序列 / None → canonical 顺序元组 (时域 → 频域, 去重)。"""
-    if pre_deal is None:
-        return ()
-    items = (pre_deal,) if isinstance(pre_deal, str) else tuple(pre_deal)
-    seen = []
-    for m in items:
-        name = _canon_pre_deal_one(m)
-        if name != "None" and name not in seen:
-            seen.append(name)
-    return tuple(m for m in (PRE_DEAL_MOD_TIME + PRE_DEAL_MOD_FREQ) if m in seen)
+class EWT_MAX_MIN_FALLBACK_MODS(Enum):
+    Midpoint = "midpoint"
+    Geometric = "geometric"
 
+class EWT_ENVELOPE_SPLINE_MODS(Enum):
+    UnivariateSpline = "UnivariateSpline"
+    CubicSpline = "CubicSpline"
+    PCHIP = "PCHIP"
+    Akima = "Akima"
 
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class EWTConfig(Config):
     """
     Effective parameters of an EWT run.
+
+    ``band_factor`` 记录**实际使用**的 γ (``"auto"`` 在 ``decompose`` 中反推后
+    落定为 float), ``fs`` 记录本次 ``decompose`` 的采样频率; 分支参数以标量字典
+    快照保存 (只放标量, 不放 numpy 数组, 其中的 ``EWT_*_MODS`` 成员是 Enum)。
     """
     num_imfs: int
-    band_factor: float
-    boundary_mod: str
+    band_factor: float | EWT_BAND_FACTOR_MODS
+    boundary_mod: EWT_BOUNDARY_MODS
     pre_deal: tuple
     mirror: bool
     fs: float
+    dtype: type | np.dtype | None
+    pre_deal_kwargs: dict
+    boundary_kwargs: dict
 
+    def to_dict(self) -> dict:
+        """
+        Plain-dict snapshot of the run configuration.
 
-@register_class("EWT")
+        覆写基类 ``Config.to_dict`` (基类用的是 ``dataclasses.asdict``, 会把
+        ``Enum`` 成员原样留下, 于是 ``json.dumps`` 会报 "not JSON serializable")。
+        这里递归把每个 ``Enum`` 换成它的 ``.value``, 嵌套在 ``pre_deal_kwargs`` /
+        ``boundary_kwargs`` 里的分支 mod 因此也能直接 ``json.dumps``。
+        """
+        def plain(value):
+            if isinstance(value, Enum):
+                return value.value
+            if isinstance(value, dict):
+                return {k: plain(v) for k, v in value.items()}
+            if isinstance(value, tuple):
+                return tuple(plain(v) for v in value)
+            if isinstance(value, list):
+                return [plain(v) for v in value]
+            return value
+
+        return {k: plain(v) for k, v in super().to_dict().items()}
+
+"""
+Class and Function of decomposer
+"""
 class EWT(Decomposer):
     name: ClassVar[str] = "EWT"
 
     pre_deal_mod_constraint = ("None", "no-DC", "no-trend", "window", "Slepian-Optimize", "Smooth")
     pre_deal_mod = {"None", "no-DC", "no-trend", "window", "Slepian-Optimize", "Smooth"}
-    boundary_mod_constraint = Literal["maximum", "max-min", "scale-space", "envelope"]
-    boundary_mods = {"maximum", "max-min", "scale-space", "envelope"}
+    boundary_mod_constraint = EWT_BOUNDARY_MODS_ARGS
+    boundary_mods = {m.value for m in EWT_BOUNDARY_MODS}
 
     def __init__(
         self,
         num_imfs: int = 5,
-        band_factor: float | Literal["auto"] = "auto",
-        boundary_mod: Literal["maximum", "max-min", "scale-space", "envelope"] = "maximum",
-        pre_deal: str | Sequence[str] | None = None,
+        band_factor: float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS = "auto",
+        boundary_mod: EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS = "maximum",
+        pre_deal: EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None = None,
         mirror: bool = True,
+        dtype: type | np.dtype | None = None,
         **kwargs
     ):
         """
@@ -176,22 +217,29 @@ class EWT(Decomposer):
             boundary strategies it is the **maximum**: ``"maximum"`` /
             ``"max-min"`` / ``"scale-space"`` always yield ``num_imfs`` bands,
             while ``"envelope"`` may yield fewer (模式数由显著峰数自动确定).
-        band_factor : float | {"auto"}
+        band_factor : float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS
             Relative transition width γ of each empirical wavelet: the transition
             occupies ``[(1−γ)w, (1+γ)w]`` around a boundary ``w``.
+            取值是 **数字或字符串** 的联合:
 
-            * ``"auto"`` (default) —— **按检测到的边界间距反推**(见
-              :meth:`_resolve_band_factor`): ``γ`` 取"相邻过渡带恰好不交叠"的
-              上确界, 于是滤波器组满足紧框架 ``Σ_i H_i² ≡ 1``, 幅度带和误差最小
-              (与 ewtpy 的自动 gamma 同法)。
+            * ``"auto"`` (``EWT_BAND_FACTOR_MODS.Auto``, 默认) —— **按检测到的
+              边界间距反推**(见 :meth:`_resolve_band_factor`): ``γ`` 取"相邻过渡带
+              恰好不交叠"的上确界, 于是滤波器组满足紧框架 ``Σ_i H_i² ≡ 1``,
+              幅度带和误差最小 (与 ewtpy 的自动 gamma 同法)。
             * ``float`` (``0 < γ < 1``) —— 固定过渡带宽度, 数值语义与旧版一致;
               γ 偏大时相邻过渡带叠加 (``Σ H² > 1``, 同一频段被重复计入),
               偏小则频带间出现重构空档。旧版默认值为 ``0.15``。
-        boundary_mod : {"maximum", "max-min", "scale-space", "envelope"}
+              数值**不**走 Enum, 参数校验后原样归一成 ``float``。
+        boundary_mod : EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS
             Spectral boundary detection strategy (integrated by
-            :meth:`boundary`; 见其文档的四套规则).
-        pre_deal : str | Sequence[str] | None
+            :meth:`boundary`; 见其文档的四套规则). 字符串或
+            ``EWT_BOUNDARY_MODS`` 成员皆可, 实例上一律存 Enum 成员。
+        pre_deal : EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None
             预处理分支选择 (单个名或序列; ``None``/``"None"`` = 不预处理)。
+            取值见 ``EWT_PRE_DEAL_MODS_ARGS``, 也接受对应的 ``EWT_PRE_DEAL_MODS``
+            成员 (内部一律经 ``Check.validate_mod`` 归一成 canonical 名字后存进
+            ``self.pre_deal_mods``; 属性不叫 ``self.pre_deal``, 以免遮蔽同名的
+            公共方法 :meth:`pre_deal`)。
             分支按 canonical 顺序施加: 时域 ``("no-dc", "no-trend", "window")``
             在 ``Check_Time_and_Signal`` 之后作用于信号, 频域
             ``("Slepian-Optimize", "Smooth")`` 在 ``fft`` 之后作用于
@@ -201,45 +249,46 @@ class EWT(Decomposer):
             ``maximum`` 也能给出贴合的边界, 代价是噪声下抖动变大。
         mirror : bool
             ``True`` (default): 频域滤波在**端点镜像延拓**后的信号上进行
-            (``Utils.Mirror.mirror_signal`` 整条信号语义, 长度 ``2N``, 轴长与
-            原信号共享 ``0…fs/2``), 逆变换后取中间 ``N`` 点 —— 同 ewtpy 的
-            ``fMirr`` 处理, 抑制频域滤波的环形卷积边界效应。
+            (``Utils.mirror`` 的 ``mod="mirror"``, 每端镜像 ``N//2`` 个样本,
+            长度 ``2N``, 轴长与原信号共享 ``0…fs/2``), 逆变换后取中间 ``N`` 点 ——
+            同 ewtpy 的 ``fMirr`` 处理, 抑制频域滤波的环形卷积边界效应。
             ``False``: 直接在原信号的单边谱上滤波 (等价于对该长度信号做循环
             卷积)。两种取值下**边界检测都在原信号谱上**做, 故 ``boundaries``
             相同; 滤波结果与代价不同 (镜像多一次 ``rfft`` 且轴长翻倍)。
+        dtype : type | np.dtype | None
+            Working dtype of the returned IMFs. ``None`` keeps the input
+            precision; integer/bool/f16 inputs are promoted to float64.
         **kwargs
             分支参数 (未传入即用默认值, 见 ``PRE_DEAL_DEFAULTS`` /
-            ``BOUNDARY_DEFAULTS``): 时域 ``no_dc_type`` / ``no_dc_bp`` /
-            ``no_trend_win`` / ``window_kind``; 频域 ``slepian_nw`` /
-            ``slepian_k`` / ``slepian_mod`` / ``slepian_max_samples`` /
-            ``smooth_kind`` / ``smooth_width``;
+            ``BOUNDARY_DEFAULTS``; 字符串取值一律经 ``Check.validate_mod``
+            归一成对应的 ``EWT_*_MODS`` 成员):
+            时域 ``no_dc_type`` (``EWT_NO_DC_TYPE_MODS``) / ``no_dc_bp`` /
+            ``no_trend_win`` / ``window_kind`` (``EWT_WINDOW_KIND_MODS``);
+            频域 ``slepian_nw`` / ``slepian_k`` / ``slepian_mod``
+            (``EWT_SLEPIAN_MODS``) / ``slepian_max_samples`` /
+            ``smooth_kind`` (``EWT_SMOOTH_KIND_MODS``) / ``smooth_width``;
             边界 ``peak_distance`` /
-            ``max_min_fallback`` / ``scale_space_scales`` /
+            ``max_min_fallback`` (``EWT_MAX_MIN_FALLBACK_MODS``) /
+            ``scale_space_scales`` /
             ``scale_space_sigma_min`` / ``scale_space_sigma_max`` /
             ``scale_space_otsu_bins`` / ``scale_space_min_persist`` /
-            ``envelope_spline`` / ``envelope_noise_pct`` / ``envelope_snr_db`` /
-            ``envelope_prominence``。未识别的键保留在 ``self.kwargs``。
+            ``envelope_spline`` (``EWT_ENVELOPE_SPLINE_MODS``) /
+            ``envelope_noise_pct`` / ``envelope_snr_db`` /
+            ``envelope_prominence``; 以及库级 ``safe`` / ``copy``.
+            未识别的键报 ``TypeError``。
         """
-        if not isinstance(num_imfs, int) or isinstance(num_imfs, bool) or num_imfs < 1:
-            raise ValueError(f"num_imfs must be an int >= 1, got {num_imfs!r}")
-        if isinstance(band_factor, str):
-            if band_factor != "auto":
-                raise ValueError(
-                    f"band_factor must be 'auto' or a float in (0, 1), got {band_factor!r}"
-                )
-        elif not (0.0 < float(band_factor) < 1.0):
-            raise ValueError(f"band_factor must be in (0, 1), got {band_factor!r}")
-        if boundary_mod not in self.boundary_mods:
-            raise ValueError(
-                f"boundary_mod must be one of {sorted(self.boundary_mods)}, got {boundary_mod!r}"
-            )
-        if not isinstance(mirror, bool):
-            raise ValueError(f"mirror must be a bool, got {mirror!r}")
+        self.num_imfs: int = num_imfs
+        self.band_factor: float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS = band_factor
+        self.boundary_mod: EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS = boundary_mod
+        self.mirror: bool = mirror
+        self.dtype: type | np.dtype | None = dtype
 
-        self.num_imfs = num_imfs
-        self.band_factor = band_factor if band_factor == "auto" else float(band_factor)
-        self.boundary_mod = boundary_mod
-        self.mirror = mirror
+        unknown = set(kwargs) - _KWARGS_ALLOWED
+        if unknown:
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
+
+        self.safe = kwargs.get("safe", "unknown")
+        self.copy: bool = kwargs.get("copy", True)
 
         # 属性名用 pre_deal_mods, 以免遮蔽同名的公共方法 ``pre_deal()``。
         self.pre_deal_mods = _canon_pre_deal_mods(pre_deal)
@@ -251,61 +300,81 @@ class EWT(Decomposer):
         self.boundary_kwargs = {k: kwargs.get(k, v) for k, v in BOUNDARY_DEFAULTS.items()}
         self.kwargs = kwargs
 
-        self._validate_branch_kwargs()
-
-        # 工具惰性取用 (与全库一致)。get_fft() 返回 Utils.FFT 模块, 模块内唯一
-        # 公开名是 fft 类 (全静态方法), 故变换统一写作 ``self.fft.fft.<op>(...)``。
-        self.fft = get_fft()
-        self.find_peaks = get_peaks().find_peaks
-        self.mirror_signal = get_mirror().mirror_signal
-        self.spline = get_spline().Spline
-
+        # --- 运行期状态: 每次 decompose 开头复位 (缓冲按形状跨调用复用) ----- #
         self.frequency = None
         self.empirical_wave = None
         self.modal = None
         self._trend = None              # no-trend 分支构造出的趋势 (保留进 result)
         self._slepian_degraded = False  # Slepian 分支是否因规模上限而降级
+        self._band_factor_effective = None   # "auto" 解析后的实际 γ
+        self.fs: float = 1.0                 # 最近一次 decompose 的采样频率
+
+        self.param_check()
+
+    def param_check(self) -> None:
+        """校验构造参数 (非法值在实例化时立即报错, 不留到 decompose)。"""
+        if not isinstance(self.num_imfs, int) or isinstance(self.num_imfs, bool) or self.num_imfs < 1:
+            raise ValueError(f"num_imfs must be an int >= 1, got {self.num_imfs!r}")
+
+        # band_factor 是 "数字或字符串" 的联合: 数值原样保留 (原语义), 只有字符串
+        # 形态 ("auto") 走 Enum; 实例上最终只可能是 float 或 EWT_BAND_FACTOR_MODS.Auto。
+        if isinstance(self.band_factor, str):
+            self.band_factor = Check.validate_mod(self.band_factor, EWT_BAND_FACTOR_MODS)
+        elif not isinstance(self.band_factor, EWT_BAND_FACTOR_MODS):
+            if not (0.0 < float(self.band_factor) < 1.0):
+                raise ValueError(f"band_factor must be in (0, 1), got {self.band_factor!r}")
+            self.band_factor = float(self.band_factor)      # 归一成 float (np.float 等)
+
+        self.boundary_mod = Check.validate_mod(self.boundary_mod, EWT_BOUNDARY_MODS)
+
+        if not isinstance(self.mirror, bool):
+            raise ValueError(f"mirror must be a bool, got {self.mirror!r}")
+
+        if self.dtype is not None and np.dtype(self.dtype).kind != "f":
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
+
+        self.safe = Check.validate_safe(self.safe)
+
+        self._validate_branch_kwargs()
 
     def _validate_branch_kwargs(self) -> None:
-        """校验分支参数取值 (非法值立即报错, 不留到 decompose)。"""
+        """校验分支参数取值, 并把字符串归一成 ``EWT_*_MODS`` 成员。
+
+        非法值立即报错 (不留到 decompose); 归一后就地写回
+        ``self.pre_deal_kwargs`` / ``self.boundary_kwargs``, 于是内部只会见到
+        Enum 成员 (或数值), 不再出现字符串分支名。
+        """
         kw, bw = self.pre_deal_kwargs, self.boundary_kwargs
 
-        if kw["no_dc_type"] not in ("linear", "constant"):
-            raise ValueError(
-                f"no_dc_type must be 'linear' or 'constant', got {kw['no_dc_type']!r}"
-            )
+        kw["no_dc_type"] = Check.validate_mod(kw["no_dc_type"], EWT_NO_DC_TYPE_MODS)
         if kw["no_trend_win"] is not None and int(kw["no_trend_win"]) < 1:
             raise ValueError(f"no_trend_win must be >= 1 or None, got {kw['no_trend_win']!r}")
-        window_kind = str(kw["window_kind"]).strip().lower()
-        if window_kind not in ("hann", "hanning", "hamming"):
-            raise ValueError(
-                f"window_kind must be 'hann' or 'hamming', got {kw['window_kind']!r}"
-            )
+        kw["window_kind"] = _canon_window_kind(kw["window_kind"])
         if float(kw["slepian_nw"]) <= 0.0:
             raise ValueError(f"slepian_nw must be > 0, got {kw['slepian_nw']!r}")
         if kw["slepian_k"] is not None and int(kw["slepian_k"]) < 1:
             raise ValueError(f"slepian_k must be >= 1 or None, got {kw['slepian_k']!r}")
-        if str(kw["smooth_kind"]).strip().lower() not in ("box", "gaussian"):
-            raise ValueError(
-                f"smooth_kind must be 'box' or 'gaussian', got {kw['smooth_kind']!r}"
-            )
+        if kw["slepian_mod"] is not None:       # None = ConstDefine.SLEPIAN_BACKEND
+            kw["slepian_mod"] = Check.validate_mod(kw["slepian_mod"], EWT_SLEPIAN_MODS)
+        kw["smooth_kind"] = _canon_mod_lower(kw["smooth_kind"], EWT_SMOOTH_KIND_MODS)
         if float(kw["smooth_width"]) < 1.0:
             raise ValueError(f"smooth_width must be >= 1, got {kw['smooth_width']!r}")
 
-        if bw["max_min_fallback"] not in ("midpoint", "geometric"):
-            raise ValueError(
-                f"max_min_fallback must be 'midpoint' or 'geometric', got {bw['max_min_fallback']!r}"
-            )
+        bw["max_min_fallback"] = Check.validate_mod(
+            bw["max_min_fallback"], EWT_MAX_MIN_FALLBACK_MODS
+        )
         if int(bw["scale_space_scales"]) < 2:
             raise ValueError(f"scale_space_scales must be >= 2, got {bw['scale_space_scales']!r}")
         if float(bw["scale_space_sigma_min"]) <= 0.0 or float(bw["scale_space_sigma_max"]) <= 0.0:
             raise ValueError("scale_space sigma bounds must be > 0")
         if int(bw["scale_space_otsu_bins"]) < 2:
             raise ValueError(f"scale_space_otsu_bins must be >= 2, got {bw['scale_space_otsu_bins']!r}")
-        if bw["envelope_spline"] not in SPLINE_KIND:
-            raise ValueError(
-                f"envelope_spline must be one of {SPLINE_KIND}, got {bw['envelope_spline']!r}"
-            )
+        bw["envelope_spline"] = Check.validate_mod(
+            bw["envelope_spline"], EWT_ENVELOPE_SPLINE_MODS
+        )
         if not (0.0 <= float(bw["envelope_noise_pct"]) <= 100.0):
             raise ValueError(f"envelope_noise_pct must be in [0, 100], got {bw['envelope_noise_pct']!r}")
         if float(bw["envelope_snr_db"]) < 0.0:
@@ -315,7 +384,24 @@ class EWT(Decomposer):
                 f"envelope_prominence must be in [0, 1], got {bw['envelope_prominence']!r}"
             )
 
-    def decompose(self, S, T=None, fs: float = 1.0, **kwargs) -> DecompositionResult:
+    def config_generate(self) -> EWTConfig:
+        """本次运行的有效参数快照 (``band_factor`` 是实际使用的 γ)。"""
+        band_factor = self.band_factor \
+            if self._band_factor_effective is None else float(self._band_factor_effective)
+
+        return EWTConfig(
+            num_imfs=self.num_imfs,
+            band_factor=band_factor,
+            boundary_mod=self.boundary_mod,
+            pre_deal=tuple(self.pre_deal_mods),
+            mirror=self.mirror,
+            fs=float(self.fs),
+            dtype=self.dtype,
+            pre_deal_kwargs=dict(self.pre_deal_kwargs),
+            boundary_kwargs=dict(self.boundary_kwargs),
+        )
+
+    def decompose(self, S, T=None, fs: float = 1.0) -> DecompositionResult:
         """
         Decompose the signal into ``num_imfs`` band-limited modes.
 
@@ -331,39 +417,51 @@ class EWT(Decomposer):
             Sampling frequency, only used to express the frequency axis and
             the reported boundaries in Hz (the transform itself is
             scale-invariant).
-        **kwargs
-            Forwarded to the FFT call of ``Utils.FFT`` (e.g. ``mod="scipy"``
-            to pick a backend for this call).
 
         Returns
         -------
         DecompositionResult
-            ``IMFs`` (num_imfs, N) real bands in ascending frequency order;
+            ``IMFs`` (num_imfs, N) real bands in ascending frequency order with
+            the working dtype of ``S`` (``dtype`` 参数 / 输入精度);
             ``Res`` = ``S − ΣIMFs`` (so ``reconstruct()`` reproduces ``S``);
             ``info`` with ``mfb`` (the filter bank, ``(num_imfs, N//2+1)``;
             ``None`` on the chunked path — see below), ``boundaries``
-            (num_imfs+1, Hz), ``boundary_mod``, ``residual_ratio``
+            (num_imfs+1, Hz), ``boundary_mod`` (字符串形态, 即 Enum 的
+            ``.value``, 与旧版返回值一致), ``residual_ratio``
             (``‖Res‖ / ‖S‖``), ``chunked``, ``chunk_size`` and ``mirror``.
 
         Mirroring (``mirror`` 参数)
         -------------------------
         边界检测一律在原信号单边谱上做, 故 ``boundaries`` 与 ``mirror`` 取值无关;
-        ``mirror=True`` (默认) 时滤波改在端点镜像延拓信号 (长度 ``2N``) 上做,
-        逆变换后取中间 ``N`` 点, 以抑制频域滤波的环形卷积边界效应 (ewtpy 的
-        ``fMirr`` 同法); ``mirror=False`` 时即对原长度信号做循环卷积。
+        ``mirror=True`` (默认) 时滤波改在端点镜像延拓信号 (每端 ``N//2`` 个样本,
+        长度 ``2N``) 上做, 逆变换后取中间 ``N`` 点, 以抑制频域滤波的环形卷积
+        边界效应 (ewtpy 的 ``fMirr`` 同法); ``mirror=False`` 时即对原长度信号做
+        循环卷积。
 
         Filtering paths (滤波器组的两条路径)
         ----------------------------------
         滤波器组自身的体积 (``num_imfs × (N//2+1) × 8`` 字节) 达到
-        ``Base.ConstDefine.BIG_ARRAY`` 时不再一次性物化整张滤波器组, 改为
-        ``Utils.Chunk`` 分块 + ``Operator`` 算子逐块求值, 并逐模态落定 ——
+        ``Define.BIG_ARRAY`` 时不再一次性物化整张滤波器组, 改为分块 +
+        ``Operator`` 算子逐块求值, 并逐模态落定 ——
         每模态只保留一条单边带谱 ``(N//2+1,)`` 复数组, 工作集与 ``num_imfs``
         解耦 (``info["chunked"]`` 为 True, ``info["mfb"]`` 为 None); 未达阈值
         时沿用一次性物化的向量化路径, 两条路径逐元素结果一致。
         """
-        S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
+        S, N = Check_Time_and_Signal(
+            S, T=T, ndim={1}, method=self.name, dtype=self.dtype,
+            need_T=False, safe=self.safe, copy=self.copy,
+        )
 
-        S = np.asarray(S, dtype=np.float64)
+        # int/bool 输入无法承载滤波结果, f16 会让算子/样条出非有限值: 统一抬到 f64
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):
+            S = Check.to_dtype(S, np.dtype(np.float64))
+
+        # 每次调用都从干净状态开始 (缓冲 self.modal / self.empirical_wave 按形状复用)
+        self._trend = None
+        self._slepian_degraded = False
+        self._band_factor_effective = None
+        self.fs = float(fs)
+
         S_in = S                                # 原始输入: Res / reconstruct 的基准
 
         # --- 时域预处理: Check_Time_and_Signal 之后立即施加 ----------------- #
@@ -371,7 +469,7 @@ class EWT(Decomposer):
 
         # 边界检测始终在**预处理后信号的原始谱**上做 (与 ewtpy 一致: 镜像只作用
         # 于滤波阶段, 不改变 boundaries)。
-        F_orig = self.fft.fft.rfft(S, **kwargs)         # (N//2+1,) 单边谱
+        F_orig = np.fft.rfft(S)                         # (N//2+1,) 单边谱
         freq_orig = np.fft.rfftfreq(S.size, 1.0 / fs)   # 0…fs/2, 含 Nyquist
         self.frequency = freq_orig
 
@@ -381,15 +479,16 @@ class EWT(Decomposer):
         boundary = self.boundary(amp, freq_orig, mod=self.boundary_mod)
         n_bands = int(boundary.size) - 1        # "envelope" 分支可少于 num_imfs
 
-        # mirror=True: 滤波在端点镜像延拓信号上进行 (Utils.Mirror 整条信号语义,
-        # 长度 2N), 逆变换后取中间 N 点 —— 同 ewtpy 的 fMirr 处理, 抑制频域滤波
-        # 的环形卷积边界效应。镜像轴与原轴共享 0…fs/2 频率范围, 故 boundary 通用。
+        # mirror=True: 滤波在端点镜像延拓信号上进行 (Utils.mirror 的
+        # mod="mirror", 每端 N//2 个样本 ⇒ 长度 2N), 逆变换后取中间 N 点 ——
+        # 同 ewtpy 的 fMirr 处理, 抑制频域滤波的环形卷积边界效应。镜像轴与原轴
+        # 共享 0…fs/2 频率范围, 故 boundary 通用。
         if self.mirror:
-            f_mirr = self.mirror_signal(S)
+            left = N // 2                       # 每端镜像的样本数 (与 Utils.mirror 一致)
+            f_mirr = mirror(S, mod="mirror", nbsym=left, safe="safe")
             axis_len = int(f_mirr.size)
-            F = self.fft.fft.rfft(f_mirr)
+            F = np.fft.rfft(f_mirr)
             frequency = np.fft.rfftfreq(axis_len, 1.0 / fs)
-            left = N // 2                       # 镜像左端样本数 (与 mirror_signal 一致)
         else:
             axis_len = N
             F = F_orig
@@ -405,6 +504,7 @@ class EWT(Decomposer):
 
         # γ: 显式 float 原样使用; "auto" 按边界间距反推 (下称"自动 gamma")。
         band_factor, bf_auto = self._resolve_band_factor(boundary, frequency)
+        self._band_factor_effective = band_factor   # 落进 config_generate()
 
         # 最高带的滤波上边界: 算子把边界 w 的过渡带放在 [(1−γ)w, (1+γ)w], 若最高带
         # 仍以 Nyquist 为上边界, 它就会在 Nyquist 处再放一条过渡带 —— 而 Nyquist
@@ -417,44 +517,37 @@ class EWT(Decomposer):
 
         # 跨调用长度守卫: 模态缓冲按本次 (n_bands, N) 复用/重建。
         if self.modal is None or self.modal.shape != (n_bands, N):
-            self.modal = np.zeros((n_bands, N))
+            self.modal = np.zeros((n_bands, N), dtype=DEFAULT_NUMPY_TYPE)
 
         # 大数组判据: 滤波器组自身的体积 (n_bands × n_bins, float64) 是否达到
-        # Base.ConstDefine.BIG_ARRAY。达到则不物化整张滤波器组, 改为 Chunk 分块 +
-        # 算子逐块求值, 并逐模态落定 (工作集与频带数解耦, 只留一条带谱)。
+        # Define.BIG_ARRAY。达到则不物化整张滤波器组, 改为分块 + 算子逐块求值,
+        # 并逐模态落定 (工作集与频带数解耦, 只留一条带谱)。
         filter_bytes = n_bands * n_bins * np.dtype(np.float64).itemsize
         chunked = filter_bytes >= BIG_ARRAY
 
         if chunked:
-            # 块长按"目标单块工作集"反推 (与 VMD_CHUNK_WORK_BYTES 同法): 块内除
-            # 算子输出外还有 _OPERATOR_TMP_ELEMS 个 float64 临时量, 故
-            # base = EWT_CHUNK_WORK_BYTES / (临时量数 × 8 字节); 再交给内存策略
-            # 按当前预算继续收缩 (`default_chunk_size` 的 extra_per_elem 与之同源)。
-            base = max(1, EWT_CHUNK_WORK_BYTES // (_OPERATOR_TMP_ELEMS * np.dtype(np.float64).itemsize))
-            chunk_size = chunk_size(
-                filter_bytes, base=min(base, n_bins), extra_per_elem=_OPERATOR_TMP_ELEMS
-            )
+            # 块长按"目标单块工作集"反推: 块内除算子输出外还有
+            # _OPERATOR_TMP_ELEMS 个 float64 临时量, 故
+            # 块长 = EWT_CHUNK_WORK_BYTES / (临时量数 × 8 字节), 再夹到 [1, n_bins]。
+            elem_bytes = _OPERATOR_TMP_ELEMS * np.dtype(np.float64).itemsize
+            chunk_size = max(1, min(n_bins, EWT_CHUNK_WORK_BYTES // elem_bytes))
             self.empirical_wave = None              # 大数组下不保留整张滤波器组
             for row in range(n_bands):
                 band_hat = np.empty(n_bins, dtype=np.complex128)
-                pos = 0
                 with np.errstate(divide="ignore", invalid="ignore"):
-                    for f_chunk, f_hat_chunk in zip(
-                        iter_chunks(frequency, chunk_size), iter_chunks(F, chunk_size)
-                    ):
-                        n_chunk = f_chunk.size
-                        band_hat[pos:pos + n_chunk] = empirical_wavelet_arr(
-                            f_chunk,
+                    for start in range(0, n_bins, chunk_size):
+                        stop = min(start + chunk_size, n_bins)
+                        band_hat[start:stop] = empirical_wavelet_arr(
+                            frequency[start:stop],
                             band_factor=band_factor,
                             w0=filter_boundary[row],
                             w1=filter_boundary[row + 1],
-                        ) * f_hat_chunk
-                        pos += n_chunk
-                self.modal[row, :] = self.fft.fft.irfft(band_hat, n=axis_len)[left:left + N]
+                        ) * F[start:stop]
+                self.modal[row, :] = np.fft.irfft(band_hat, n=axis_len)[left:left + N]
         else:
             chunk_size = None
             if self.empirical_wave is None or self.empirical_wave.shape != (n_bands, n_bins):
-                self.empirical_wave = np.zeros((n_bands, n_bins))
+                self.empirical_wave = np.zeros((n_bands, n_bins), dtype=DEFAULT_NUMPY_TYPE)
 
             # 逐带求传递函数: 滤波器直接建立在频率轴上 (不是下标轴), 且 |x| 使
             # 单边谱天然对称, 无需再补负频镜像。
@@ -470,11 +563,12 @@ class EWT(Decomposer):
                     )
 
             freq_modal = self.empirical_wave * F
-            full = self.fft.fft.irfft(freq_modal, n=axis_len, axis=1)
+            full = np.fft.irfft(freq_modal, n=axis_len, axis=1)
             # 镜像路径下取中间 N 点 (复制成连续数组, 避免留下切片视图)
             self.modal = np.ascontiguousarray(full[:, left:left + N])
 
-        IMFs = np.asarray(self.modal, dtype=np.float64)
+        # 输出 dtype 跟随工作精度 (f32 输入 ⇒ f32 模态), 内部一律按 f64 计算。
+        IMFs = np.asarray(self.modal, dtype=S.dtype)
 
         # 残差以**原始输入**为基准: 预处理(去趋势/加窗/镜像)带来的差异一并落入
         # Res, 于是 reconstruct() 始终等于用户传入的 S; no-trend 的趋势也因此
@@ -496,7 +590,8 @@ class EWT(Decomposer):
             {
                 "mfb": self.empirical_wave,
                 "boundaries": boundary,
-                "boundary_mod": self.boundary_mod,
+                # info 里给字符串形态 (Enum 的 .value): 与旧版返回值逐字一致。
+                "boundary_mod": self.boundary_mod.value,
                 "n_bands": n_bands,
                 "band_factor": band_factor,         # 实际使用的 γ (auto 时已反推)
                 "band_factor_auto": bf_auto,
@@ -511,14 +606,7 @@ class EWT(Decomposer):
                 "chunk_size": chunk_size,
                 "mirror": self.mirror,
             },
-            EWTConfig(
-                num_imfs=self.num_imfs,
-                band_factor=band_factor,            # effective γ (auto 已解析)
-                boundary_mod=self.boundary_mod,
-                pre_deal=tuple(self.pre_deal_mods),
-                mirror=self.mirror,
-                fs=fs,
-            ),
+            self.config_generate(),
         )
 
     # ------------------------------------------------------------------ #
@@ -536,15 +624,16 @@ class EWT(Decomposer):
           约 ``N//20`` 的奇数, 端点复制填充); 趋势保留在
           ``info["trend"]``, 并随 ``Res`` 一起回到结果中
           (``Res = S_原始 − ΣIMFs`` ⇒ ``reconstruct()`` 仍等于原始输入)。
-        * ``window``   —— 加窗 (``window_kind`` ∈ {"hann","hamming"};
+        * ``window``   —— 加窗 (``window_kind`` ∈ ``EWT_WINDOW_KIND_MODS``;
           ``np.hanning`` / ``np.hamming``, 对称窗); 加窗损失同样并入 ``Res``。
 
         Parameters
         ----------
         S : np.ndarray
             时域信号 (check 之后, mirror 之前)。
-        mods : Sequence[str] | None
-            显式指定分支 (按 canonical 顺序重排); None 时用 ``self.pre_deal_time``。
+        mods : EWT_PRE_DEAL_MODS_ARGS | EWT_PRE_DEAL_MODS | Sequence[...] | None
+            显式指定分支 (按 canonical 顺序重排, 字符串经 ``Check.validate_mod``
+            归一); None 时用 ``self.pre_deal_time``。
         **kwargs
             逐名覆盖该分支参数 (未给出用 ``self.pre_deal_kwargs``)。
 
@@ -562,21 +651,27 @@ class EWT(Decomposer):
 
         self._trend = None
         for mod in mods:
-            if mod == "no-dc":
-                sp = cache.import_module(
-                    CACHE_KEY["scipy"]["signal"],
-                    description="scipy.signal: detrend (供 EWT no-dc 分支使用)",
-                )
-                S = np.asarray(
-                    sp.detrend(S, type=kw["no_dc_type"], bp=int(kw["no_dc_bp"])),
-                    dtype=np.float64,
-                )
-            elif mod == "no-trend":
-                trend = _moving_average(S, kw["no_trend_win"])
-                S = S - trend
-                self._trend = trend
-            elif mod == "window":
-                S = S * _window_vec(S.size, kw["window_kind"])
+            match Check.validate_mod(mod, EWT_PRE_DEAL_MODS):
+                case EWT_PRE_DEAL_MODS.NoDC:
+                    sp = Cache.import_module(
+                        "scipy.signal",
+                        description="scipy.signal: detrend (供 EWT no-dc 分支使用)",
+                    )
+                    if sp is None:
+                        raise ImportError(
+                            "EWT pre_deal='no-dc' needs scipy: python -m pip install scipy"
+                        )
+                    detrend_type = Check.validate_mod(kw["no_dc_type"], EWT_NO_DC_TYPE_MODS)
+                    S = np.asarray(
+                        sp.detrend(S, type=detrend_type.value, bp=int(kw["no_dc_bp"])),
+                        dtype=DEFAULT_NUMPY_TYPE,
+                    )
+                case EWT_PRE_DEAL_MODS.NoTrend:
+                    trend = _moving_average(S, kw["no_trend_win"])
+                    S = S - trend
+                    self._trend = trend
+                case EWT_PRE_DEAL_MODS.Window:
+                    S = S * _window_vec(S.size, kw["window_kind"])
         return S
 
     def _freq_domain_pre_deal(self, S: np.ndarray, F: np.ndarray, mods=None, **kwargs) -> np.ndarray:
@@ -585,11 +680,12 @@ class EWT(Decomposer):
 
         分支 (按 ``PRE_DEAL_MOD_FREQ`` 的顺序施加: ``Slepian-Optimize`` → ``Smooth``):
 
-        * ``Slepian-Optimize`` —— Slepian 多锥谱估计: 经 ``Utils.get_slepian()``
+        * ``Slepian-Optimize`` —— Slepian 多锥谱估计: 经 ``Utils.slepian``
           统一入口取 ``(K, N)`` 的 Slepian 序列 (``slepian_nw`` 默认 3.0,
           ``slepian_k`` 默认 ``2*NW-1``), 各锥按其集中比加权平均:
           ``amp = sqrt(Σ_k ratio_k·|rfft(S·v_k)|² / Σk ratio_k)``。
-          后端由 ``slepian_mod`` 决定 (None = ``ConstDefine.SLEPIAN_BACKEND``);
+          后端由 ``slepian_mod`` 决定 (None = ``ConstDefine.SLEPIAN_BACKEND``;
+          显式取值见 ``EWT_SLEPIAN_MODS``);
           **小 N (NW >= N/2, 默认参数下 N <= 6) 由入口自动换后端并 warning**,
           本类不再直接调 scipy。
           ``N > slepian_max_samples`` (默认 ``ConstDefine.EWT_SLEPIAN_MAX_SAMPLES``
@@ -622,35 +718,42 @@ class EWT(Decomposer):
         amp = np.abs(F)
         self._slepian_degraded = False
         for mod in mods:
-            if mod == "Slepian-Optimize":
-                limit = kw["slepian_max_samples"]
-                if limit is not None and S.size > int(limit):
-                    self._slepian_degraded = True
-                else:
-                    amp = self._slepian_multitaper(S, kw["slepian_nw"], kw["slepian_k"],
-                                                   mod=kw["slepian_mod"])
-            elif mod == "Smooth":
-                width = kw["smooth_width"]
-                if str(kw["smooth_kind"]).strip().lower() == "box":
-                    amp = _moving_average(amp, int(width) | 1)
-                else:
-                    amp = _gaussian_smooth(amp, float(width))
+            match Check.validate_mod(mod, EWT_PRE_DEAL_MODS):
+                case EWT_PRE_DEAL_MODS.SlepianOptimize:
+                    limit = kw["slepian_max_samples"]
+                    if limit is not None and S.size > int(limit):
+                        self._slepian_degraded = True
+                    else:
+                        amp = self._slepian_multitaper(S, kw["slepian_nw"], kw["slepian_k"],
+                                                       mod=kw["slepian_mod"])
+                case EWT_PRE_DEAL_MODS.Smooth:
+                    width = kw["smooth_width"]
+                    match _canon_mod_lower(kw["smooth_kind"], EWT_SMOOTH_KIND_MODS):
+                        case EWT_SMOOTH_KIND_MODS.Box:
+                            amp = _moving_average(amp, int(width) | 1)
+                        case EWT_SMOOTH_KIND_MODS.Gaussian:
+                            amp = _gaussian_smooth(amp, float(width))
         return amp
 
     def _slepian_multitaper(self, S: np.ndarray, nw, k, mod=None) -> np.ndarray:
         """
         Slepian 多锥幅度谱估计 (各锥按集中比加权); 返回与 ``rfft(S)`` 同长度。
 
-        走 ``Utils.Slepian.slepian`` 统一入口: 后端选择/小 N 自动换后端/进程内缓存
+        走 ``Utils.slepian`` 统一入口: 后端选择/小 N 自动换后端/进程内缓存
         都由入口负责 (本方法不再直接依赖 scipy.signal)。
         """
         n = int(S.size)
         kk = int(2 * float(nw) - 1) if k is None else int(k)
         kk = max(1, min(kk, n))
-        seqs, ratios = get_slepian().slepian(n, float(nw), kk, mod=mod,
-                                            return_ratios=True, norm=2)
+        # None = 用 ConstDefine.SLEPIAN_BACKEND; 入口把这一语义收在 "auto" 上。
+        # mod 是 EWT_SLEPIAN_MODS 成员 (None 除外), 入口只认字符串 ⇒ 传 .value。
+        backend = None if mod is None else Check.validate_mod(mod, EWT_SLEPIAN_MODS)
+        seqs, ratios = slepian(
+            n, float(nw), kk, mod="auto" if backend is None else backend.value,
+            return_ratios=True, norm=2,
+        )
         w = np.maximum(np.asarray(ratios, dtype=np.float64), 0.0)
-        spec = np.abs(self.fft.fft.rfft(S[None, :] * seqs, axis=1)) ** 2
+        spec = np.abs(np.fft.rfft(S[None, :] * seqs, axis=1)) ** 2
         return np.sqrt(np.maximum((spec * w[:, None]).sum(axis=0) / max(float(w.sum()), 1e-300), 0.0))
 
     def pre_deal(self, S: np.ndarray, mod="None", **kwargs) -> np.ndarray:
@@ -660,7 +763,8 @@ class EWT(Decomposer):
         频域分支 (``Slepian-Optimize`` / ``Smooth``) 需要频谱, 只能在
         ``__init__`` 的 ``pre_deal`` 中选择、由 ``decompose`` 在 ``fft`` 之后施加。
 
-        ``mod`` 可以是单个名字或名字序列 (大小写不敏感, ``"None"`` = 不处理)。
+        ``mod`` 可以是单个名字或名字序列 (大小写不敏感, ``"None"`` = 不处理),
+        也可以直接给 ``EWT_PRE_DEAL_MODS`` 成员。
         """
         mods = _canon_pre_deal_mods(mod)
         freq_only = [m for m in mods if m in PRE_DEAL_MOD_FREQ]
@@ -684,8 +788,9 @@ class EWT(Decomposer):
             :meth:`_freq_domain_pre_deal`)。
         frequency : np.ndarray
             频率轴 (Hz, ``np.fft.rfftfreq``), 0…fs/2。
-        mod : {"maximum","max-min","scale-space","envelope"} | None
-            策略名; None 时用 ``self.boundary_mod``。
+        mod : EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS | None
+            策略名 (字符串经 ``Check.validate_mod`` 归一成 ``EWT_BOUNDARY_MODS``);
+            None 时用 ``self.boundary_mod``。
         **kwargs
             逐名覆盖该策略参数 (未给出用 ``self.boundary_kwargs``)。
 
@@ -710,9 +815,7 @@ class EWT(Decomposer):
                          修平 → 检峰检谷, 模式数由显著峰数自动确定 (适合轴承/风机
                          等故障信号)。
         """
-        mod = self.boundary_mod if mod is None else mod
-        if mod not in self.boundary_mods:
-            raise ValueError(f"the mod of {mod} is not supported.")
+        mod = self.boundary_mod if mod is None else Check.validate_mod(mod, EWT_BOUNDARY_MODS)
 
         kw = dict(self.boundary_kwargs)
         kw.update(kwargs)
@@ -721,15 +824,15 @@ class EWT(Decomposer):
         f_lo, f_hi = float(frequency[0]), float(frequency[-1])
 
         match mod:
-            case "maximum":
+            case EWT_BOUNDARY_MODS.Maximum:
                 interior = self._boundary_maximum(amp, frequency, **kw)
-            case "max-min":
+            case EWT_BOUNDARY_MODS.MaxMin:
                 interior = self._boundary_max_min(amp, frequency, **kw)
-            case "scale-space":
+            case EWT_BOUNDARY_MODS.ScaleSpace:
                 interior = self._boundary_scale_space(amp, frequency, **kw)
-            case "envelope":
+            case EWT_BOUNDARY_MODS.Envelope:
                 interior = self._boundary_envelope(amp, frequency, **kw)
-            case _:
+            case _:     # pragma: no cover - Check.validate_mod 已挡住其它取值
                 raise ValueError(f"the mod of {mod} is not supported.")
 
         interior = np.asarray(interior, dtype=np.float64).ravel()
@@ -739,11 +842,11 @@ class EWT(Decomposer):
         return np.concatenate(([f_lo], interior, [f_hi]))
 
     def _peaks(self, amp: np.ndarray, **kw) -> np.ndarray:
-        """谱峰检测 (Utils.Peaks; ``peak_distance`` 透传); 返回内部下标。"""
-        fkw = {}
+        """谱峰检测 (``Utils.find_peaks``; ``peak_distance`` 透传); 返回内部下标。"""
+        fkw = {"safe": "safe"}
         if kw.get("peak_distance") is not None:
             fkw["distance"] = int(kw["peak_distance"])
-        peaks, _ = self.find_peaks(amp, **fkw)
+        peaks, _ = find_peaks(amp, **fkw)
         idx = np.asarray(peaks, dtype=np.int64)
         return idx[(idx > 0) & (idx < amp.size)]
 
@@ -754,7 +857,8 @@ class EWT(Decomposer):
         """
         解析 ``band_factor`` -> ``(γ, 是否自动)``。
 
-        显式 float 原样返回 (不改动旧行为)。``"auto"`` 时按**边界间距反推**:
+        显式 float 原样返回 (不改动旧行为)。``EWT_BAND_FACTOR_MODS.Auto``
+        (即字符串 ``"auto"``, 校验后已归一成 Enum) 时按**边界间距反推**:
         算子 (:func:`Operator.Empirical_wavelet.empirical_wavelet_arr`) 把边界
         ``w`` 的过渡带放在 ``[(1−γ)w, (1+γ)w]``, 于是相邻边界 ``w_i < w_{i+1}``
         的过渡带不交叠要求
@@ -779,7 +883,7 @@ class EWT(Decomposer):
 
         无内部边界 (单频带) 时没有交叠约束可言, 退回固定 ``0.15``。
         """
-        if self.band_factor != "auto":
+        if self.band_factor is not EWT_BAND_FACTOR_MODS.Auto:
             return float(self.band_factor), False
 
         nyq = float(frequency[-1])
@@ -879,15 +983,15 @@ class EWT(Decomposer):
         n = int(amp.size)
         kw_peaks = dict(kw)
 
-        # --- 1) 上包络: 过局部极大的样条 (Utils.Spline), 节点不足则用原谱 --- #
+        # --- 1) 上包络: 过局部极大的样条, 节点不足则用原谱 --- #
         pk = self._peaks(amp, **kw_peaks)
         env = np.asarray(amp, dtype=np.float64)
         if pk.size >= 2:
             try:
                 grid = np.arange(n, dtype=np.float64)
-                sp = self.spline(
+                sp = _spline_fit(
                     pk.astype(np.float64), amp[pk],
-                    spline_kind=kw["envelope_spline"], extrapolate=True,
+                    kw["envelope_spline"],
                 )
                 env = np.asarray(sp(grid), dtype=np.float64)
             except Exception:
@@ -935,6 +1039,170 @@ class EWT(Decomposer):
 
 
 # --------------------------------------------------------------------------- #
+# 模块级常量: 分支登记 / 参数默认值 / 惰性后端表
+#
+# 放在类之后是为了让文件顶部的布局与参照模块一致
+# (docstring → import → __all__ → Literal → Enum → Config 横幅 → EWTConfig →
+#  Class 横幅 → EWT); 这些常量只在实例方法运行时被读取, 定义位置不影响行为。
+# --------------------------------------------------------------------------- #
+#: 分块滤波时算子每元素展开的 float64 临时量个数 (``np.select`` 的候选分支 +
+#: 掩码 + 输出): 用于把 ``EWT_CHUNK_WORK_BYTES`` 反推成块长 (元素数)。
+_OPERATOR_TMP_ELEMS = 12
+
+#: 时域预处理分支 (施加在 ``Check_Time_and_Signal`` 之后的信号上); 由 Enum 派生。
+PRE_DEAL_MOD_TIME = (
+    EWT_PRE_DEAL_MODS.NoDC.value,
+    EWT_PRE_DEAL_MODS.NoTrend.value,
+    EWT_PRE_DEAL_MODS.Window.value,
+)
+#: 频域预处理分支 (施加在 ``fft`` 之后的谱上; 只影响边界检测用的幅度谱)。
+#: 顺序即施加顺序: 先做多锥谱估计, 再对其结果做平滑。
+PRE_DEAL_MOD_FREQ = (
+    EWT_PRE_DEAL_MODS.SlepianOptimize.value,
+    EWT_PRE_DEAL_MODS.Smooth.value,
+)
+
+#: 分支名别名 → canonical 名 (大小写不敏感)。
+_PRE_DEAL_ALIAS = {
+    "nodc": EWT_PRE_DEAL_MODS.NoDC.value,
+    "no_dc": EWT_PRE_DEAL_MODS.NoDC.value,
+    "notrend": EWT_PRE_DEAL_MODS.NoTrend.value,
+    "no_trend": EWT_PRE_DEAL_MODS.NoTrend.value,
+    "slepian": EWT_PRE_DEAL_MODS.SlepianOptimize.value,
+}
+
+#: 预处理分支参数默认值 (``__init__`` 的 kwargs 逐名覆盖; 未传入即用此值)。
+PRE_DEAL_DEFAULTS = {
+    "no_dc_type": EWT_NO_DC_TYPE_MODS.Linear.value,          # detrend 的 type
+    "no_dc_bp": 0,                 # detrend 断点 (仅 1-D; 0 = 不使用)
+    "no_trend_win": None,          # 移动平均窗长; None -> 自动 (约 N//20 的奇数, >= 3)
+    "window_kind": EWT_WINDOW_KIND_MODS.Hann.value,          # 接受 "hanning" 别名
+    "slepian_nw": 3.0,             # dpss 时间-带宽积 NW
+    "slepian_k": None,             # dpss 锥数 K; None -> 2*NW-1
+    "slepian_mod": None,           # Slepian 后端; None -> ConstDefine.SLEPIAN_BACKEND
+    # 启用 Slepian 分支的样本上限 (时间预算): 默认取 ConstDefine 值 32768;
+    # 传 None 表示不设上限 (大 N 下每次 decompose 多付约 O(N) 的 dpss 时间)。
+    "slepian_max_samples": EWT_SLEPIAN_MAX_SAMPLES,
+    "smooth_kind": EWT_SMOOTH_KIND_MODS.Box.value,           # (Smooth 分支)
+    "smooth_width": 5,             # 平滑窗宽 (频点数): box = 窗长, gaussian = σ
+}
+
+#: 边界策略参数默认值 (同样由 ``__init__`` 的 kwargs 覆盖)。
+BOUNDARY_DEFAULTS = {
+    "peak_distance": None,             # find_peaks 的 distance 过滤 (maximum / max-min)
+    "max_min_fallback": EWT_MAX_MIN_FALLBACK_MODS.Midpoint.value,   # 段内无极小的回退
+    "scale_space_scales": 32,          # 尺度数 (几何级数)
+    "scale_space_sigma_min": 1.0,      # 最小高斯尺度 (样本)
+    "scale_space_sigma_max": 32.0,     # 最大高斯尺度 (样本)
+    "scale_space_otsu_bins": 64,       # 持久度 Otsu 直方图桶数
+    "scale_space_min_persist": 0.25,   # 持久度下限 (占尺度数的比例)
+    "envelope_spline": EWT_ENVELOPE_SPLINE_MODS.CubicSpline.value,  # 见 ``_SPLINE_CTORS``
+    "envelope_noise_pct": 10.0,        # 噪底估计分位
+    "envelope_snr_db": 3.0,            # 硬阈值比峰值低多少 dB
+    "envelope_prominence": 0.05,       # 峰的相对突出度下限
+}
+
+#: ``**kwargs`` 里除分支参数外允许出现的库级参数 (其余键一律报 TypeError)。
+_KWARGS_ALLOWED = frozenset(PRE_DEAL_DEFAULTS) | frozenset(BOUNDARY_DEFAULTS) | {"safe", "copy"}
+
+#: 包络样条后端名 → ``scipy.interpolate`` 构造器名 (与旧 ``Utils.Spline`` 的
+#: ``SPLINE_KIND`` 同一套名字; 本文件内自持映射, 只在 envelope 分支真正用到时
+#: 才惰性导入 scipy)。键是 ``EWT_ENVELOPE_SPLINE_MODS`` 的成员值。
+_SPLINE_CTORS = {
+    EWT_ENVELOPE_SPLINE_MODS.UnivariateSpline.value: "UnivariateSpline",
+    EWT_ENVELOPE_SPLINE_MODS.CubicSpline.value: "CubicSpline",
+    EWT_ENVELOPE_SPLINE_MODS.PCHIP.value: "PchipInterpolator",
+    EWT_ENVELOPE_SPLINE_MODS.Akima.value: "Akima1DInterpolator",
+}
+
+
+# --------------------------------------------------------------------------- #
+# 模块级工具函数: mod 归一 / 预处理分支名规范化 / 惰性样条
+# --------------------------------------------------------------------------- #
+def _canon_mod_lower(mod, MOD):
+    """大小写不敏感的 mod 归一: 字符串先 strip+lower, 再走 ``Check.validate_mod``。
+
+    返回值一律是 ``MOD`` 的 Enum 成员 (Enum 成员原样返回)。
+    """
+    if isinstance(mod, str):
+        mod = mod.strip().lower()
+    return Check.validate_mod(mod, MOD)
+
+
+def _canon_window_kind(mod) -> EWT_WINDOW_KIND_MODS:
+    """``window_kind`` → ``EWT_WINDOW_KIND_MODS`` (``"hanning"`` 是 ``"hann"`` 的别名)。"""
+    if isinstance(mod, str) and mod.strip().lower() in ("hann", "hanning"):
+        mod = EWT_WINDOW_KIND_MODS.Hann
+    return _canon_mod_lower(mod, EWT_WINDOW_KIND_MODS)
+
+
+def _canon_pre_deal_one(mod) -> str:
+    """单个预处理分支名 → canonical 名 (大小写不敏感, 支持别名)。
+
+    接受 ``EWT_PRE_DEAL_MODS`` 成员; 返回值仍是 canonical **字符串** (沿用
+    ``pre_deal_mods`` / ``info["pre_deal"]`` 的既有契约), 但取值由
+    ``Check.validate_mod`` 对 Enum 校验后取 ``.value``。
+    """
+    key = str(getattr(mod, "value", mod)).strip()
+    if key == "" or key.lower() == "none":
+        return "None"
+    table = {name.lower(): name for name in PRE_DEAL_MOD_TIME + PRE_DEAL_MOD_FREQ}
+    table.update(_PRE_DEAL_ALIAS)
+    low = key.lower()
+    if low not in table:
+        raise ValueError(
+            f"unsupported pre_deal mod {mod!r}; expected one of "
+            f"{list(PRE_DEAL_MOD_TIME + PRE_DEAL_MOD_FREQ)} or 'None'"
+        )
+    return Check.validate_mod(table[low], EWT_PRE_DEAL_MODS).value
+
+
+def _canon_pre_deal_mods(pre_deal) -> tuple:
+    """单个名 / 序列 / None → canonical 顺序元组 (时域 → 频域, 去重)。"""
+    if pre_deal is None:
+        return ()
+    items = (pre_deal,) if isinstance(pre_deal, (str, EWT_PRE_DEAL_MODS)) else tuple(pre_deal)
+    seen = []
+    for m in items:
+        name = _canon_pre_deal_one(m)
+        if name != "None" and name not in seen:
+            seen.append(name)
+    return tuple(m for m in (PRE_DEAL_MOD_TIME + PRE_DEAL_MOD_FREQ) if m in seen)
+
+
+def _spline_fit(x, y, kind):
+    """
+    惰性构造包络样条 (只在 ``boundary_mod="envelope"`` 真正用到时才导入 scipy)。
+
+    ``kind`` 是 ``EWT_ENVELOPE_SPLINE_MODS`` 成员 (或其 ``.value``); 返回可直接
+    调用的插值对象 (``UnivariateSpline`` 用 ``s=0`` 精确插值, 其余后端打开
+    ``extrapolate``, 与旧 ``Utils.Spline`` 封装的默认语义一致)。scipy 缺失时
+    只在此处报错, 不影响 EWT 的其余分支。
+    """
+    kind = Check.validate_mod(kind, EWT_ENVELOPE_SPLINE_MODS)
+    ctor_name = _SPLINE_CTORS[kind.value]
+
+    interpolate = Cache.import_module(
+        "scipy.interpolate",
+        description="scipy.interpolate: 供 EWT envelope 分支拟合幅谱包络",
+    )
+    if interpolate is None:
+        raise ImportError(
+            "EWT boundary_mod='envelope' needs scipy: python -m pip install scipy"
+        )
+
+    ctor = getattr(interpolate, ctor_name, None)
+    if ctor is None:
+        raise ImportError(f"scipy.interpolate has no {ctor_name!r}")
+
+    match kind:
+        case EWT_ENVELOPE_SPLINE_MODS.UnivariateSpline:
+            return ctor(x, y, s=0)
+        case _:
+            return ctor(x, y, extrapolate=True)
+
+
+# --------------------------------------------------------------------------- #
 # 数值助手 (预处理/边界分支共用; 纯 numpy, 不引入额外依赖)
 # --------------------------------------------------------------------------- #
 def _moving_average(x: np.ndarray, win=None) -> np.ndarray:
@@ -951,31 +1219,30 @@ def _moving_average(x: np.ndarray, win=None) -> np.ndarray:
         raise ValueError(f"moving average window must be >= 1, got {win}")
     win = min(win, n)
     if win == 1:
-        return np.array(x, dtype=np.float64, copy=True)
+        return np.array(x, dtype=DEFAULT_NUMPY_TYPE, copy=True)
     half = win // 2
-    pad = np.pad(np.asarray(x, dtype=np.float64), (half, win - 1 - half), mode="edge")
+    pad = np.pad(np.asarray(x, dtype=DEFAULT_NUMPY_TYPE), (half, win - 1 - half), mode="edge")
     cum = np.concatenate(([0.0], np.cumsum(pad)))
     return (cum[win:] - cum[:-win]) / float(win)
 
 
-def _window_vec(n: int, kind) -> np.ndarray:
-    """时域窗向量: ``"hann"`` (别名 ``"hanning"``) / ``"hamming"``, 对称窗。"""
-    key = str(kind).strip().lower()
-    if key in ("hann", "hanning"):
-        return np.hanning(int(n))
-    if key == "hamming":
-        return np.hamming(int(n))
-    raise ValueError(f"window_kind must be 'hann' or 'hamming', got {kind!r}")
+def _window_vec(n: int, kind="hann") -> np.ndarray:
+    """时域窗向量: ``EWT_WINDOW_KIND_MODS.Hann`` (别名 ``"hanning"``) / ``Hamming``。"""
+    match _canon_window_kind(kind):
+        case EWT_WINDOW_KIND_MODS.Hann:
+            return np.hanning(int(n))
+        case EWT_WINDOW_KIND_MODS.Hamming:
+            return np.hamming(int(n))
 
 
 def _gaussian_smooth(x: np.ndarray, sigma: float) -> np.ndarray:
     """高斯平滑 (核半宽 3σ, 奇数长度核, ``mode="same"`` 不产生位移)。"""
-    x = np.asarray(x, dtype=np.float64)
+    x = np.asarray(x, dtype=DEFAULT_NUMPY_TYPE)
     sigma = float(sigma)
     if sigma <= 0.0 or x.size == 0:
         return x.copy()
     half = max(1, int(np.ceil(3.0 * sigma)))
-    t = np.arange(-half, half + 1, dtype=np.float64)
+    t = np.arange(-half, half + 1, dtype=DEFAULT_NUMPY_TYPE)
     ker = np.exp(-0.5 * (t / sigma) ** 2)
     ker /= ker.sum()
     return np.convolve(x, ker, mode="same")
@@ -983,7 +1250,7 @@ def _gaussian_smooth(x: np.ndarray, sigma: float) -> np.ndarray:
 
 def _otsu_threshold(values: np.ndarray, bins: int = 64) -> float:
     """一维 Otsu 阈值 (直方图法); 常数序列返回该常数。"""
-    v = np.asarray(values, dtype=np.float64)
+    v = np.asarray(values, dtype=DEFAULT_NUMPY_TYPE)
     v = v[np.isfinite(v)]
     if v.size == 0:
         return 0.0
@@ -991,7 +1258,7 @@ def _otsu_threshold(values: np.ndarray, bins: int = 64) -> float:
     if hi <= lo:
         return lo
     hist, edges = np.histogram(v, bins=max(2, int(bins)), range=(lo, hi))
-    p = hist.astype(np.float64) / max(float(hist.sum()), 1.0)
+    p = hist.astype(DEFAULT_NUMPY_TYPE) / max(float(hist.sum()), 1.0)
     centers = 0.5 * (edges[:-1] + edges[1:])
     w0 = np.cumsum(p)
     w1 = 1.0 - w0
@@ -1007,28 +1274,53 @@ def _otsu_threshold(values: np.ndarray, bins: int = 64) -> float:
 
 def _local_minima(x: np.ndarray) -> np.ndarray:
     """局部极小下标 (平台取左缘, 不含端点)。"""
-    x = np.asarray(x, dtype=np.float64)
+    x = np.asarray(x, dtype=DEFAULT_NUMPY_TYPE)
     if x.size < 3:
         return np.empty(0, dtype=np.int64)
     mask = (x[1:-1] < x[:-2]) & (x[1:-1] <= x[2:])
     return np.flatnonzero(mask) + 1
 
 
-def _valley_between(amp, i0: int, i1: int, frequency, fallback: str = "midpoint") -> float:
+def _valley_between(
+    amp,
+    i0: int,
+    i1: int,
+    frequency,
+    fallback: EWT_MAX_MIN_FALLBACK_MODS_ARGS | EWT_MAX_MIN_FALLBACK_MODS = "midpoint",
+) -> float:
     """
     在 ``(i0, i1)`` 开区间内取幅值最小处作边界 ("谷底分割")。
 
     段内极小落在区间端点 (段单调) 或段长不足时按 ``fallback`` 回退:
-    ``"midpoint"`` 取两峰频率中点, ``"geometric"`` 取几何平均。
+    ``EWT_MAX_MIN_FALLBACK_MODS.Midpoint`` 取两峰频率中点,
+    ``Geometric`` 取几何平均。``fallback`` 接受成员或其 ``.value`` 字符串。
     """
-    amp = np.asarray(amp, dtype=np.float64)
-    frequency = np.asarray(frequency, dtype=np.float64)
+    fallback = Check.validate_mod(fallback, EWT_MAX_MIN_FALLBACK_MODS)
+    amp = np.asarray(amp, dtype=DEFAULT_NUMPY_TYPE)
+    frequency = np.asarray(frequency, dtype=DEFAULT_NUMPY_TYPE)
     if i1 - i0 >= 3:
         seg = amp[i0 + 1:i1]
         j = int(np.argmin(seg))
         if 0 < j < seg.size - 1:
             return float(frequency[i0 + 1 + j])
     f0, f1 = float(frequency[i0]), float(frequency[i1])
-    if fallback == "geometric" and f0 > 0.0 and f1 > 0.0:
+    if fallback is EWT_MAX_MIN_FALLBACK_MODS.Geometric and f0 > 0.0 and f1 > 0.0:
         return float(np.sqrt(f0 * f1))
     return 0.5 * (f0 + f1)
+
+
+"""
+other function for module
+"""
+def f_EWT(S: list | np.ndarray, T=None, fs: float = 1.0, *, num_imfs: int = 5, band_factor: float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS = "auto", boundary_mod: EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS = "maximum", pre_deal: EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None = None, mirror: bool = True, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+    ewt = EWT(
+        num_imfs=num_imfs,
+        band_factor=band_factor,
+        boundary_mod=boundary_mod,
+        pre_deal=pre_deal,
+        mirror=mirror,
+        dtype=dtype,
+        **kwargs
+    )
+
+    return ewt.decompose(S, T, fs)

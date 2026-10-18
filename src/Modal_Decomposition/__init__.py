@@ -2,13 +2,13 @@
 Modal Decomposition
 
 A unified library for modal decomposition methods:
-LMD, CEEMDAN, EFD, CEEFD, VMD, EEMD, FMD, EWT, SSA, RPSEMD, CEEMD, MEMD,
-ICEEMDAN, EMD, SVMD, and the optional EWTpy (ewtpy-backed EWT).
+EMD, EEMD, CEEMD, CEEMDAN, ICEEMDAN, RPSEMD (EMD family) and
+EFD, CEEFD, MEMD, SSA, FMD, LMD, VMD, EWT, SVMD.
 
 Public interface
 ----------------
-- ``Class.X``     : decomposer class; use ``Class.X(**params).decompose(S, T)``.
-- ``Function.X``  : facade function; use ``Function.X(S, T=None, **params)``.
+- ``Class.X``     : decomposer class; use ``Class.X(**params).decompose(S)``.
+- ``Function.X``  : facade function; use ``Function.X(S, **params)``.
 - ``set_seed``    : set the process-level global random seed.
 - ``get_seed``    : read the current global random seed.
 
@@ -16,9 +16,7 @@ Every method returns a ``DecompositionResult`` with ``.IMFs``, ``.Res``,
 ``.info`` and ``.config``. ``Res`` is None for methods without a residual
 concept (SSA, VMD).
 
-``EWT`` 是本库自研实现(不依赖 ewtpy); ``EWTpy`` 是可选适配层, 只在真正
-``decompose`` 时经 ``Base.Cache.cache.import_module`` 惰性导入 ``ewtpy``,
-未安装该可选依赖时不影响其余方法。
+``EWT`` 是本库自研实现(不依赖 ewtpy)。
 """
 
 from .Base import *
@@ -28,9 +26,21 @@ from .Define import *
 from .Operator import *
 
 from .EMD import EMD, f_EMD, EMDConfig
+from .EEMD import EEMD, f_EEMD, EEMDConfig
 from .CEEMD import CEEMD, f_CEEMD, CEEMDConfig
 from .CEEMDAN import CEEMDAN, f_CEEMDAN, CEEMDANConfig
 from .ICEEMDAN import ICEEMDAN, f_ICEEMDAN, ICEEMDANConfig
+from .RPSEMD import RPSEMD, f_RPSEMD, RPSEMDConfig
+
+from .EFD import EFD, f_EFD, EFDConfig
+from .CEEFD import CEEFD, f_CEEFD, CEEFDConfig
+from .MEMD import MEMD, f_MEMD, MEMDConfig
+from .SSA import SSA, f_SSA, SSAConfig
+from .FMD import FMD, f_FMD, FMDConfig
+from .LMD import LMD, f_LMD, LMDConfig
+from .VMD import VMD, f_VMD, VMDConfig
+from .EWT import EWT, f_EWT, EWTConfig
+from .SVMD import SVMD, f_SVMD, SVMDConfig
 
 __all__ = [
     "Class",
@@ -53,12 +63,37 @@ __description__ = "A comprehensive modal decomposition library"
 
 class Class:
     EMD = EMD
+    EEMD = EEMD
     CEEMD = CEEMD
     CEEMDAN = CEEMDAN
     ICEEMDAN = ICEEMDAN
+    RPSEMD = RPSEMD
+
+    EFD = EFD
+    CEEFD = CEEFD
+    MEMD = MEMD
+    SSA = SSA
+    FMD = FMD
+    LMD = LMD
+    VMD = VMD
+    EWT = EWT
+    SVMD = SVMD
+
 
 class Function:
     EMD = f_EMD
+    EEMD = f_EEMD
     CEEMD = f_CEEMD
     CEEMDAN = f_CEEMDAN
     ICEEMDAN = f_ICEEMDAN
+    RPSEMD = f_RPSEMD
+
+    EFD = f_EFD
+    CEEFD = f_CEEFD
+    MEMD = f_MEMD
+    SSA = f_SSA
+    FMD = f_FMD
+    LMD = f_LMD
+    VMD = f_VMD
+    EWT = f_EWT
+    SVMD = f_SVMD

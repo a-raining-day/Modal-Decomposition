@@ -8,16 +8,18 @@ envelope estimate from extrema interpolation.
 --------------------------------
 - 模态分解筛分迭代里的"包络 / 局部均值"是对**极值**做插值得到 —— 本方法默认
   ``envelope="midpoint"`` (Smith 经典筛分): 幅度包络用保形 Pchip 插值,
-  局部均值用自然三次样条 (均经 ``Utils.Spline`` 提供; 极值端点镜像经
-  ``Utils.Mirror``)。自然三次样条曾因极值间过冲导致幅度爆炸 (峰值 ~1e12,
-  重构损失 ~2.4e-4), 故幅度一律走 Pchip; 最后一次筛分的局部均值按经典
-  LMD 语义留在残差中。
+  局部均值用自然三次样条 (均经 ``scipy.interpolate`` 提供; 极值端点镜像由
+  本模块顶层的 ``mirror_extrema`` 完成)。自然三次样条曾因极值间过冲导致幅度
+  爆炸 (峰值 ~1e12, 重构损失 ~2.4e-4), 故幅度一律走 Pchip; 最后一次筛分的
+  局部均值按经典 LMD 语义留在残差中。
 - 解析 Hilbert 包络 ``a(t) = |H[h(t)]|`` **不是**筛分迭代中的包络: 只有确实
   需要解析幅度时才使用 (``envelope="hilbert"`` 显式选择, 单次解调 / 实验
   对比)。迭代该解调在多分量信号上不收敛 (包络拍频、极值数发散), 故该变体
-  是搁置的历史选项。Hilbert 后端经 ``**kwargs`` 传入:
-  ``hilbert_mod="Scipy"`` (默认) 或 ``hilbert_mod="FHT"`` (第三方 C 内核,
-  见 ``Utils.Hilbert``)。
+  是搁置的历史选项。Hilbert 后端经 ``hilbert_mod`` 传入, 取 ``Utils.Hilbert``
+  的 ``HILBERT_MODS`` 枚举: ``hilbert_mod="Scipy"`` (默认, scipy.signal.hilbert;
+  历史写法, 大小写归一后落到 ``HILBERT_MODS.Scipy``, canonical 值 ``"scipy"``)
+  或 ``hilbert_mod="FHT"`` (第三方 C 内核, 见 ``Utils.Hilbert``)。实例上存的
+  是 ``HILBERT_MODS`` 成员 (Enum), 不再保存裸字符串。
 
 References
 ----------
@@ -26,27 +28,36 @@ References
 
 import numpy as np
 from dataclasses import dataclass
+from enum import Enum
 from typing import ClassVar, Literal
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Base import Cache
 from .Utils import (
+    Check,
     Check_Time_and_Signal,
-    get_mirror,
-    get_spline,
-    is_monotonic,
+    hilbert,
+    HILBERT_MODS,
+    HILBERT_MODS_ARGS,
+    monotonic,
 )
-from .Utils.Hilbert import hilbert
 
-__all__ = ["LMD", "LMDConfig"]
+__all__ = ["LMD", "LMDConfig", "LMD_ENVELOPE_MODS", "LMD_ENVELOPE_MODS_ARGS", "f_LMD"]
 
+LMD_ENVELOPE_MODS_ARGS = Literal["midpoint", "hilbert"]
+class LMD_ENVELOPE_MODS(Enum):
+    Midpoint = "midpoint"
+    Hilbert = "hilbert"
 
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class LMDConfig(Config):
     """
     Effective parameters of an LMD run.
     """
-    max_pf: int
+    max_pf: int | None
     max_iter: int
     eps: float
     eps_stable: float
@@ -54,11 +65,14 @@ class LMDConfig(Config):
     max_amp: float
     converge_mean: float
     smooth_window: int
-    envelope: str
-    hilbert_mod: str
+    envelope: LMD_ENVELOPE_MODS | LMD_ENVELOPE_MODS_ARGS
+    hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS
+    dtype: type | np.dtype | None
 
 
-@register_class("LMD")
+"""
+Class and Function of decomposer
+"""
 class LMD(Decomposer):
     name: ClassVar[str] = "LMD"
 
@@ -72,7 +86,10 @@ class LMD(Decomposer):
         max_amp: float = 1e12,
         converge_mean: float = 1e-3,
         smooth_window: int = 5,
-        envelope: Literal["midpoint", "hilbert"] = "midpoint",
+        envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint",
+        hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy",
+        hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None,
+        dtype: type | np.dtype | None = None,
         **kwargs,
     ):
         """
@@ -96,17 +113,29 @@ class LMD(Decomposer):
             Mean convergence threshold (midpoint envelope only).
         smooth_window : int
             Savitzky-Golay window length for the amplitude estimate.
-        envelope : {"midpoint", "hilbert"}
+        envelope : LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS
             Amplitude-estimate strategy: ``"midpoint"`` (default) = classical
             Smith sift with extrema (Pchip) interpolation, the modal-
             decomposition envelope; ``"hilbert"`` = single-shot analytic
             demodulation per PF (``|H[h(t)]|``), only for users who genuinely
             need the analytic envelope — it is NOT the sift envelope and does
             not converge when iterated.
+        hilbert_mod : HILBERT_MODS_ARGS | HILBERT_MODS
+            Hilbert backend when ``envelope="hilbert"``, taken from
+            ``Utils.Hilbert``'s ``HILBERT_MODS``: ``"Scipy"`` (default,
+            scipy.signal.hilbert; the historical spelling is case-normalised
+            onto the canonical ``"scipy"`` / ``HILBERT_MODS.Scipy``) or
+            ``"FHT"`` (compiled third-party C kernel); the remaining declared
+            names are accepted by the enum but not implemented by the
+            dispatcher. The alias ``hilbert_backend`` is also accepted.
+        hilbert_backend : {"Scipy", "scipy", "FHT"} | None
+            Deprecated alias of ``hilbert_mod`` (kept for the historical API).
+        dtype : type | np.dtype | None
+            Working dtype of the returned product functions. ``None`` keeps
+            the input precision; integer/bool inputs are promoted to float64.
         **kwargs
-            Hilbert backend when ``envelope="hilbert"``: ``hilbert_mod="Scipy"``
-            (default, scipy.signal.hilbert) or ``hilbert_mod="FHT"`` (compiled
-            third-party C kernel). The alias ``hilbert_backend`` is also accepted.
+            ``safe`` (validation level, see ``Utils.Check``) and ``copy``
+            (hand the decomposer its own copy of the signal).
 
         Strategy comparison (measured, n=16384, tests/comparison):
 
@@ -132,42 +161,86 @@ class LMD(Decomposer):
         |                  |                                          | to the NumPy reference otherwise)        |
         +------------------+------------------------------------------+------------------------------------------+
         """
-        self.max_pf = max_pf
-        self.max_iter = max_iter
-        self.eps = eps
-        self.eps_stable = eps_stable
-        self.min_amp = min_amp
-        self.max_amp = max_amp
-        self.converge_mean = converge_mean
-        self.smooth_window = smooth_window
+        self.max_pf: int | None = max_pf
+        self.max_iter: int = max_iter
+        self.eps: float = eps
+        self.eps_stable: float = eps_stable
+        self.min_amp: float = min_amp
+        self.max_amp: float = max_amp
+        self.converge_mean: float = converge_mean
+        self.smooth_window: int = smooth_window
+        self.envelope: LMD_ENVELOPE_MODS | LMD_ENVELOPE_MODS_ARGS = envelope
 
-        if envelope not in ("midpoint", "hilbert"):
-            raise ValueError(
-                f"envelope must be 'midpoint' or 'hilbert', got {envelope!r}"
-            )
-        self.envelope = envelope
+        # 历史别名: hilbert_mod 仍是默认写法 (未显式给出) 时用 hilbert_backend 覆盖
+        if hilbert_backend is not None and hilbert_mod in ("Scipy", HILBERT_MODS.Scipy):
+            hilbert_mod = hilbert_backend
+        self.hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = hilbert_mod
 
-        hilbert_mod = kwargs.pop("hilbert_mod", kwargs.pop("hilbert_backend", "Scipy"))
-        if hilbert_mod not in ("Scipy", "FHT"):
-            raise ValueError(
-                f"hilbert_mod must be 'Scipy' or 'FHT', got {hilbert_mod!r}"
-            )
-        self.hilbert_mod = hilbert_mod
+        self.dtype: type | np.dtype | None = dtype
 
-        if kwargs:
-            raise TypeError(
-                f"unexpected keyword arguments: {sorted(kwargs)}"
-            )
+        unknown = set(kwargs) - {"safe", "copy"}
+        if unknown:
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
+
+        self.safe: str = kwargs.get("safe", "unknown")
+        self.copy: bool = kwargs.get("copy", True)
+
+        self.imfs: np.ndarray | None = None
+        self.res: np.ndarray | None = None
+
+        self.param_check()
+
+    def param_check(self) -> None:
+        self.envelope = Check.validate_mod(self.envelope, LMD_ENVELOPE_MODS)
+
+        # ``HILBERT_MODS`` 的成员值是 canonical 名 (``"scipy"`` 小写), 历史写法
+        # ``"Scipy"`` 直接喂给 ``HILBERT_MODS("Scipy")`` 会 ValueError; 失败后按
+        # 大小写归一再匹配一次, 最终实例上一定是 Enum 成员。
+        try:
+            self.hilbert_mod = Check.validate_mod(self.hilbert_mod, HILBERT_MODS)
+        except ValueError:
+            self.hilbert_mod = _validate_hilbert_mod(self.hilbert_mod)
+
+        if self.dtype is not None and np.dtype(self.dtype).kind != "f":
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
+
+    def config_generate(self) -> LMDConfig:
+        return LMDConfig(
+            max_pf=self.max_pf,
+            max_iter=self.max_iter,
+            eps=self.eps,
+            eps_stable=self.eps_stable,
+            min_amp=self.min_amp,
+            max_amp=self.max_amp,
+            converge_mean=self.converge_mean,
+            smooth_window=self.smooth_window,
+            envelope=self.envelope,
+            hilbert_mod=self.hilbert_mod,
+            dtype=self.dtype,
+        )
 
     def decompose(self, S, T=None) -> DecompositionResult:
         """
         Decompose the signal into product functions and a residual.
         """
-        from scipy.signal import argrelextrema, savgol_filter
+        scipy_signal = Cache.import_module("scipy.signal")
+        argrelextrema = scipy_signal.argrelextrema
+        savgol_filter = scipy_signal.savgol_filter
 
-        S, T, _N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
+        # LMD 只在样本序号上插值, 不使用外部时间轴
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name,
+                                     dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
 
-        S = np.asarray(S, dtype=np.float64).ravel()
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 会让包络除法直接报错, f16 会让样条出非有限值
+            S = Check.to_dtype(S, np.dtype(np.float64))
+
+        # 每次调用都从干净状态开始, 同一实例可反复复用
+        self.imfs = None
+        self.res = None
+
         n_samples = S.size
 
         if n_samples < 8:
@@ -179,33 +252,30 @@ class LMD(Decomposer):
         if max_pf is None:
             max_pf = int(np.log2(n_samples))
 
-        if self.envelope == "hilbert":
-            PFs, residue = self._sift_hilbert(S, n_samples, t, max_pf,
-                                              argrelextrema, savgol_filter)
-        else:
-            PFs, residue = self._sift_midpoint(S, n_samples, t, max_pf,
-                                               argrelextrema, savgol_filter)
+        match self.envelope:
+            case LMD_ENVELOPE_MODS.Hilbert:
+                PFs, residue = self._sift_hilbert(S, n_samples, t, max_pf,
+                                                  argrelextrema, savgol_filter)
+            case _:
+                PFs, residue = self._sift_midpoint(S, n_samples, t, max_pf,
+                                                   argrelextrema, savgol_filter)
 
-        IMFs = np.array(PFs, dtype=np.float64)
-        if IMFs.shape[0] == 0:
-            IMFs = np.empty((0, n_samples), dtype=np.float64)
+        self.imfs = np.array(PFs, dtype=S.dtype) if len(PFs) \
+            else np.empty((0, n_samples), dtype=S.dtype)
+        self.res = residue
+
+        info = \
+        {
+            "envelope": self.envelope,
+            "hilbert_mod": self.hilbert_mod,
+            "max_pf": max_pf,
+        }
 
         return DecompositionResult(
-            IMFs,
-            residue,
-            {"envelope": self.envelope, "hilbert_mod": self.hilbert_mod},
-            LMDConfig(
-                max_pf=max_pf,
-                max_iter=self.max_iter,
-                eps=self.eps,
-                eps_stable=self.eps_stable,
-                min_amp=self.min_amp,
-                max_amp=self.max_amp,
-                converge_mean=self.converge_mean,
-                smooth_window=self.smooth_window,
-                envelope=self.envelope,
-                hilbert_mod=self.hilbert_mod,
-            ),
+            IMFs=self.imfs,
+            Res=self.res,
+            info=info,
+            config=self.config_generate(),
         )
 
     # ------------------------------------------------------------------
@@ -246,7 +316,7 @@ class LMD(Decomposer):
                 if len(ext_idx) < 3:
                     break
 
-                ext_idx, ext_vals = get_mirror().mirror_extrema(
+                ext_idx, ext_vals = mirror_extrema(
                     ext_idx, h[ext_idx], nbsym=0,
                     edges=(float(h[0]), float(h[-1]), n_samples),
                 )
@@ -284,7 +354,7 @@ class LMD(Decomposer):
             residue -= current_pf
 
             if (
-                is_monotonic(residue) or
+                monotonic(residue, mod="monotonic", safe="safe") or
                 np.sum(residue ** 2) < self.eps_stable or
                 len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2
             ):
@@ -318,7 +388,7 @@ class LMD(Decomposer):
             if len(ext_idx) < 3:
                 break
 
-            ext_idx, ext_vals = get_mirror().mirror_extrema(
+            ext_idx, ext_vals = mirror_extrema(
                 ext_idx, h[ext_idx], nbsym=0,
                 edges=(float(h[0]), float(h[-1]), n_samples),
             )
@@ -345,7 +415,7 @@ class LMD(Decomposer):
             residue -= current_pf
 
             if (
-                is_monotonic(residue) or
+                monotonic(residue, mod="monotonic", safe="safe") or
                 np.sum(residue ** 2) < self.eps_stable or
                 len(argrelextrema(residue, np.greater)[0]) + len(argrelextrema(residue, np.less)[0]) <= 2
             ):
@@ -354,12 +424,39 @@ class LMD(Decomposer):
         return PFs, residue
 
 
+def _validate_hilbert_mod(mod) -> HILBERT_MODS:
+    """
+    Case-insensitive fallback for the ``hilbert_mod`` argument (backward
+    compatibility with the historical spelling ``"Scipy"``).
+
+    ``Check.validate_mod`` / ``HILBERT_MODS(value)`` match the **canonical**
+    member values, and ``HILBERT_MODS.Scipy`` is ``"scipy"`` (lower case), so
+    ``HILBERT_MODS("Scipy")`` raises ``ValueError``. This helper normalises the
+    string with ``str.casefold`` and matches it against the member values once
+    more; anything that still does not hit raises ``ValueError`` just like
+    ``Check.validate_mod``.
+
+    Returns
+    -------
+    HILBERT_MODS
+        The matching enum member (never the raw string).
+    """
+    if isinstance(mod, str):
+        key = mod.casefold()
+        for member in HILBERT_MODS:
+            if member.value.casefold() == key:
+                return member
+
+    raise ValueError(
+        f"the parameter of `hilbert_mod` can only be {HILBERT_MODS._member_names_}"
+    )
+
+
 def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
-    """自然三次样条插值 (经 Utils.Spline), 界外线性外延 + np.interp 兜底。"""
+    """自然三次样条插值 (scipy.interpolate.CubicSpline), 界外线性外延 + np.interp 兜底。"""
     try:
-        sp = get_spline().spline(
-            x, y, spline_kind="CubicSpline", bc_type="natural", extrapolate=True
-        )
+        interpolate = Cache.import_module("scipy.interpolate")
+        sp = interpolate.CubicSpline(x, y, bc_type="natural", extrapolate=True)
         res = sp(x_new)
     except Exception:
         res = np.interp(x_new, x, y)
@@ -379,14 +476,16 @@ def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.nda
 def _safe_interpolate_pchip(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
     """
     Shape-preserving (Pchip) interpolation for the amplitude envelope
-    (经 Utils.Spline; extrapolate=False, 界外 NaN -> np.interp 兜底)。
+    (scipy.interpolate.PchipInterpolator; extrapolate=False, 界外 NaN ->
+    np.interp 兜底)。
 
     Unlike the natural cubic spline, Pchip cannot overshoot between the data
     points, which keeps ``a_t`` within the extrema amplitude range and stops
     the multiplicative ``a_total`` explosion of the old code.
     """
     try:
-        sp = get_spline().spline(x, y, spline_kind="PCHIP", extrapolate=False)
+        interpolate = Cache.import_module("scipy.interpolate")
+        sp = interpolate.PchipInterpolator(x, y, extrapolate=False)
         res = sp(x_new)
         res = np.where(np.isnan(res), np.interp(x_new, x, y), res)
     except Exception:
@@ -400,7 +499,6 @@ def _check_convergence(m_t: np.ndarray, a_t: np.ndarray, eps: float, converge_me
     return mean_ok and envelope_ok
 
 
-"""
 def mirror_extrema(
     idx: np.ndarray,
     vals: np.ndarray,
@@ -431,7 +529,7 @@ def mirror_extrema(
     Examples
     --------
     >>> import numpy as np
-    >>> from Modal_Decomposition.Utils.Mirror import mirror_extrema
+    >>> from Modal_Decomposition.LMD import mirror_extrema
     >>> idx = np.array([5, 9]); vals = np.array([2.0, 3.0])
     >>> pos, val = mirror_extrema(idx, vals, nbsym=1)
     >>> pos.tolist()   # 1 个左镜像 + 原极值 + 1 个右镜像
@@ -504,4 +602,26 @@ def mirror_extrema(
         values = new_values
 
     return positions, values
+
+
 """
+other function for module
+"""
+def f_LMD(S: list | np.ndarray, T=None, *, max_pf: int | None = None, max_iter: int = 37, eps: float = 0.05, eps_stable: float = 1e-12, min_amp: float = 1e-12, max_amp: float = 1e12, converge_mean: float = 0.001, smooth_window: int = 5, envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint", hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy", hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+    lmd = LMD(
+        max_pf=max_pf,
+        max_iter=max_iter,
+        eps=eps,
+        eps_stable=eps_stable,
+        min_amp=min_amp,
+        max_amp=max_amp,
+        converge_mean=converge_mean,
+        smooth_window=smooth_window,
+        envelope=envelope,
+        hilbert_mod=hilbert_mod,
+        hilbert_backend=hilbert_backend,
+        dtype=dtype,
+        **kwargs
+    )
+
+    return lmd.decompose(S, T)

@@ -11,63 +11,104 @@ References
 
 import numpy as np
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import List, ClassVar
 
-from .Base import Config, Decomposer, DecompositionResult
-from ._Registry import register_class
-from .Utils import Check_Time_and_Signal
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Base import Cache
+from .Utils import Check, Check_Time_and_Signal
 
-__all__ = ["EFD", "EFDConfig"]
+__all__ = ["EFD", "EFDConfig", "f_EFD"]
 
 
+"""
+Config
+"""
 @dataclass(frozen=True, kw_only=True)
 class EFDConfig(Config):
     """
     Effective parameters of an EFD run.
     """
     max_IMFs: int
+    dtype: type | np.dtype | None
 
 
-@register_class("EFD")
+"""
+Class and Function of decomposer
+"""
 class EFD(Decomposer):
     name: ClassVar[str] = "EFD"
 
-    def __init__(self, max_IMFs: int = -1):
+    def __init__(self, max_IMFs: int = -1, dtype: type | np.dtype | None = None, **kwargs):
         """
         Parameters
         ----------
         max_IMFs : int
             Maximum number of IMFs; -1 returns all IMFs.
+        dtype : type | np.dtype | None
+            Working dtype of the returned IMFs. ``None`` keeps the input
+            precision; integer/bool inputs are promoted to float64.
         """
-        self.max_IMFs = max_IMFs
+        self.max_IMFs: int = max_IMFs
+        self.dtype: type | np.dtype | None = dtype
 
-        if not isinstance(max_IMFs, int):
+        unknown = set(kwargs) - {"safe", "copy"}
+        if unknown:
+            raise TypeError(f"unexpected keyword arguments: {unknown}")
+
+        self.safe: str = kwargs.get("safe", "unknown")
+        self.copy: bool = kwargs.get("copy", True)
+
+        self.param_check()
+
+    def param_check(self) -> None:
+        if not isinstance(self.max_IMFs, int) or isinstance(self.max_IMFs, bool):
             raise TypeError("The type of the max_IMFs must be int!")
 
-        if max_IMFs != -1 and max_IMFs <= 0:
+        if self.max_IMFs != -1 and self.max_IMFs <= 0:
             raise ValueError("Invalid value! Do you want use -1?")
+
+        if self.dtype is not None and np.dtype(self.dtype).kind != "f":
+            raise ValueError("the `dtype` must be a float numpy dtype or None.")
+
+        if not isinstance(self.copy, bool):
+            raise TypeError("the `copy` must be bool")
+
+    def config_generate(self) -> EFDConfig:
+        return EFDConfig(max_IMFs=self.max_IMFs, dtype=self.dtype)
 
     def decompose(self, S, T=None) -> DecompositionResult:
         """
         Decompose the signal into IMFs and a residual.
         """
-        from scipy.signal import argrelmax
+        scipy_signal = Cache.import_module("scipy.signal")
 
-        S, T, N = Check_Time_and_Signal(S, T, ndim={1}, method=self.name)
+        # EFD 是纯频域方法, 不使用时间轴; 用 need_T=False 省掉 arange(N) 那份临时数组
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name,
+                                     dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
 
-        # make seq 0-mean value
-        MEAN = np.mean(S)
-        S = S - np.mean(S)
+        if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):
+            S = Check.to_dtype(S, np.dtype(np.float64))
+
+        # 退化输入 (常量 / 全零): 去均值后没有能量, 频谱里也没有峰, 分不出任何模态
+        MEAN: float = float(np.mean(S))
+        S = S - MEAN
+        if float(np.max(np.abs(S))) <= np.finfo(float).tiny:
+            empty = np.empty((0, N), dtype=S.dtype)
+            return DecompositionResult(
+                IMFs=empty,
+                Res=S + MEAN,
+                info={"mean": MEAN, "fft_signal": None, "magnitude": None, "phase": None},
+                config=self.config_generate()
+            )
 
         F = np.fft.fft(S)
         magnitude = np.abs(F)
         phase = np.angle(F)
 
         edge_magnitude = magnitude[: N // 2 + 1].copy()[1:] * 2  # filter the dc(loc[0])
-        uniform_freq = np.linspace(0, np.pi, N // 2)
-        freq_N = len(uniform_freq)
+        freq_N = N // 2
 
-        local_maximum_points_tuple = argrelmax(edge_magnitude)
+        local_maximum_points_tuple = scipy_signal.argrelmax(edge_magnitude)
         local_maximum_points = local_maximum_points_tuple[0]
         local_maximum = edge_magnitude[local_maximum_points]
 
@@ -125,7 +166,7 @@ class EFD(Decomposer):
 
             IMFs.append(np.fft.ifft(full_spectrum).real)
 
-        IMFs = np.array(IMFs)
+        IMFs = np.asarray(IMFs, dtype=S.dtype) if len(IMFs) else np.empty((0, N), dtype=S.dtype)
         Res = S - np.sum(IMFs, axis=0) + MEAN
 
         info = \
@@ -140,5 +181,18 @@ class EFD(Decomposer):
             IMFs,
             Res,
             info,
-            EFDConfig(max_IMFs=self.max_IMFs),
+            self.config_generate(),
         )
+
+
+"""
+other function for module
+"""
+def f_EFD(S: list | np.ndarray, T=None, *, max_IMFs: int = -1, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+    efd = EFD(
+        max_IMFs=max_IMFs,
+        dtype=dtype,
+        **kwargs
+    )
+
+    return efd.decompose(S, T)

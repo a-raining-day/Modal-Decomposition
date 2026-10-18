@@ -346,7 +346,7 @@ class CEEMD(Decomposer):
             raise
 
 
-def f_CEEMD(S: List[int | float] | np.ndarray, *, num_imf: int, noise_amp: float = None, M: int = 25, parallel: bool = False, num_workers: int | float = 1, **kwargs) -> DecompositionResult:
+def f_CEEMD(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp: float = None, M: int = 25, parallel: bool = False, num_workers: int | float = 1, **kwargs) -> DecompositionResult:
     ceemd = CEEMD(
         num_imf=num_imf,
         noise_amp=noise_amp,

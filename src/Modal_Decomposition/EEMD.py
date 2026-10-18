@@ -27,7 +27,7 @@ Class and Function of decomposer
 class EEMD(Decomposer):
     name = "EEMD"
 
-    def __init__(self, num_imf: int = -1, noise_amp: float = 0.1, M: int = 50, parallel: bool = False, num_workers: int | float = 1, copy: bool = False, **kwargs):
+    def __init__(self, num_imf: int = -1, noise_amp: float = None, M: int = 50, parallel: bool = False, num_workers: int | float = 1, copy: bool = False, **kwargs):
         self.num_imf: int = num_imf
         self.noise_amp: float = noise_amp
         self.M: int = M
@@ -95,11 +95,12 @@ class EEMD(Decomposer):
             if not (self.num_imf > 0):
                 raise ValueError("num_imf must > 0")
 
-        if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
-            raise TypeError("noise_amp must be float or int")
+        if self.noise_amp is not None:
+            if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
+                raise TypeError("noise_amp must be float or int")
 
-        if not (self.noise_amp > 0):
-            raise ValueError("noise_amp must > 0")
+            if not (self.noise_amp > 0):
+                raise ValueError("noise_amp must > 0")
 
         if not isinstance(self.M, int) or isinstance(self.M, bool):
             raise TypeError("M must be an int")
@@ -161,7 +162,8 @@ class EEMD(Decomposer):
         # 用局部变量, 不回写 self.noise_amp —— 否则换信号复用实例时会沿用上一次推出来的幅值
         # noise_amp 是**幅值系数**: 实际注入 noise_amp × N(0, std(S))。自动档取 0.3 ——
         # Pareto 扫描显示弱音调捕获在系数≈0.3 处饱和, 再大只增加残余噪声 (≈ 系数/sqrt(M))
-        noise_std = self.noise_amp * S.std()  # 实际噪声标准差, 便于追溯
+        noise_amp: float = self.noise_amp if self.noise_amp is not None else 0.3
+        noise_std = noise_amp * S.std()  # 实际噪声标准差, 便于追溯
 
         _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.peaks_backend)
         if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
@@ -170,7 +172,7 @@ class EEMD(Decomposer):
             return DecompositionResult(
                 IMFs=self.imfs,
                 Res=self.res,
-                info={"rows": [], "min row": 0, "noise_std": noise_std, "EMD info": []},
+                info={"rows": [], "min row": 0, "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": []},
                 config=self.config_generate()
             )
 
@@ -278,7 +280,7 @@ class EEMD(Decomposer):
 
         config = self.config_generate()
         info = {"rows": rows, "min row": min(rows),
-                "noise_std": noise_std, "EMD info": EMD_info}
+                "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": EMD_info}
 
         return DecompositionResult(
             IMFs=self.imfs,

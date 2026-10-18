@@ -1,0 +1,25 @@
+{
+  "_comment": "ICEEMDAN 局部均值 M(·) 口径探针。脚本 .scratch/eemd_new/probe_local_mean.py 与 probe_mirror.py, A/4096, M=25, eps=0.2, seed=0。envelope=(上包络+下包络)/2 单次; envelope+mirror=同上但先 mirror(nbsym=4); sift=信号-E_1(信号) 即包络平均筛分到收敛。beta=none 表示不做 beta_k 缩放。",
+  "env": {
+    "python": "3.10.11",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3 (in-memory repaired)",
+    "case": "A",
+    "n": 4096,
+    "M": 25,
+    "eps": 0.2,
+    "seed": 0
+  },
+  "rows": [
+    {"local_mean": "envelope", "beta": "none",  "k": 8, "mode1": 0.8458, "mode2": 0.8108, "io": 0.5249},
+    {"local_mean": "envelope", "beta": "paper", "k": 7, "mode1": 0.8552, "mode2": 0.7966, "io": 0.6624},
+    {"local_mean": "envelope+mirror", "beta": "none", "k": 8, "mode1": 0.8676, "mode2": 0.8453, "io": 0.6893},
+    {"local_mean": "sift",     "beta": "none",  "k": 8, "mode1": 0.9974, "mode2": 0.9777, "io": 0.1139},
+    {"local_mean": "sift",     "beta": "paper", "k": 8, "mode1": 0.9971, "mode2": 0.9836, "io": 0.1062}
+  ],
+  "old_native_reference": {"k": 7, "mode1": 0.9977, "mode2": 0.9829, "io": 0.1051,
+                           "_source": "iceemdan_bench.py 实验 1 (旧算法，改口径前), A/4096, M=25, eps=0.2"},
+  "conclusion": "单次包络平均 (±beta、±边界镜像) 只能到 mode1 0.846–0.868、IO 0.52–0.69; 把包络平均筛分到收敛 (M(x)=x-E_1(x)) 才是 0.997 / 0.114, 与旧原生 0.9977 / 0.1051 吻合。beta 缩放不是主因, 单次包络平均留下的极值尺度高频残渣才是。",
+  "decision": "采用 sift 口径 (选项 B)。已实装于 ICEEMDAN_NEW.py: M(x)=x-E_1(x), 由 self.local_mean_EMD(num_imf=1, nbsym=self.nbsym) 计算; 噪声池改为单位方差, noise_amp 即 beta 里的 epsilon_0。实装后默认 noise_amp=0.2, M=100 (pareto_sweep.json 的 pick)。",
+  "caveat": "mirror 的 nbsym 必须按实际极值数 clamp: 后期残差极值少于 nbsym+1 时 mirror() 会抛 ValueError (实测 'nbsym must be <= extrema-1')。本实现不做手工 mirror —— 边界处理交给内层 EMD 的 mirror(nbsym)。"
+}

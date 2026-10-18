@@ -28,7 +28,7 @@ Class and Function of decomposer
 class CEEMD(Decomposer):
     name = "CEEMD"
 
-    def __init__(self, num_imf: int = -1, noise_amp: float = 0.1, M: int = 25, parallel: bool = False, num_workers: int | float = 1, copy: bool = False, **kwargs) -> None:
+    def __init__(self, num_imf: int = -1, noise_amp: float = None, M: int = 25, parallel: bool = False, num_workers: int | float = 1, copy: bool = False, **kwargs) -> None:
         self.num_imf = num_imf
         self.noise_amp: float = noise_amp
         self.M: int = M
@@ -96,11 +96,12 @@ class CEEMD(Decomposer):
             if not (self.num_imf > 0):
                 raise ValueError("num_imf must > 0")
 
-        if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
-            raise TypeError("noise_amp must be float or None")
+        if self.noise_amp is not None:
+            if not isinstance(self.noise_amp, (int, float)) or isinstance(self.noise_amp, bool):
+                raise TypeError("noise_amp must be float or None")
 
-        if not (self.noise_amp > 0):
-            raise ValueError("noise_amp must > 0")
+            if not (self.noise_amp > 0):
+                raise ValueError("noise_amp must > 0")
 
         if not isinstance(self.M, int) or isinstance(self.M, bool):
             raise TypeError("M must be an int")
@@ -159,7 +160,10 @@ class CEEMD(Decomposer):
         self.imfs = None
         self.res = None
 
-        noise_std = self.noise_amp * S.std()          # 实际噪声标准差, 便于追溯
+        # noise_amp 是**幅值系数**: 实际注入 noise_amp × N(0, std(S))。自动档取 0.3 ——
+        # Pareto 扫描显示互补噪声对在系数≈0.3 处弱音调捕获饱和, 再大只增加残余噪声
+        noise_amp: float = self.noise_amp if self.noise_amp is not None else 0.3
+        noise_std = noise_amp * S.std()          # 实际噪声标准差, 便于追溯
 
         _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.peaks_backend)
         if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
@@ -168,7 +172,7 @@ class CEEMD(Decomposer):
             return DecompositionResult(
                 IMFs=self.imfs,
                 Res=self.res,
-                info={"rows": [], "min row": 0, "noise_std": noise_std, "EMD info": []},
+                info={"rows": [], "min row": 0, "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": []},
                 config=self.config_generate()
             )
 
@@ -288,7 +292,7 @@ class CEEMD(Decomposer):
             self.res = S - self.imfs.sum(axis=0)
 
         config = self.config_generate()
-        info = {"rows": rows, "min row": min(r[2] for r in rows),"noise_std": noise_std, "EMD info": EMD_info}
+        info = {"rows": rows, "min row": min(r[2] for r in rows), "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": EMD_info}
 
         return DecompositionResult(
             IMFs=self.imfs,

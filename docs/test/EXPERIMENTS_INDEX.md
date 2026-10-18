@@ -15,7 +15,7 @@
 | **CEEMD** | 旧版可运行性重建与**算法差异辨析**、并行实现补齐、退化输入与 `dtype` 修复、开箱默认对比、互补性收益、Pareto 调参与默认值选择、并行崩溃检测 | `.scratch/eemd_new/ceemd_bench.py`、`legacy_ceemd.py`、`fig_ceemd.py`、`pareto.py`、`test_ceemd.py`、`test_ceemd_robust.py` | `tests/comparison/results/ceemd_new/{compare,pareto_sweep}.json` | `docs/test/CEEMD_Native_Engine_Report.md` |
 | **CEEMDAN** | 半成品补齐（10 项修复 + 3 处注释位）、**每阶 spawn 的并行分支**、四方等口径对比、`valid` 偏低成因、**主导旋钮为 `M` 的 Pareto 调参与默认值选择**、并行性能实测 | `.scratch/eemd_new/ceemdan_bench.py`、`legacy_ceemdan.py`、`fig_ceemdan.py`、`pareto.py`、`test_ceemdan.py`、`test_ceemdan_parallel.py`、`test_ceemdan_speed.py` | `tests/comparison/results/ceemdan_new/{compare,pareto_sweep}.json` | `docs/test/CEEMDAN_Native_Engine_Report.md` |
 | **ICEEMDAN** | **局部均值算子 `M(·)` 口径探针**（`x − E_1(x)` vs 单次包络平均）、半成品补齐（10 项修复 + 3 处补齐）、**每阶 spawn 的并行分支与一处竞态修复**、四方对比（旧原生是唯一同类对照）、Pareto 调参与默认值选择（`ε₀=0.2`、`M=100`）、`peaks_backend` 补齐 | `.scratch/eemd_new/iceemdan_bench.py`、`legacy_iceemdan.py`、`fig_iceemdan.py`、`test_iceemdan.py`、`test_iceemdan_parallel.py`、`probe_local_mean.py`、`probe_mirror.py` | `tests/comparison/results/iceemdan_new/{compare,pareto_sweep,local_mean_probe}.json` | `docs/test/ICEEMDAN_Native_Engine_Report.md` |
-| **RPSEMD** | **半成品补齐（13 项修复，含 `amp`/`freq` 传反这个根因）**、**「为什么这么慢」的拆解计时与聚类抽稀加速**（4096 点 `linkage` 155 → 1.8 ms、A/16384 端到端 35121 → 237.7 ms）、**瞬时频率估计器评估**（试过、无稳定收益、未采用）、**加权选簇评估**（干净双音有效、基准三例综合 Q 反降，默认不启用）、四方对比（PyEMD / pysdkit 都没有 RPSEMD，旧原生是唯一同类对照）、Pareto 调参与默认值选择（`max_clusters=4`、`sin_smaple_num=8`） | `.scratch/eemd_new/rpsemd_bench.py`、`legacy_rpsemd.py`、`fig_rpsemd.py`、`test_rpsemd.py`、`probe_rpsemd_speed.py`、`probe_rpsemd_speedup.py`、`probe_rpsemd_if.py`、`probe_rpsemd_weight.py` | `tests/comparison/results/rpsemd_new/{compare,pareto_sweep}.json` | `docs/test/RPSEMD_Native_Engine_Report.md` |
+| **RPSEMD** | **半成品补齐（13 项修复，含 `amp`/`freq` 传反这个根因）+ 两处算法规范修正（①特征只在极值点上取 ②相位网格 `2πi/I`）**、**「为什么当年那么慢」的拆解计时与 O(N²) 消失**（A/16384 端到端 35121 → 190.7 ms）、**瞬时频率估计器评估**（试过、无稳定收益、未采用）、**加权选簇评估**（双音上修伪簇、三例 Q 微升，默认不启用）、四方对比（PyEMD / pysdkit 都没有 RPSEMD，旧原生是唯一同类对照）、**近邻频率分离目标用例**（37/40–37/74 Hz：3–13 Hz 内四家都分不开，八度级上新版 RPSEMD **捕获率最高** → 设计意图兑现）、Pareto 调参与默认值选择（`max_clusters=4`、`sin_smaple_num=8`） | `.scratch/eemd_new/rpsemd_bench.py`、`legacy_rpsemd.py`、`fig_rpsemd.py`、`test_rpsemd.py`、`probe_rpsemd_speed.py`、`probe_rpsemd_speedup.py`、`probe_rpsemd_if.py`、`probe_rpsemd_weight.py`、`probe_rpsemd_close.py` | `tests/comparison/results/rpsemd_new/{compare,pareto_sweep}.json` | `docs/test/RPSEMD_Native_Engine_Report.md` |
 
 > 六份报告开头都有互换链接，且各含一节「同族一致性」，统一列出跨六个类的已知不一致
 > （噪声参数口径、`num_imf` 是否必填、`info` 键名、`register_class` 缺失、并行能力）。
@@ -43,11 +43,12 @@
 > `ICEEMDAN_Native_Engine_Report.md` §11.2）；旧源码只在提交 **`d3eec7e`**，脚本会自动回落到那里。
 > 新引擎已由 `ICEEMDAN_NEW.py` **转正为 `ICEEMDAN.py`**（584 行，提交 `833c1f4`）。
 >
-> RPSEMD 同理**没有删除记录**：旧 `RPSEMD.py`（**149 行、含 `_Registry`**）**仍在工作区**，
-> 在当前代码树上直接 import 就跑不起来，需 `.scratch/eemd_new/legacy_rpsemd.py` 打补丁复活，
-> 才能作为新旧算法对照的基线（见 `RPSEMD_Native_Engine_Report.md` §11.2）；补丁脚本优先读工作区
-> 这份源码，若工作区已被替换则回落到提交 **`833c1f4`**。**新引擎仍叫 `RPSEMD_NEW.py`（473 行），
-> 尚未转正** —— 也就是说 `RPSEMD.py` / `RPSEMD_NEW.py` 现在并存，旧的跑不起来、新的是现役实验对象。
+> RPSEMD 同理**没有删除记录**：旧 `RPSEMD.py`（**149 行、含 `_Registry`**）已随转正被取代，
+> 源码只在提交 **`833c1f4`**；在当前代码树上直接 import 就跑不起来，需
+> `.scratch/eemd_new/legacy_rpsemd.py` 打补丁复活，才能作为新旧算法对照的基线（见
+> `RPSEMD_Native_Engine_Report.md` §11.2；脚本判据是"工作区源码里还含不含 `_Registry`"，
+> 现在已不含，所以它会**自动回落到该提交取源**，运行时会打印 `旧 RPSEMD 来源: 提交 833c1f4`）。
+> **新引擎已由 `RPSEMD_NEW.py` 转正为 `RPSEMD.py`**（473 行），与另外五个引擎同一做法。
 >
 > **旧原生基线取源注意**：EEMD / CEEMD 的旧原生实现要从未转正前的提交
 > **`dd547f2`** 取回（`git show dd547f2:src/Modal_Decomposition/{EEMD,CEEMD}.py`，

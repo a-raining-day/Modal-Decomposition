@@ -31,19 +31,15 @@ Class and Function of decomposer
 class RPSEMD(Decomposer):
     name = "RPSEMD"
 
-    def __init__(self, num_imf: int = 10, separation_ratio: float = 1.5, max_clusters: int = 4, sin_smaple_num: int = 8, res_energy: float = 1e-6, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs):
+    def __init__(self, num_imf: int = -1, separation_ratio: float = 1.5, max_clusters: int = 4, sin_smaple_num: int = 8, res_energy: float = 1e-6, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs):
         self.num_imf: int = num_imf
         self.separation_ratio: float = separation_ratio
         self.max_clusters: int = max_clusters  # `-1` means while True | `None` means equal to S.size(length) | `int` means limited
         self.sin_smaple_num: int = sin_smaple_num
         self.res_energy: float = res_energy
         self.standard: bool = standard
-        # 选簇时的能量权重门限: 权重 = 簇大小 × 平均幅值; 只有 >= cluster_weight × 总权重 的簇
-        # 才参与"取最高频簇"。0 = 不过滤 (原行为)。
-        self.cluster_weight: float = cluster_weight
-        # 聚类前的抽稀上限: linkage 是 O(N^2), 而聚类只用来找中心频率, 均匀抽稀即可。
-        # 512 点时 linkage ≈1.8 ms (4096 点要 155 ms)。0 = 不抽稀。
-        self.cluster_max_samples: int = cluster_max_samples
+        self.cluster_weight: float = cluster_weight  # 选簇时的能量权重门限: 权重 = 簇大小 × 平均幅值; 只有 >= cluster_weight × 总权重 的簇才参与"取最高频簇"。0 = 不过滤 (原行为)。
+        self.cluster_max_samples: int = cluster_max_samples  # 聚类前的抽稀上限: linkage 是 O(N^2), 而聚类只用来找中心频率, 均匀抽稀即可。
         self.hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = hilbert_mod
         self.copy: bool = copy
         self.store_more_info: bool = store_more_info
@@ -222,19 +218,27 @@ class RPSEMD(Decomposer):
 
             amp, freq = self.get_instantaneous_features(analytic_signal)
 
-            # 聚类前均匀抽稀: linkage 是 O(N^2) 且每阶都调一次, 而聚类只用来确定中心频率,
-            # 抽稀后的频率分布与之几乎一致。N=4096 时 155 ms -> 1.8 ms, 整条分解快 ~20x。
-            if 0 < self.cluster_max_samples < amp.size:
-                step = int(np.ceil(amp.size / self.cluster_max_samples))
-                freq_cluster, amp_cluster = freq[::step], amp[::step]
-            else:
-                freq_cluster, amp_cluster = freq, amp
+            # 规范: 在**第一阶初步 IMF 的极值点**上取瞬时幅值/频率再去聚类, 而不是全样本。
+            # 非极值点处的相位没有物理意义, 把它们纳入聚类只会把伪簇拉进来; 而且极值点
+            # 数量远少于 N, linkage 的 O(N^2) 也就自然消失了。
+            ext_x, _, _ = find_peaks(IMF, mod="both", safe="safe")
+            if ext_x.size >= 4:
+                amp_cluster, freq_cluster = amp[ext_x], freq[ext_x]
+            else:                                  # 极值点太少, 退回全样本
+                amp_cluster, freq_cluster = amp, freq
+
+            # 兜底抽稀: 极值点仍很多时(长信号 + 高频分量)才生效
+            if 0 < self.cluster_max_samples < amp_cluster.size:
+                step = int(np.ceil(amp_cluster.size / self.cluster_max_samples))
+                freq_cluster, amp_cluster = freq_cluster[::step], amp_cluster[::step]
 
             # 注意顺序: hierarchical_clustering(x, y) 里 x 是被聚类的**频率**、y 是**幅值**。
             # 传反了会把"平均幅值"当成中心频率(>Nyquist)、把"平均瞬时频率"当成正弦幅值。
             center_freq, center_amp, cluster_info = self.hierarchical_clustering(freq_cluster, amp_cluster, max_clusters=max_clusters, compare=self.separation_ratio, standard=self.standard, cluster_weight=self.cluster_weight)
 
-            phases = np.linspace(start=0, stop=2.0 * np.pi, num=self.sin_smaple_num)
+            # 规范: θ_i = (2π/I)·i, i = 0..I-1。用 linspace(0, 2π, I) 会让末相位与首相位重复,
+            # 于是 Σ cos(2πft+θ_i) ≠ 0, 辅助正弦无法在集合平均中**精确抵消**。
+            phases = np.arange(self.sin_smaple_num) * (2.0 * np.pi / self.sin_smaple_num)
             for p in range(self.sin_smaple_num):
                 waves[p, :] = center_amp * np.cos(2 * np.pi * center_freq * T + phases[p])
 

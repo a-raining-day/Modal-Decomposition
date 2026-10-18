@@ -26,12 +26,10 @@ classifiers = [
 ]
 dependencies = [
     "numpy",
-    "EMD-signal",
-    "scipy",
     "psutil"
 ]
 
-optional-dependencies = {"cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "scipy"=["scipy"], "ewtpy"=["ewtpy"]}
+optional-dependencies = {"EMD"=["EMD-signal"], "cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "scipy"=["scipy"], "ewtpy"=["ewtpy"]}
 
 [project.urls]
 homepage = "https://github.com/a-raining-day/Modal-Decomposition"

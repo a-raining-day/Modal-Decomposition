@@ -1,8 +1,7 @@
 """
-Successive Variational Mode Decomposition
+逐次变分模态分解 (Successive Variational Mode Decomposition)。
 
-Extracts modes one after another by minimizing a variational criterion
-against the residual spectrum.
+逐个提取模态: 每次在当前残差谱上最小化变分准则, 依次得到各模态。
 
 References
 ----------
@@ -14,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Literal
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache
 from .Error import RealizationError
 from .Utils import Check, Check_Time_and_Signal
@@ -32,7 +31,7 @@ Config
 @dataclass(frozen=True, kw_only=True)
 class SVMDConfig(Config):
     """
-    Effective parameters of an SVMD run.
+    一次 SVMD 运行的实际参数。
     """
     num_modes: int
     alpha: float
@@ -64,23 +63,23 @@ class SVMD(Decomposer):
         Parameters
         ----------
         num_modes : int
-            Number of modes.
+            模态数。
         alpha : float
-            Compactness constraint.
+            紧凑度约束。
         tau : float
-            Dual-ascent step.
+            对偶上升步长。
         tol : float
-            Convergence tolerance.
+            收敛容差。
         max_iter : int
-            Maximum number of iterations.
+            最大迭代次数。
         backend : SVMD_BACKEND_MODS_ARGS | SVMD_BACKEND_MODS
-            Implementation backend, one of ``SVMD_BACKEND_MODS``. The numba
-            backend is not yet implemented and raises RealizationError.
+            实现后端, 取 ``SVMD_BACKEND_MODS`` 的成员。numba 后端尚未实现,
+            调用 ``decompose`` 时抛 ``RealizationError``。
         dtype : type | np.dtype | None
-            Working dtype of the returned modes. ``None`` keeps the input
-            precision; integer/bool inputs are promoted to float64.
+            输出模态的工作 dtype。``None`` 沿用输入精度; 整数/布尔输入提升为
+            float64。
         """
-        # 归一化口径与原实现一致: 先整数化, 再夹到 >= 1
+        # 归一化: 先整数化, 再夹到 >= 1
         self.num_modes: int = max(1, int(num_modes))
         self.alpha: float = float(alpha)
         self.tau: float = float(tau)
@@ -134,13 +133,14 @@ class SVMD(Decomposer):
             dtype=self.dtype,
         )
 
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S, T=None, output_memmap: bool = False) -> DecompositionResult:
         """
-        Decompose the signal into modes and a residual.
+        分解出各模态与残差。
 
-        The time axis is accepted for API symmetry only; SVMD works in the
-        frequency domain and never reads it.
+        时间轴只为接口对称而接收: SVMD 是纯频域方法, 从不读取它。
         """
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         scipy_fft = Cache.import_module("scipy.fft")
 
         # SVMD 是纯频域方法, 不使用时间轴; 用 need_T=False 省掉 arange(N) 那份临时数组
@@ -159,8 +159,8 @@ class SVMD(Decomposer):
         self._modes_hat = None
 
         if self.backend is SVMD_BACKEND_MODS.Numba:
-            # 原实现惰性 import 的 ._SVMD_numba 占位模块已不存在 (恒抛 RealizationError),
-            # 这里直接抛出同一个异常, 不再制造 ModuleNotFoundError。
+            # numba 后端尚未实现: 直接抛 RealizationError, 不 import 不存在的占位
+            # 模块 (那样对外只会变成 ModuleNotFoundError)。
             raise RealizationError("the numba backend of SVMD is not implemented yet; use backend='numpy'")
 
         signal = np.array(S, dtype=DEFAULT_NUMPY_TYPE).ravel()
@@ -208,9 +208,9 @@ class SVMD(Decomposer):
             for k in range(K):
                 # `sum_modes_hat` 是**全量**模态和(跨外层迭代增量维护), 因此
                 # `sum_modes_hat - modes_hat[k]` 才是 "除第 k 个之外的模态和"。
-                # 旧代码每次外层迭代都把它清零、且只累积 i<k, 于是减掉的是 k 自己的旧值,
-                # 相当于把 +u_k^old 反馈回分子; 又因 tau=0 对偶项恒为 0, 没有纠偏力,
-                # 幅值随迭代指数放大 (iters=500 时达 5e6 倍信号幅值)。
+                # 若每轮清零且只累积 i<k, 减掉的就成了 u_k 自己的旧值, 相当于把
+                # +u_k^old 反馈回分子; 又因 tau=0 时对偶项恒为 0、没有纠偏力,
+                # 幅值会随迭代指数放大。
                 u_k_old = modes_hat[k]
                 numerator = signal_hat - (sum_modes_hat - u_k_old) + 0.5 * lambda_hat
 
@@ -249,18 +249,21 @@ class SVMD(Decomposer):
         self.imfs = np.asarray(modes, dtype=S.dtype)
         self.res = np.asarray(signal - np.sum(self.imfs, axis=0, dtype=DEFAULT_NUMPY_TYPE), dtype=S.dtype)
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info={},
-            config=self.config_generate(),
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info={},
+                config=self.config_generate(),
+            ),
+            output_memmap,
         )
 
 
 """
 other function for module
 """
-def f_SVMD(S: list | np.ndarray, T=None, *, num_modes: int = 3, alpha: float = 2000.0, tau: float = 0.0, tol: float = 1e-07, max_iter: int = 500, backend: SVMD_BACKEND_MODS_ARGS | SVMD_BACKEND_MODS = "numpy", dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_SVMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, num_modes: int = 3, alpha: float = 2000.0, tau: float = 0.0, tol: float = 1e-07, max_iter: int = 500, backend: SVMD_BACKEND_MODS_ARGS | SVMD_BACKEND_MODS = "numpy", dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
     svmd = SVMD(
         num_modes=num_modes,
         alpha=alpha,
@@ -272,4 +275,4 @@ def f_SVMD(S: list | np.ndarray, T=None, *, num_modes: int = 3, alpha: float = 2
         **kwargs
     )
 
-    return svmd.decompose(S, T)
+    return svmd.decompose(S, T, output_memmap=output_memmap)

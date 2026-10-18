@@ -4,7 +4,7 @@ from typing import List
 
 from .EMD import EMD, EMDConfig
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache, set_allocable
 from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal, PEAKS_BACKEND
 
@@ -94,7 +94,7 @@ class ICEEMDAN(Decomposer):
         )
 
         # 噪声预分解器: pre_decompose_noise=True 时需要; parallel=True 也需要 (worker 无状态,
-        # 每阶的噪声 IMF 必须在阶段循环开始前就备好)。这里无条件构造, 只在用不到时闲着。
+        # 每阶的噪声 IMF 必须在阶段循环开始前就备好)。始终构造, 用不到时不参与计算。
         self.pre_decompose_EMD = EMD(
             num_imf=self.emd_pre_decompose_num_imf,
             nbsym=self.emd_nbsym,
@@ -199,7 +199,9 @@ class ICEEMDAN(Decomposer):
         )
 
 
-    def decompose(self, S: List[int | float] | np.ndarray) -> DecompositionResult:
+    def decompose(self, S: List[int | float] | np.ndarray, output_memmap: bool = False) -> DecompositionResult:
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False)
 
         if not (
@@ -213,20 +215,23 @@ class ICEEMDAN(Decomposer):
         noise_std = self.noise_amp * S.std()  # 实际噪声标准差, 便于追溯
 
         # 退化输入 (常量/全零/线性趋势/单峰/过短): 信号本身极大或极小不足 2 个, 内层 EMD 一个 IMF
-        # 也分不出来; 若照常加噪, 分出来的全是"我们加进去的噪声"。直接返回空 IMF 集, 与 EMD 对齐。
+        # 也分不出来; 若照常加噪, 分出来的全是注入的噪声。直接返回空 IMF 集, 与 EMD 对齐。
         _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.peaks_backend)
         if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
             self.imfs = np.empty((0, N), dtype=S.dtype)
             self.res = S
-            return DecompositionResult(
-                IMFs=self.imfs,
-                Res=self.res,
-                info={"noise_std": noise_std,"emd info": [], "noise emd info": [], "rows": []},
-                config=self.config_generate()
+            return finalize_output(
+                DecompositionResult(
+                    IMFs=self.imfs,
+                    Res=self.res,
+                    info={"noise_std": noise_std,"emd info": [], "noise emd info": [], "rows": []},
+                    config=self.config_generate()
+                ),
+                output_memmap,
             )
 
         original_energy = np.dot(S, S)
-        # 噪声池取 **单位方差**: 注入幅值由 β_k 决定 (见下), 若这里再乘 std(S) 会被 β_k 约掉
+        # 噪声池取 **单位方差**: 注入幅值由 β_n 决定, 若这里再乘 std(S) 会被 β_n 约掉
         noises: np.ndarray = np.random.normal(loc=0, scale=1.0, size=(self.M, N)).astype(S.dtype, copy=False)
 
         EMD_info: List[dict] = []
@@ -249,11 +254,14 @@ class ICEEMDAN(Decomposer):
                 if min_rows is None or min_rows < 1:
                     self.imfs = np.empty((0, N), dtype=S.dtype)
                     self.res = S
-                    return DecompositionResult(
-                        IMFs=self.imfs,
-                        Res=self.res,
-                        info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
-                        config=self.config_generate()
+                    return finalize_output(
+                        DecompositionResult(
+                            IMFs=self.imfs,
+                            Res=self.res,
+                            info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
+                            config=self.config_generate()
+                        ),
+                        output_memmap,
                     )
 
                 # [M, min_rows, N] —— 第 n 阶要用噪声的第 n 阶 IMF, 所以最多只能做 min_rows 阶
@@ -391,11 +399,14 @@ class ICEEMDAN(Decomposer):
             if min_rows is None or min_rows < 1:
                 self.imfs = np.empty((0, N), dtype=S.dtype)
                 self.res = S
-                return DecompositionResult(
-                    IMFs=self.imfs,
-                    Res=self.res,
-                    info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
-                    config=self.config_generate()
+                return finalize_output(
+                    DecompositionResult(
+                        IMFs=self.imfs,
+                        Res=self.res,
+                        info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
+                        config=self.config_generate()
+                    ),
+                    output_memmap,
                 )
 
             # [M, min_rows, N] —— 第 n 阶要用噪声的第 n 阶 IMF, 所以最多只能做 min_rows 阶
@@ -442,9 +453,9 @@ class ICEEMDAN(Decomposer):
                         item = queue.get(timeout=0.5)
                     except Empty:
                         if any(p is not None and not p.is_alive() for p in parallel_process):
-                            # 有进程已退出。先 join 收尸: 子进程的 Queue.put 走后台 feeder 线程,
+                            # 有进程已退出。先 join 收尾: 子进程的 Queue.put 走后台 feeder 线程,
                             # 进程刚退出时结果可能还没 flush 进管道, 直接 get_nowait 会漏。
-                            # ICEEMDAN 每阶只算两条包络, 毫秒级就结束, 这个窗口必然撞上。
+                            # 每条噪声实现每阶只跑一次局部均值算子, 毫秒级就结束, 这个窗口必然撞上。
                             for p in parallel_process:
                                 if p is not None and not p.is_alive():
                                     p.join()
@@ -527,11 +538,14 @@ class ICEEMDAN(Decomposer):
             "rows": rows,
         }
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info=info,
-            config=config
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info=info,
+                config=config
+            ),
+            output_memmap,
         )
 
     def parallel_decompose(self, S, noise_block, pointer, task):
@@ -568,7 +582,7 @@ class ICEEMDAN(Decomposer):
             raise
 
 
-def f_ICEEMDAN(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp: float | int = 0.2, M: int = 100, res_energy: float = 1e-6, nbsym: int = 4, pre_decompose_noise: bool = False, parallel: bool = False, num_workers: int = 1, **kwargs) -> DecompositionResult:
+def f_ICEEMDAN(S: List[int | float] | np.ndarray, output_memmap: bool = False, *, num_imf: int = -1, noise_amp: float | int = 0.2, M: int = 100, res_energy: float = 1e-6, nbsym: int = 4, pre_decompose_noise: bool = False, parallel: bool = False, num_workers: int = 1, **kwargs) -> DecompositionResult:
     iceemdan = ICEEMDAN(
         num_imf=num_imf,
         noise_amp=noise_amp,
@@ -581,4 +595,4 @@ def f_ICEEMDAN(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_am
         **kwargs
     )
 
-    return iceemdan.decompose(S)
+    return iceemdan.decompose(S, output_memmap=output_memmap)

@@ -3,11 +3,11 @@ Slepian (DPSS) 序列生成的统一入口 —— 三后端分发 (numpy / scipy
 
 定位
 ----
-本模块是"对外表现的生成 Slepian 序列入口": 统一参数与返回契约, 后端实现在
+本模块是对外的 Slepian 序列生成入口: 统一参数与返回契约, 后端实现在
 ``_Slepian/`` 下 (``numpy_slepian.py`` 纯 NumPy; ``C.py`` ctypes 绑定 ``_C/`` 的 C 核心;
 ``scipy`` 直接走 ``scipy.signal.windows.dpss``)。三者数值语义一致 (同一套三对角 +
 中心对称折半数学, 集中比同为 FFT 自相关法, 符号约定同 Percival & Walden 1993 pg379),
-实测互差 <= 1e-11 (见 ``docs/Slepian_Backend_Report.md``)。
+实测互差 <= 1e-11。
 
 返回契约 (三后端统一)
 --------------------
@@ -18,9 +18,9 @@ Slepian (DPSS) 序列生成的统一入口 —— 三后端分发 (numpy / scipy
 
 后端选择
 --------
-* ``mod=None`` 用 ``Base.ConstDefine.SLEPIAN_BACKEND`` (默认 "scipy", 见基准报告
-  ``docs/Slepian_Backend_Report.md`` 的选型依据); **默认路径**下若该后端不可用
-  (如 C 未编译), 发一次 ``UserWarning`` 并降级 numpy;
+* ``mod=None`` 用 ``Base.ConstDefine.SLEPIAN_BACKEND`` (默认 "scipy": 稳态最快、
+  峰值内存最低且无需构建); **默认路径**下若该后端不可用 (如 C 未编译), 发一次
+  ``UserWarning`` 并降级 numpy;
 * ``mod="auto"``: ``N`` 超过 numpy 的稠密矩阵预算 (``SLEPIAN_NUMPY_MAX_BYTES``) 且
   C 可用时用 "C", 否则用默认后端;
 * 显式 ``mod`` 不可用时按"缺依赖 → 报错"处理 (含可直接照抄的编译/安装提示)。
@@ -32,10 +32,7 @@ Lib and Version:
     scipy - 1.15.3 (可选, mod="scipy")
     _slepian_native - 本仓库编译产物 (可选, mod="C")
 
-Only accessed by: 全库 Slepian 调用点 (经 Utils.get_slepian() 惰性注册)
-
-Modify:
-    2026.9.15
+Only accessed by: 全库 Slepian 调用点 (统一经 ``Utils.slepian``)
 """
 
 import collections
@@ -113,7 +110,8 @@ def resolve_backend(N: int, mod: Literal["numpy", "scipy", "C", "auto"] = "auto"
     **仅默认路径** (``mod=None``/``"auto"``) 在后端不可用 (如 C 未编译) 时降级 numpy; 显式指定的后端不可用时由 :func:`slepian` 报错。
     """
     match mod:
-        case "auto":
+        case "auto" | None:
+            # `None` 与 `"auto"` 同义: 走默认后端
             return SLEPIAN_BACKEND
 
         case "C":
@@ -124,6 +122,8 @@ def resolve_backend(N: int, mod: Literal["numpy", "scipy", "C", "auto"] = "auto"
                     stacklevel=3,
                 )
                 return "numpy"
+            # `C` 可用时必须返回 `"C"`: 返回 `None` 会让调用方按未知后端名报 ValueError。
+            return "C"
 
         case "scipy":
             if halfBW is not None and 2.0 * float(halfBW) >= int(N):
@@ -142,12 +142,15 @@ def resolve_backend(N: int, mod: Literal["numpy", "scipy", "C", "auto"] = "auto"
                     stacklevel=3,
                 )
                 return alt
+            # 规模可行时必须返回 `"scipy"`, 否则调用方拿到 `None`。
+            return "scipy"
 
         case "numpy":
-            return mod
+            return "numpy"
 
         case _:
-            raise KeyError(f"the mod of {mod} is not supported!")
+            # 未知后端名报 ValueError, 调用方按参数错误统一捕获。
+            raise ValueError(f"the mod of {mod} is not supported!")
 
 
 # --------------------------------------------------------------------------- #

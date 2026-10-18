@@ -7,9 +7,9 @@ Empirical Wavelet Transform —— 本库默认实现 (自研经验小波滤波�
 给出单位分解光滑阶跃 β(x) (β(x)+β(1−x)=1), ``Empirical_wavelet`` 用 β 构造
 带过渡带 γ 的经验小波传递函数 ``H(w0, w1)`` (``w0=0`` 时退化为低通尺度函数)。
 
-滤波器组、边界检测、变换与逆变换全部在本库内完成, **不依赖 ewtpy**(原 ewtpy
-包装版已迁到 ``EWTpy.py``, 作为可选适配层, 注册键 ``"EWTpy"``)。已知与
-Gilles 2013 原文/ewtpy 的对应关系:
+滤波器组、边界检测、变换与逆变换全部在本库内完成, **不依赖 ewtpy**;
+依赖 ewtpy 的适配层在 ``EWTpy.py``, 注册键 ``"EWTpy"``。与 Gilles 2013
+原文/ewtpy 的对应关系:
 ``Σ_k H_k²(ω) ≡ 1`` (能量型紧框架, 逐点验证误差 < 1e-16); 而幅度型
 ``Σ_k H_k(ω)`` 在过渡带内最大到 √2, 故单次滤波所得各带之和并不等于原信号 ——
 本实现把该差额全部放进 ``Res = S − ΣIMFs``, 于是 ``reconstruct()`` 仍精确。
@@ -20,7 +20,7 @@ Gilles 2013 原文/ewtpy 的对应关系:
 不是频点下标; ``band_factor`` 是过渡带相对宽度 (0<γ<1), 过渡带为
 ``[(1−γ)w, (1+γ)w]``; 默认 ``band_factor="auto"`` 时 γ 由边界间距反推
 (见 :meth:`EWT._resolve_band_factor`), 以保证相邻过渡带不交叠、``Σ H_k² ≡ 1``
-逐点成立 —— 显式传 float 则沿用固定宽度 (旧默认 ``0.15``)。
+逐点成立 —— 显式传 float 则用固定宽度。
 
 参数类型约定
 ------------
@@ -30,9 +30,8 @@ Gilles 2013 原文/ewtpy 的对应关系:
 ``EWT_*_MODS_ARGS | EWT_*_MODS``, 内部一律经 :meth:`Utils.Check.validate_mod`
 归一成 Enum 成员后再用 ``match`` 分支 (不直接比较字符串)。
 
-"数字或字符串" 混合语义的参数只有 ``band_factor``: 数值仍是过渡带宽度
-(原语义, 原样保留为 float), 只有字符串形态 (``"auto"``) 走
-``EWT_BAND_FACTOR_MODS``。
+"数字或字符串" 混合语义的参数只有 ``band_factor``: 数值即过渡带宽度, 原样
+保留为 float; 只有字符串形态 (``"auto"``) 走 ``EWT_BAND_FACTOR_MODS``。
 
 References
 ----------
@@ -52,6 +51,8 @@ from .Define import (
     Config,
     Decomposer,
     DecompositionResult,
+    check_output_memmap,
+    finalize_output,
 )
 from .Base import Cache
 from .Utils import Check, Check_Time_and_Signal, find_peaks, mirror, slepian
@@ -83,7 +84,7 @@ __all__ = [
 
 #: ``boundary_mod``: 谱边界检测策略 (四套规则见 :meth:`EWT.boundary`)。
 EWT_BOUNDARY_MODS_ARGS = Literal["maximum", "max-min", "scale-space", "envelope"]
-#: ``band_factor``: 只有字符串 ``"auto"`` 走 Enum; 数值仍是过渡带相对宽度 γ。
+#: ``band_factor``: 只有字符串 ``"auto"`` 走 Enum; 数值即过渡带相对宽度 γ。
 EWT_BAND_FACTOR_MODS_ARGS = Literal["auto"]
 #: ``pre_deal``: 预处理分支名 (可传单个名或序列; 按 canonical 顺序施加)。
 EWT_PRE_DEAL_MODS_ARGS = Literal["no-dc", "no-trend", "window", "Slepian-Optimize", "Smooth"]
@@ -150,11 +151,11 @@ Config
 @dataclass(frozen=True, kw_only=True)
 class EWTConfig(Config):
     """
-    Effective parameters of an EWT run.
+    一次 EWT 运行的有效参数。
 
     ``band_factor`` 记录**实际使用**的 γ (``"auto"`` 在 ``decompose`` 中反推后
     落定为 float), ``fs`` 记录本次 ``decompose`` 的采样频率; 分支参数以标量字典
-    快照保存 (只放标量, 不放 numpy 数组, 其中的 ``EWT_*_MODS`` 成员是 Enum)。
+    快照保存 (只放标量, 不放 numpy 数组; 其中的 ``EWT_*_MODS`` 成员是 Enum)。
     """
     num_imfs: int
     band_factor: float | EWT_BAND_FACTOR_MODS
@@ -168,7 +169,7 @@ class EWTConfig(Config):
 
     def to_dict(self) -> dict:
         """
-        Plain-dict snapshot of the run configuration.
+        运行参数的纯 dict 快照。
 
         覆写基类 ``Config.to_dict`` (基类用的是 ``dataclasses.asdict``, 会把
         ``Enum`` 成员原样留下, 于是 ``json.dumps`` 会报 "not JSON serializable")。
@@ -201,7 +202,7 @@ class EWT(Decomposer):
 
     def __init__(
         self,
-        num_imfs: int = 5,
+        num_imfs: int = 8,
         band_factor: float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS = "auto",
         boundary_mod: EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS = "maximum",
         pre_deal: EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None = None,
@@ -210,30 +211,28 @@ class EWT(Decomposer):
         **kwargs
     ):
         """
+        构造 EWT 分解器: 校验并归一全部分支参数, 非法值在实例化时立即报错。
+
         Parameters
         ----------
         num_imfs : int
-            Number of modes (bands of the filter bank); must be >= 1. For the
-            boundary strategies it is the **maximum**: ``"maximum"`` /
-            ``"max-min"`` / ``"scale-space"`` always yield ``num_imfs`` bands,
-            while ``"envelope"`` may yield fewer (模式数由显著峰数自动确定).
+            模态数 (滤波器组的频带数), 必须 >= 1。对边界策略它是**上限**:
+            ``"maximum"`` / ``"max-min"`` / ``"scale-space"`` 恒给出 ``num_imfs``
+            个频带, ``"envelope"`` 可能更少 (模式数由显著峰数自动确定)。
         band_factor : float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS
-            Relative transition width γ of each empirical wavelet: the transition
-            occupies ``[(1−γ)w, (1+γ)w]`` around a boundary ``w``.
-            取值是 **数字或字符串** 的联合:
+            每个经验小波的过渡带相对宽度 γ: 过渡带位于边界 ``w`` 的
+            ``[(1−γ)w, (1+γ)w]`` 区间。取值是 **数字或字符串** 的联合:
 
             * ``"auto"`` (``EWT_BAND_FACTOR_MODS.Auto``, 默认) —— **按检测到的
               边界间距反推**(见 :meth:`_resolve_band_factor`): ``γ`` 取"相邻过渡带
               恰好不交叠"的上确界, 于是滤波器组满足紧框架 ``Σ_i H_i² ≡ 1``,
               幅度带和误差最小 (与 ewtpy 的自动 gamma 同法)。
-            * ``float`` (``0 < γ < 1``) —— 固定过渡带宽度, 数值语义与旧版一致;
-              γ 偏大时相邻过渡带叠加 (``Σ H² > 1``, 同一频段被重复计入),
-              偏小则频带间出现重构空档。旧版默认值为 ``0.15``。
+            * ``float`` (``0 < γ < 1``) —— 固定过渡带宽度; γ 偏大时相邻过渡带
+              叠加 (``Σ H² > 1``, 同一频段被重复计入), 偏小则频带间出现重构空档。
               数值**不**走 Enum, 参数校验后原样归一成 ``float``。
         boundary_mod : EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS
-            Spectral boundary detection strategy (integrated by
-            :meth:`boundary`; 见其文档的四套规则). 字符串或
-            ``EWT_BOUNDARY_MODS`` 成员皆可, 实例上一律存 Enum 成员。
+            谱边界检测策略 (由 :meth:`boundary` 集成, 四套规则见其文档)。字符串
+            或 ``EWT_BOUNDARY_MODS`` 成员皆可, 实例上一律存 Enum 成员。
         pre_deal : EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None
             预处理分支选择 (单个名或序列; ``None``/``"None"`` = 不预处理)。
             取值见 ``EWT_PRE_DEAL_MODS_ARGS``, 也接受对应的 ``EWT_PRE_DEAL_MODS``
@@ -248,7 +247,7 @@ class EWT(Decomposer):
             ``"Smooth"`` (幅度谱平滑, 默认**不开启**) 用于抑制伪峰、让
             ``maximum`` 也能给出贴合的边界, 代价是噪声下抖动变大。
         mirror : bool
-            ``True`` (default): 频域滤波在**端点镜像延拓**后的信号上进行
+            ``True`` (默认): 频域滤波在**端点镜像延拓**后的信号上进行
             (``Utils.mirror`` 的 ``mod="mirror"``, 每端镜像 ``N//2`` 个样本,
             长度 ``2N``, 轴长与原信号共享 ``0…fs/2``), 逆变换后取中间 ``N`` 点 ——
             同 ewtpy 的 ``fMirr`` 处理, 抑制频域滤波的环形卷积边界效应。
@@ -256,8 +255,8 @@ class EWT(Decomposer):
             卷积)。两种取值下**边界检测都在原信号谱上**做, 故 ``boundaries``
             相同; 滤波结果与代价不同 (镜像多一次 ``rfft`` 且轴长翻倍)。
         dtype : type | np.dtype | None
-            Working dtype of the returned IMFs. ``None`` keeps the input
-            precision; integer/bool/f16 inputs are promoted to float64.
+            返回 IMF 的工作 dtype。None 保留输入精度; int/bool/f16 输入会被提升
+            到 float64。
         **kwargs
             分支参数 (未传入即用默认值, 见 ``PRE_DEAL_DEFAULTS`` /
             ``BOUNDARY_DEFAULTS``; 字符串取值一律经 ``Check.validate_mod``
@@ -316,7 +315,7 @@ class EWT(Decomposer):
         if not isinstance(self.num_imfs, int) or isinstance(self.num_imfs, bool) or self.num_imfs < 1:
             raise ValueError(f"num_imfs must be an int >= 1, got {self.num_imfs!r}")
 
-        # band_factor 是 "数字或字符串" 的联合: 数值原样保留 (原语义), 只有字符串
+        # band_factor 是 "数字或字符串" 的联合: 数值原样保留为 float, 只有字符串
         # 形态 ("auto") 走 Enum; 实例上最终只可能是 float 或 EWT_BAND_FACTOR_MODS.Auto。
         if isinstance(self.band_factor, str):
             self.band_factor = Check.validate_mod(self.band_factor, EWT_BAND_FACTOR_MODS)
@@ -401,52 +400,49 @@ class EWT(Decomposer):
             boundary_kwargs=dict(self.boundary_kwargs),
         )
 
-    def decompose(self, S, T=None, fs: float = 1.0) -> DecompositionResult:
+    def decompose(self, S, T=None, fs: float = 1.0, output_memmap: bool = False) -> DecompositionResult:
         """
-        Decompose the signal into ``num_imfs`` band-limited modes.
+        把信号分解为 ``num_imfs`` 个带限模态。
 
         Parameters
         ----------
         S : array-like
-            Signal (input layer ``Check_Time_and_Signal`` applies the global
-            memory policy).
+            信号 (入口 ``Check_Time_and_Signal`` 负责应用全局内存策略)。
         T : array-like, optional
-            Time axis; validated for length/duplicates/monotonicity but unused
-            by the algorithm.
+            时间轴; 只校验长度 / 重复 / 单调性, 算法本身不使用。
         fs : float
-            Sampling frequency, only used to express the frequency axis and
-            the reported boundaries in Hz (the transform itself is
-            scale-invariant).
+            采样频率, 只用于把频率轴与报告的边界表示成 Hz (变换本身与尺度无关)。
 
         Returns
         -------
         DecompositionResult
-            ``IMFs`` (num_imfs, N) real bands in ascending frequency order with
-            the working dtype of ``S`` (``dtype`` 参数 / 输入精度);
-            ``Res`` = ``S − ΣIMFs`` (so ``reconstruct()`` reproduces ``S``);
-            ``info`` with ``mfb`` (the filter bank, ``(num_imfs, N//2+1)``;
-            ``None`` on the chunked path — see below), ``boundaries``
-            (num_imfs+1, Hz), ``boundary_mod`` (字符串形态, 即 Enum 的
-            ``.value``, 与旧版返回值一致), ``residual_ratio``
-            (``‖Res‖ / ‖S‖``), ``chunked``, ``chunk_size`` and ``mirror``.
+            ``IMFs``: ``(num_imfs, N)`` 实值频带, 按频率升序, 工作 dtype 由
+            ``dtype`` 参数决定 (缺省即输入精度); ``Res`` = ``S − ΣIMFs`` (故
+            ``reconstruct()`` 能精确还原 ``S``); ``info`` 含 ``mfb`` (滤波器组,
+            ``(num_imfs, N//2+1)``; 分块路径下为 None, 见下)、``boundaries``
+            (``num_imfs+1`` 个, Hz)、``boundary_mod`` (字符串形态, 即 Enum 的
+            ``.value``)、``residual_ratio`` (``‖Res‖ / ‖S‖``)、``chunked``、
+            ``chunk_size`` 与 ``mirror``。
 
-        Mirroring (``mirror`` 参数)
-        -------------------------
+        镜像 (``mirror`` 参数)
+        ---------------------
         边界检测一律在原信号单边谱上做, 故 ``boundaries`` 与 ``mirror`` 取值无关;
         ``mirror=True`` (默认) 时滤波改在端点镜像延拓信号 (每端 ``N//2`` 个样本,
         长度 ``2N``) 上做, 逆变换后取中间 ``N`` 点, 以抑制频域滤波的环形卷积
         边界效应 (ewtpy 的 ``fMirr`` 同法); ``mirror=False`` 时即对原长度信号做
         循环卷积。
 
-        Filtering paths (滤波器组的两条路径)
-        ----------------------------------
+        滤波的两条路径
+        -------------
         滤波器组自身的体积 (``num_imfs × (N//2+1) × 8`` 字节) 达到
         ``Define.BIG_ARRAY`` 时不再一次性物化整张滤波器组, 改为分块 +
         ``Operator`` 算子逐块求值, 并逐模态落定 ——
         每模态只保留一条单边带谱 ``(N//2+1,)`` 复数组, 工作集与 ``num_imfs``
         解耦 (``info["chunked"]`` 为 True, ``info["mfb"]`` 为 None); 未达阈值
-        时沿用一次性物化的向量化路径, 两条路径逐元素结果一致。
+        时走一次性物化的向量化路径, 两条路径逐元素结果一致。
         """
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         S, N = Check_Time_and_Signal(
             S, T=T, ndim={1}, method=self.name, dtype=self.dtype,
             need_T=False, safe=self.safe, copy=self.copy,
@@ -519,9 +515,9 @@ class EWT(Decomposer):
         if self.modal is None or self.modal.shape != (n_bands, N):
             self.modal = np.zeros((n_bands, N), dtype=DEFAULT_NUMPY_TYPE)
 
-        # 大数组判据: 滤波器组自身的体积 (n_bands × n_bins, float64) 是否达到
-        # Define.BIG_ARRAY。达到则不物化整张滤波器组, 改为分块 + 算子逐块求值,
-        # 并逐模态落定 (工作集与频带数解耦, 只留一条带谱)。
+        # 大数组判据: 滤波器组体积 (n_bands × n_bins, float64) 达到 Define.BIG_ARRAY
+        # 时不物化整张滤波器组, 改为分块 + 算子逐块求值, 并逐模态落定 (工作集与
+        # 频带数解耦, 只留一条带谱)。
         filter_bytes = n_bands * n_bins * np.dtype(np.float64).itemsize
         chunked = filter_bytes >= BIG_ARRAY
 
@@ -584,29 +580,32 @@ class EWT(Decomposer):
         resid_pre = S - IMFs.sum(axis=0)
         residual_ratio_pre = float(np.linalg.norm(resid_pre)) / norm_pre if norm_pre > 0.0 else 0.0
 
-        return DecompositionResult(
-            IMFs,
-            Res,
-            {
-                "mfb": self.empirical_wave,
-                "boundaries": boundary,
-                # info 里给字符串形态 (Enum 的 .value): 与旧版返回值逐字一致。
-                "boundary_mod": self.boundary_mod.value,
-                "n_bands": n_bands,
-                "band_factor": band_factor,         # 实际使用的 γ (auto 时已反推)
-                "band_factor_auto": bf_auto,
-                "pre_deal": tuple(self.pre_deal_mods),
-                "pre_deal_kwargs": dict(self.pre_deal_kwargs),
-                "boundary_kwargs": dict(self.boundary_kwargs),
-                "trend": self._trend,
-                "slepian_degraded": self._slepian_degraded,
-                "residual_ratio": residual_ratio,
-                "residual_ratio_preprocessed": residual_ratio_pre,
-                "chunked": chunked,
-                "chunk_size": chunk_size,
-                "mirror": self.mirror,
-            },
-            self.config_generate(),
+        return finalize_output(
+            DecompositionResult(
+                IMFs,
+                Res,
+                {
+                    "mfb": self.empirical_wave,
+                    "boundaries": boundary,
+                    # info 里给字符串形态 (Enum 的 .value): 调用方与序列化只认字符串。
+                    "boundary_mod": self.boundary_mod.value,
+                    "n_bands": n_bands,
+                    "band_factor": band_factor,         # 实际使用的 γ (auto 时已反推)
+                    "band_factor_auto": bf_auto,
+                    "pre_deal": tuple(self.pre_deal_mods),
+                    "pre_deal_kwargs": dict(self.pre_deal_kwargs),
+                    "boundary_kwargs": dict(self.boundary_kwargs),
+                    "trend": self._trend,
+                    "slepian_degraded": self._slepian_degraded,
+                    "residual_ratio": residual_ratio,
+                    "residual_ratio_preprocessed": residual_ratio_pre,
+                    "chunked": chunked,
+                    "chunk_size": chunk_size,
+                    "mirror": self.mirror,
+                },
+                self.config_generate(),
+            ),
+            output_memmap,
         )
 
     # ------------------------------------------------------------------ #
@@ -698,8 +697,7 @@ class EWT(Decomposer):
           ``2·fs/N·5`` Hz), box 的偶数宽会被向上取到奇数以保证窗居中。
           作用是抑制谱上由噪声/边带产生的伪峰, 使 ``maximum`` 这类"直接取前 K
           大峰"的策略同样能得到贴近真实分量的边界 —— 代价是噪声下边界抖动变大
-          (实测 multitone 稳定性 0.67 → 2.4 Hz), 故**默认不开启**;
-          详见 docs/EWT_Native_Report.md §5.4。
+          (实测 multitone 稳定性 0.67 → 2.4 Hz), 故**默认不开启**。
 
         滤波仍使用原始复数谱 ``F`` —— 与 ewtpy 一致, 本函数只改变边界检测的输入。
 
@@ -758,7 +756,7 @@ class EWT(Decomposer):
 
     def pre_deal(self, S: np.ndarray, mod="None", **kwargs) -> np.ndarray:
         """
-        时域预处理便捷入口 (保留旧名): 显式调用 :meth:`_time_domain_pre_deal`。
+        时域预处理便捷入口: 显式调用 :meth:`_time_domain_pre_deal`。
 
         频域分支 (``Slepian-Optimize`` / ``Smooth``) 需要频谱, 只能在
         ``__init__`` 的 ``pre_deal`` 中选择、由 ``decompose`` 在 ``fft`` 之后施加。
@@ -857,7 +855,7 @@ class EWT(Decomposer):
         """
         解析 ``band_factor`` -> ``(γ, 是否自动)``。
 
-        显式 float 原样返回 (不改动旧行为)。``EWT_BAND_FACTOR_MODS.Auto``
+        显式 float 原样返回。``EWT_BAND_FACTOR_MODS.Auto``
         (即字符串 ``"auto"``, 校验后已归一成 Enum) 时按**边界间距反推**:
         算子 (:func:`Operator.Empirical_wavelet.empirical_wavelet_arr`) 把边界
         ``w`` 的过渡带放在 ``[(1−γ)w, (1+γ)w]``, 于是相邻边界 ``w_i < w_{i+1}``
@@ -870,15 +868,15 @@ class EWT(Decomposer):
         ewtpy 的 ``(π−w_last)/(π+w_last)`` 项; 这些比值与频率单位无关)。
 
         .. note::
-           最高带的**滤波**上边界已被抬到 ``Nyquist/(1−γ)`` (见 ``decompose``),
-           故上端约束如今不再是"防交叠"所必需, 而是用来把 γ 压小 —— γ 越小,
+           最高带的**滤波**上边界取 ``Nyquist/(1−γ)`` (见 ``decompose``),
+           因此上端约束并不承担防交叠, 而是用来把 γ 压小 —— γ 越小,
            过渡带越窄, 幅度带和 ``Σ H`` 偏离 1 的频段就越少, 带和误差也越小
            (实测: 只用内部约束的 γ 在 white/spike 上让带和误差从 0.108/0.127
            升到 0.157/0.160)。
 
         取所有约束的最小值再乘 ``(1−1/n_bins)`` 作为"严格小于"的安全余量, 得到
         **不交叠的最大 γ** —— 此时滤波器组满足紧框架 ``Σ_i H_i² ≡ 1``, 幅度带和
-        误差最小; 而 γ 偏大 (旧默认 0.15 在边界聚拢时) 会让 2–3 条带的过渡带
+        误差最小; 而 γ 偏大 (边界聚拢时取 0.15 这种量级) 会让 2–3 条带的过渡带
         叠加, 同一频段被重复计入 (实测 ``Σ H²`` 最高 3.15)。
 
         无内部边界 (单频带) 时没有交叠约束可言, 退回固定 ``0.15``。
@@ -890,7 +888,7 @@ class EWT(Decomposer):
         interior = np.asarray(boundary, dtype=np.float64)
         interior = interior[(interior > 0.0) & (interior < nyq)]
         if interior.size == 0:
-            return 0.15, True                     # 单频带: 无约束, 用旧默认值
+            return 0.15, True                     # 单频带: 无交叠约束, 退回固定 0.15
 
         gamma = 1.0
         if interior.size >= 2:
@@ -999,8 +997,8 @@ class EWT(Decomposer):
 
         # --- 2) 按 SNR 设定硬阈值并修平 --------------------------------- #
         # 阈值 = 噪底抬升 ``envelope_snr_db`` dB: 显著峰的判据是"比噪底高
-        # snr_db". (旧实现取"比**峰值**低 snr_db 的幅度", 即把阈值抬到峰高的
-        #  ~0.71 倍, 只剩全局最大峰能过线 ⇒ n_bands 退化为 1; 见 docs/EWT_Native_Report.md)
+        # snr_db"。若改成"比峰值低 snr_db"(即取峰高的约 0.71 倍), 就只有全局最大
+        # 峰能过线, n_bands 会退化到 1。
         noise = float(np.percentile(env, float(kw["envelope_noise_pct"])))
         peak = float(np.max(env))
         tiny = 1e-300
@@ -1098,16 +1096,15 @@ BOUNDARY_DEFAULTS = {
     "scale_space_min_persist": 0.25,   # 持久度下限 (占尺度数的比例)
     "envelope_spline": EWT_ENVELOPE_SPLINE_MODS.CubicSpline.value,  # 见 ``_SPLINE_CTORS``
     "envelope_noise_pct": 10.0,        # 噪底估计分位
-    "envelope_snr_db": 3.0,            # 硬阈值比峰值低多少 dB
+    "envelope_snr_db": 3.0,            # 硬阈值 = 噪底 × 10^(dB/20): 噪底之上的抬升量
     "envelope_prominence": 0.05,       # 峰的相对突出度下限
 }
 
 #: ``**kwargs`` 里除分支参数外允许出现的库级参数 (其余键一律报 TypeError)。
 _KWARGS_ALLOWED = frozenset(PRE_DEAL_DEFAULTS) | frozenset(BOUNDARY_DEFAULTS) | {"safe", "copy"}
 
-#: 包络样条后端名 → ``scipy.interpolate`` 构造器名 (与旧 ``Utils.Spline`` 的
-#: ``SPLINE_KIND`` 同一套名字; 本文件内自持映射, 只在 envelope 分支真正用到时
-#: 才惰性导入 scipy)。键是 ``EWT_ENVELOPE_SPLINE_MODS`` 的成员值。
+#: 包络样条后端名 → ``scipy.interpolate`` 构造器名 (本文件自持映射, 只在
+#: envelope 分支真正用到时才惰性导入 scipy)。键是 ``EWT_ENVELOPE_SPLINE_MODS`` 的成员值。
 _SPLINE_CTORS = {
     EWT_ENVELOPE_SPLINE_MODS.UnivariateSpline.value: "UnivariateSpline",
     EWT_ENVELOPE_SPLINE_MODS.CubicSpline.value: "CubicSpline",
@@ -1176,8 +1173,7 @@ def _spline_fit(x, y, kind):
 
     ``kind`` 是 ``EWT_ENVELOPE_SPLINE_MODS`` 成员 (或其 ``.value``); 返回可直接
     调用的插值对象 (``UnivariateSpline`` 用 ``s=0`` 精确插值, 其余后端打开
-    ``extrapolate``, 与旧 ``Utils.Spline`` 封装的默认语义一致)。scipy 缺失时
-    只在此处报错, 不影响 EWT 的其余分支。
+    ``extrapolate``)。scipy 缺失时只在此处报错, 不影响 EWT 的其余分支。
     """
     kind = Check.validate_mod(kind, EWT_ENVELOPE_SPLINE_MODS)
     ctor_name = _SPLINE_CTORS[kind.value]
@@ -1312,7 +1308,7 @@ def _valley_between(
 """
 other function for module
 """
-def f_EWT(S: list | np.ndarray, T=None, fs: float = 1.0, *, num_imfs: int = 5, band_factor: float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS = "auto", boundary_mod: EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS = "maximum", pre_deal: EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None = None, mirror: bool = True, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_EWT(S: list | np.ndarray, T=None, fs: float = 1.0, output_memmap: bool = False, *, num_imfs: int = 8, band_factor: float | EWT_BAND_FACTOR_MODS_ARGS | EWT_BAND_FACTOR_MODS = "auto", boundary_mod: EWT_BOUNDARY_MODS_ARGS | EWT_BOUNDARY_MODS = "maximum", pre_deal: EWT_PRE_DEAL_MODS_ARGS | Sequence[EWT_PRE_DEAL_MODS_ARGS] | None = None, mirror: bool = True, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
     ewt = EWT(
         num_imfs=num_imfs,
         band_factor=band_factor,
@@ -1323,4 +1319,4 @@ def f_EWT(S: list | np.ndarray, T=None, fs: float = 1.0, *, num_imfs: int = 5, b
         **kwargs
     )
 
-    return ewt.decompose(S, T, fs)
+    return ewt.decompose(S, T, fs=fs, output_memmap=output_memmap)

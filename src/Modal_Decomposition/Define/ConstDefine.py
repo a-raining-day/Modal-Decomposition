@@ -1,7 +1,7 @@
 """
-Size constants shared by the whole package.
+全库共用的大小常量。
 
-所有涉及分块 / 内存策略的大小常量统一从本字典取用
+所有涉及分块 / 内存策略的大小常量统一从本模块取用
 (见 ``Utils.Chunk`` / ``Utils.Check`` / ``Utils.Memory`` /
 ``Utils.Monotonicity``), 避免各模块各自书写魔数。
 """
@@ -15,7 +15,7 @@ from typing import Literal, Dict
 """
 defination: seed
 """
-# GLOBAL_SEED 现在位于 Utils/Seed.py 的 Seed 中
+# GLOBAL_SEED 定义在 Utils/Seed.py 的 Seed 类上
 
 
 """
@@ -57,16 +57,16 @@ class SAFE_MODS(Enum):
     Safe = "safe"
     Suspicious = "suspicious"
     Unknown = "unknown"
-# `unknown` means the best level for safe checking
-# `suspicious` means the middle of the best safe and the not safe checking. (This mod is not general)
-# `safe` means it's safe, don't need safe checking
+# `unknown`: 最高强度的安全校验
+# `suspicious`: 介于最强校验与不校验之间 (该档不通用)
+# `safe`: 调用方保证合法, 不做校验
 
 
 """
 definition: for FFT
 """
 #: "auto" 在小数组 (< BIG_ARRAY) 上选用的后端。默认 numpy: 零可选依赖、冷态最快;
-#: pyfftw 暖态更快但不是声明依赖, 需要时显式传 mod="pyfftw" (见 docs/FFT_Backend_Report.md)。
+#: pyfftw 暖态更快, 但不是声明依赖, 需要时显式传 mod="pyfftw"。
 FFT_BACKEND_SMALL = "numpy"
 
 #: "auto" 在大数组 (>= BIG_ARRAY) 上选用的后端。实测 >=500MB 时 numpy 既更快更省内存
@@ -117,13 +117,15 @@ EWT_SLEPIAN_MAX_SAMPLES = 1 << 15       # 32768 样本
 """
 definition: for slepian
 """
-#: 默认后端: 实测最优者 (稳态最快 + 峰值内存最低 + 零构建), 见 docs/Slepian_Backend_Report.md §6。备选: "C" (冷启动最快、调用路径不依赖 scipy,自研实现) 与 "numpy" (无 scipy 依赖, 但有 N 上限); 用 mod="C"/"auto" 可切换。
+#: 默认后端: 实测最优者 (稳态最快 + 峰值内存最低 + 零构建)。备选: "C" (冷启动最快、调用路径不依赖 scipy, 自研实现) 与 "numpy" (无 scipy 依赖, 但有 N 上限); 用 mod="C"/"auto" 可切换。
 SLEPIAN_BACKEND = "scipy"
 
-#: numpy 后端的稠密矩阵内存预算 (字节)。折半后需对 (N/2)×(N/2) 稠密矩阵做 eigh,
-#: 故 N 稍大就会 GB 级分配 (N=65536 → 8.6 GB); 超过该预算时 numpy 后端直接报错并提示改用 "C"/"scipy" (两者的内存都是 O(N))。对应样本上限 N_max = 2*sqrt(B/8)。
+# numpy 后端的稠密矩阵内存预算 (字节) 定义在 ``_Slepian/numpy_slepian.SLEPIAN_NUMPY_MAX_BYTES``:
+# 折半后需对 (N/2)×(N/2) 稠密矩阵做 eigh, 故 N 稍大就是 GB 级分配 (N=65536 → 8.6 GB);
+# 超过该预算时 numpy 后端直接报错并提示改用 "C"/"scipy" (两者的内存都是 O(N))。
+# 对应样本上限 N_max = 2*sqrt(B/8)。
 
-#: scipy 后端的固有规模限制 ``scipy.signal.windows.dpss`` 要求 ``NW < M/2``
+#: scipy 后端的固有规模限制: ``scipy.signal.windows.dpss`` 要求 ``NW < M/2``
 #: (即 ``2*halfBW < N``); 不满足时该后端必然抛 ValueError, 此时按下面的顺序改用其他后端 (默认参数 NW=3.0 时即 N <= 6)。
 SLEPIAN_SMALL_N_ORDER = \
 [

@@ -2,8 +2,9 @@
 
 - 日期：2026-10-17
 - 环境：Python 3.10.11 · numpy 2.2.6 · scipy 1.15.3 · matplotlib 3.10.9
-- 被测方法：`src/Modal_Decomposition/NoisyEnvelopeIteration.py` 中的
+- 被测方法：`explore/denoise/envelope_iteration.py` 中的
   `NoisyEnvelopeMeanIteration(S, iterations, noise_amp, M)`
+  （原在 `src/Modal_Decomposition/`，因属实验代码已移出包）
 - 实验代码：`explore/denoise/`
 - 原始结果：`explore/denoise/results/benchmark.json`
 - 汇总结果：`explore/denoise/results/{summary.csv,ranking.csv,summary.json}`

@@ -1,3 +1,5 @@
+"""多项式最小二乘拟合与求值；``Utils`` 层的无状态数值工具，供包络/极值等模块调用。"""
+
 import numpy as np
 from .Check import Check
 from ..Define import SAFE_ARGS

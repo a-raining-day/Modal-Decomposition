@@ -1,8 +1,9 @@
 """
-Filtered Mode Decomposition
+Filtered Mode Decomposition (FMD)。
 
-Extracts modes by iteratively updating a finite-impulse-response filter
-that maximizes a periodic kurtosis criterion.
+迭代更新一个有限脉冲响应 (FIR) 滤波器, 使周期峭度 (periodic kurtosis) 准则
+最大化, 据此逐阶提取窄带模态; 每阶模态确定后从残差中扣除, 直到模态数达到上限、
+残差能量足够小或残差极值不足。
 
 References
 ----------
@@ -14,7 +15,7 @@ import warnings
 from dataclasses import dataclass
 from typing import ClassVar
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, SAFE_MODS, SAFE_ARGS
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, SAFE_MODS, SAFE_ARGS, check_output_memmap, finalize_output
 from .Base import Cache, Seed, Global_Seed
 from .Utils import Check, Check_Time_and_Signal
 
@@ -22,12 +23,12 @@ __all__ = ["FMD", "FMDConfig", "f_FMD"]
 
 
 """
-Config
+配置
 """
 @dataclass(frozen=True, kw_only=True)
 class FMDConfig(Config):
     """
-    Effective parameters of an FMD run.
+    一次 FMD 运行的有效参数快照 (实例参数校验后固化, 供结果回查)。
     """
     M: int | None
     L_factor: int
@@ -40,7 +41,7 @@ class FMDConfig(Config):
 
 
 """
-Class and Function of decomposer
+分解器类与入口函数
 """
 class FMD(Decomposer):
     name: ClassVar[str] = "FMD"
@@ -61,23 +62,21 @@ class FMD(Decomposer):
         Parameters
         ----------
         M : int | None
-            Period of the target mode; None estimates it automatically.
+            目标模态的周期; None 时自动估计。
         L_factor : int
-            Filter length factor: L = L_factor * M.
+            滤波器长度系数: L = L_factor * M。
         K : int
-            Maximum number of modes; -1 decomposes completely.
+            模态数上限; -1 表示完全分解 (上限取 ``log2(N) + 2``)。
         max_iter : int
-            Maximum iterations per mode.
+            每阶滤波器的最大迭代次数。
         tol : float
-            Filter update tolerance.
+            滤波器更新的收敛容差 (本次与上次系数差的范数)。
         num_hand : int | None
-            Number of random filter candidates; None estimates it
-            automatically.
+            随机初始滤波器的候选个数; None 时按信噪比 / 复杂度自动估计。
         seed : int | None
-            Local random seed. Overridden by a global seed when both are set.
+            本地随机种子; 与全局种子同时设置时由全局种子覆盖。
         dtype : type | np.dtype | None
-            Working dtype of the returned modes. ``None`` keeps the input
-            precision; integer/bool inputs are promoted to float64.
+            返回模态的工作 dtype。None 沿用输入精度; int / bool 输入提升为 float64。
         """
         self.M: int | None = M
         self.L_factor: int = L_factor
@@ -167,14 +166,16 @@ class FMD(Decomposer):
             dtype=self.dtype,
         )
 
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S, T=None, output_memmap: bool = False) -> DecompositionResult:
         """
-        Decompose the signal into modes and a residual.
+        分解信号得到各阶模态与残差。
 
-        The time axis is validated but not used by the algorithm. FMD 把模态
-        全部累积在**局部变量**里 (实例上不存在 imfs/res 之类的跨调用状态),
-        所以同一实例的第二次调用天然从干净状态开始, 不会沿用上次结果。
+        时间轴只参与校验, 不参与算法。模态全部累积在**局部变量**里 (实例上不存在
+        imfs / res 之类的跨调用状态), 所以同一实例的第二次调用天然从干净状态开始,
+        不会沿用上次结果。
         """
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         scipy_signal = Cache.import_module("scipy.signal")
         scipy_linalg = Cache.import_module("scipy.linalg")
 
@@ -194,11 +195,14 @@ class FMD(Decomposer):
 
         # 退化输入 (常量 / 全零): 没有任何可分离的周期成分, 直接返回空模态 + 原信号
         if N < 10 or np.allclose(S, S[0], atol=1e-8):
-            return DecompositionResult(
-                IMFs=np.empty((0, N), dtype=S.dtype),
-                Res=np.array(S, copy=True),
-                info={"M": None, "L": None, "num_hand": None, "modes": 0, "seed": effective_seed},
-                config=self.config_generate(),
+            return finalize_output(
+                DecompositionResult(
+                    IMFs=np.empty((0, N), dtype=S.dtype),
+                    Res=np.array(S, copy=True),
+                    info={"M": None, "L": None, "num_hand": None, "modes": 0, "seed": effective_seed},
+                    config=self.config_generate(),
+                ),
+                output_memmap,
             )
 
         rng = np.random.default_rng(effective_seed)
@@ -222,11 +226,10 @@ class FMD(Decomposer):
         residual = S_norm.copy()
         modes_list = []
 
-        # K == -1 (decompose completely) used to loop forever on noisy
-        # signals: the "window too small" test below uses the constant N
-        # (never shrinks), the 1e-10 energy threshold is unreachable, and a
-        # noisy residual always has >= 3 extrema. Bound the auto mode count
-        # by log2(N) + 2 (the same convention as LMD/ICEEMDAN auto limits).
+        # K == -1 是"完全分解", 但不能靠下面两个收尾条件停下来: "窗口太小" 判断
+        # 用的是常数 N (窗口从不收缩), 1e-10 的能量阈值对噪声残差不可达, 而噪声
+        # 残差恒有 >= 3 个极值。自动模态数因此按 log2(N) + 2 设上限 (LMD 的自动
+        # 阶数取 log2(N), 这里在同样量级上留 2 阶余量)。
         k_limit = int(np.log2(N)) + 2 if self.K == -1 else self.K
 
         k = 0
@@ -302,9 +305,9 @@ class FMD(Decomposer):
 
             mode = _bounded_convolution(x, h)
 
-            # 单位范数的带通滤波器对窄带分量有约 sqrt(L) 的固有增益 (单音输入可放大
-            # 十几倍), 直接相减会让残差逐阶放大、最后数值发散 (512 点、K=10 时可放大
-            # 到 1e3 倍)。用最小二乘投影把模态标定回残差的量纲:
+            # 单位范数的带通滤波器对窄带分量有约 sqrt(L) 的固有增益 (单音输入可放
+            # 大十几倍), 直接相减会让残差逐阶放大并最终数值发散。用最小二乘投影把
+            # 模态标定回残差的量纲:
             #     alpha = <x, mode> / <mode, mode>
             # 于是 ||x - alpha*mode|| <= ||x||, 残差能量单调不增; 只改幅度, 不改模态
             # 形状, 也不改算法结构。
@@ -347,17 +350,20 @@ class FMD(Decomposer):
             "seed": effective_seed,
         }
 
-        return DecompositionResult(
-            IMFs=IMFs,
-            Res=Res,
-            info=info,
-            config=self.config_generate(),
+        return finalize_output(
+            DecompositionResult(
+                IMFs=IMFs,
+                Res=Res,
+                info=info,
+                config=self.config_generate(),
+            ),
+            output_memmap,
         )
 
 
 def _resolve_seed(local_seed: int | None, method: str) -> int | None:
     """
-    两级随机种子解析 (全局 > 本地 > 默认), 对应已删除的 ``Utils.resolve_seed``。
+    两级随机种子解析 (全局 > 本地 > 默认)。
 
     ``Base.Seed`` 的 GLOBAL_SEED 恒定非 None (默认 42), 所以把 "仍等于导入时的
     默认值" 视为 "全局种子没有被显式设置": 此时优先本地 seed, 两者都没有就退回
@@ -385,7 +391,7 @@ def _auto_estimate_num_candidates(signal: np.ndarray, M: int, L: int, fs: float)
 
     complexity = _estimate_signal_complexity(signal)
 
-    base_num = 10  # base num
+    base_num = 10  # 候选基数, 下面按信噪比 / 复杂度 / 长度 / 周期追加后裁剪到 [5, 70]
 
     if snr_estimate < 10:
         base_num += 20
@@ -555,9 +561,10 @@ def _bounded_convolution(x: np.ndarray, h: np.ndarray) -> np.ndarray:
 
 
 """
-other function for module
+模块级便捷入口
 """
-def f_FMD(S: list | np.ndarray, T=None, *, M: int | None = None, L_factor: int = 10, K: int = 10, max_iter: int = 50, tol: float = 1e-06, num_hand: int | None = None, seed: int | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_FMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, M: int | None = None, L_factor: int = 10, K: int = 10, max_iter: int = 50, tol: float = 1e-06, num_hand: int | None = None, seed: int | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+    """构造 :class:`FMD` 并调用 :meth:`FMD.decompose`, 参数与构造器一致。"""
     fmd = FMD(
         M=M,
         L_factor=L_factor,
@@ -570,4 +577,4 @@ def f_FMD(S: list | np.ndarray, T=None, *, M: int | None = None, L_factor: int =
         **kwargs
     )
 
-    return fmd.decompose(S, T)
+    return fmd.decompose(S, T, output_memmap=output_memmap)

@@ -4,7 +4,7 @@ from typing import List
 
 from .EMD import EMD, EMDConfig
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache, set_allocable
 from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal, PEAKS_BACKEND
 
@@ -149,7 +149,9 @@ class EEMD(Decomposer):
         )
 
 
-    def decompose(self, S: List[int | float] | np.ndarray) -> DecompositionResult:
+    def decompose(self, S: List[int | float] | np.ndarray, output_memmap: bool = False) -> DecompositionResult:
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, copy=self.copy)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
@@ -161,7 +163,7 @@ class EEMD(Decomposer):
 
         # 用局部变量, 不回写 self.noise_amp —— 否则换信号复用实例时会沿用上一次推出来的幅值
         # noise_amp 是**幅值系数**: 实际注入 noise_amp × N(0, std(S))。自动档取 0.3 ——
-        # Pareto 扫描显示弱音调捕获在系数≈0.3 处饱和, 再大只增加残余噪声 (≈ 系数/sqrt(M))
+        # 系数 0.3 时弱音调捕获已饱和, 再大只增加残余噪声 (≈ 系数/sqrt(M))
         noise_amp: float = self.noise_amp if self.noise_amp is not None else 0.3
         noise_std = noise_amp * S.std()  # 实际噪声标准差, 便于追溯
 
@@ -169,11 +171,14 @@ class EEMD(Decomposer):
         if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
             self.imfs = np.empty((0, N), dtype=S.dtype)
             self.res = S
-            return DecompositionResult(
-                IMFs=self.imfs,
-                Res=self.res,
-                info={"rows": [], "min row": 0, "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": []},
-                config=self.config_generate()
+            return finalize_output(
+                DecompositionResult(
+                    IMFs=self.imfs,
+                    Res=self.res,
+                    info={"rows": [], "min row": 0, "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": []},
+                    config=self.config_generate()
+                ),
+                output_memmap,
             )
 
         rows = []
@@ -275,18 +280,21 @@ class EEMD(Decomposer):
                 self.imfs += item[1][:min_row]
                 EMD_info.extend(item[4])
 
-            self.imfs /= self.M  # 回传的是各进程累积和, 这里统一求全集成的算术平均
+            self.imfs /= self.M  # 回传的是各进程的累积和, 除以 M 得到全集成的算术平均
             self.res = S - self.imfs.sum(axis=0)
 
         config = self.config_generate()
         info = {"rows": rows, "min row": min(rows),
                 "noise_amp": noise_amp, "noise_std": noise_std, "EMD info": EMD_info}
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info=info,
-            config=config
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info=info,
+                config=config
+            ),
+            output_memmap,
         )
 
     def parallel_decompose(self, S, noise_std, pointer, task):
@@ -294,8 +302,8 @@ class EEMD(Decomposer):
         单个工作进程: 只负责自己那段试验 (task["start"] .. task["end"])。
 
         与串行分支一样先累积求和, 再把 (序号, 累积和, 试验数, 各行数, EMD info) 通过
-        ``pointer`` (mp.Queue) 交回父进程; 平均由父进程统一做 —— 只重绑局部名的写法
-        拿不到子进程结果 (原来的 ``pointer = EMDResult`` 就是这个错)。
+        ``pointer`` (mp.Queue) 交回父进程; 平均由父进程统一做。子进程里对局部名的重绑定
+        不会传回父进程, 结果只能经队列回传。
         """
         acc = None
         rows = []
@@ -327,7 +335,7 @@ class EEMD(Decomposer):
             pointer.put(("error", task["index"], f"{type(exc).__name__}: {exc}"))
             raise
 
-def f_EEMD(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp: float = None, M: int = 50, parallel: bool = False, num_workers: int | float = 1, **kwargs) -> DecompositionResult:
+def f_EEMD(S: List[int | float] | np.ndarray, output_memmap: bool = False, *, num_imf: int = -1, noise_amp: float = None, M: int = 50, parallel: bool = False, num_workers: int | float = 1, **kwargs) -> DecompositionResult:
     eemd = EEMD(
         num_imf=num_imf,
         noise_amp=noise_amp,
@@ -337,4 +345,4 @@ def f_EEMD(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp: f
         **kwargs
     )
 
-    return eemd.decompose(S)
+    return eemd.decompose(S, output_memmap=output_memmap)

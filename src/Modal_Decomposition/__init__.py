@@ -45,6 +45,8 @@ from .SVMD import SVMD, f_SVMD, SVMDConfig
 __all__ = [
     "Class",
     "Function",
+    "set_seed",
+    "get_seed",
     "__version__",
     "__author__",
     "__email__",
@@ -59,6 +61,48 @@ __email__ = "2215269365@qq.com"
 __license__ = "Apache 2.0"
 __url__ = "https://github.com/a-raining-day/Modal-Decomposition"
 __description__ = "A comprehensive modal decomposition library"
+
+
+def set_seed(seed: int, lock: bool = False, verbose: bool = True) -> int:
+    """
+    设置进程级全局随机种子。
+
+    同时写入两处, 因为库里两种随机源并存:
+
+    * ``Base.Seed.GLOBAL_SEED`` —— 由 FMD 等显式读种子的方法使用;
+    * ``numpy`` 全局 RNG (``np.random.seed``) —— 由 EEMD / CEEMD / CEEMDAN /
+      ICEEMDAN 等直接调用 ``np.random.normal`` 的加噪方法使用。
+
+    Returns
+    -------
+    int
+        设置后的全局种子。
+    """
+    np.random.seed(int(seed))
+    return Seed.set(seed, lock=lock, verbose=verbose)
+
+
+def get_seed() -> int:
+    """读取当前进程级全局随机种子。"""
+    return Seed.get()
+
+
+def _facade(name: str):
+    """
+    把模块级 ``f_X`` 包成 ``Function.X``：保留真实签名 (``__wrapped__`` 让
+    ``inspect.signature`` 跟随) 与 docstring, 但 ``__qualname__`` 记为
+    ``Function.X``, 便于自省与测试识别门面入口。
+    """
+    target = globals()[f"f_{name}"]
+
+    def facade(*args, **kwargs):
+        return target(*args, **kwargs)
+
+    facade.__wrapped__ = target
+    facade.__doc__ = target.__doc__
+    facade.__name__ = name
+    facade.__qualname__ = f"Function.{name}"
+    return staticmethod(facade)
 
 
 class Class:
@@ -81,19 +125,19 @@ class Class:
 
 
 class Function:
-    EMD = f_EMD
-    EEMD = f_EEMD
-    CEEMD = f_CEEMD
-    CEEMDAN = f_CEEMDAN
-    ICEEMDAN = f_ICEEMDAN
-    RPSEMD = f_RPSEMD
+    EMD = _facade("EMD")
+    EEMD = _facade("EEMD")
+    CEEMD = _facade("CEEMD")
+    CEEMDAN = _facade("CEEMDAN")
+    ICEEMDAN = _facade("ICEEMDAN")
+    RPSEMD = _facade("RPSEMD")
 
-    EFD = f_EFD
-    CEEFD = f_CEEFD
-    MEMD = f_MEMD
-    SSA = f_SSA
-    FMD = f_FMD
-    LMD = f_LMD
-    VMD = f_VMD
-    EWT = f_EWT
-    SVMD = f_SVMD
+    EFD = _facade("EFD")
+    CEEFD = _facade("CEEFD")
+    MEMD = _facade("MEMD")
+    SSA = _facade("SSA")
+    FMD = _facade("FMD")
+    LMD = _facade("LMD")
+    VMD = _facade("VMD")
+    EWT = _facade("EWT")
+    SVMD = _facade("SVMD")

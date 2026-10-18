@@ -26,16 +26,12 @@ Implementation details in this package:
                         compiled ``_fht_native`` Cython kernel (SAO "am" C
                         code, see setup.py). **Power-of-two lengths only** —
                         the kernel zero-pads, which changes the analytic
-                        signal (see docs/test/Hilbert_Backend_Report.md §5.2);
+                        signal;
 * ``_scipy_backend``  — thin ``scipy.signal.hilbert`` wrapper;
 * ``_fir`` / ``_kramers_kronig`` / ``_wave`` / ``_forth_order_wave`` —
   reserved empty placeholders (0 bytes);
 * ``_fht_native``     — the optional compiled accelerator (``.pyx``/``.c``/
                         ``.pyd`` live in this directory).
-
-Measured cost / accuracy of the three backends:
-``docs/test/Hilbert_Backend_Report.md`` (raw numbers:
-``docs/test/Hilbert_Backend_Results.json``).
 
 Import the public API through ``..Hilbert`` instead of reaching into this
 package.
@@ -115,8 +111,7 @@ def hilbert(
     ------
     ValueError
         For an unknown spline_kind name, or for a declared-but-unimplemented
-        one (the docstring used to promise ``NotImplementedError`` — see
-        ``docs/test/Hilbert_Backend_Report.md`` §8).
+        one.
     """
     mod = Check.validate_mod(mod, HILBERT_MODS)
 

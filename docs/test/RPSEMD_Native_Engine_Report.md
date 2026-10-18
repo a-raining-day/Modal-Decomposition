@@ -150,7 +150,7 @@ RPSEMD 与前面 EMD / EEMD / CEEMD / CEEMDAN / ICEEMDAN 的差别，一句话�
        ↑ 这两条数组**已经只在极值点上取过样**（规范①，§3.3）；极值点太少时才退回全样本
 1. standard=True: x_cluster = (x − mean(x)) / std(x)     # 只用 z 分数做聚类，不改 x 本身
 2. Z = scipy.linkage(x_cluster.reshape(-1, 1), method="ward")
-3. 从 2 簇开始逐个加簇，直到**所有簇对的中心频率比** max/min > separation_ratio（默认 1.5）：
+3. 从 2 簇开始逐个加簇，直到**所有簇对的中心频率比** max/min > separation_ratio（默认 1.2）：
       lo, hi = min(x_i, x_j), max(x_i, x_j)
       ratio  = hi / lo        # |lo| <= 1e-12 时记 +inf，避免除零（§3 #13）
       只要还有一对 ratio <= separation_ratio 就继续加簇
@@ -504,7 +504,7 @@ conj 变体，得先按"极值点取样"重写探针；本轮没做，因此 §5
 
 | 项 | 结果 |
 |---|---|
-| 默认构造 | `num_imf=10, separation_ratio=1.5, max_clusters=4, sin_smaple_num=8, cluster_weight=0.0, cluster_max_samples=512, hilbert_mod=FFT` |
+| 默认构造 | `num_imf=-1, separation_ratio=1.2, max_clusters=4, sin_smaple_num=4, cluster_weight=0.0, cluster_max_samples=512, hilbert_mod=FFT` |
 | 默认分解（A/512） | `k=7`、重构 **4.44e-16**、286 ms |
 | `info` 键（默认） | `cluster_infos / each_center_amp / each_center_freq / each_amp / each_freq / each_phases / rows`（后三个为 `None`） |
 | `num_imf = 1 / 3 / 10` | `k = 1 / 3 / **7**`，重构 **2.22e-16 / 2.22e-16 / 4.44e-16**，`rows = 1 / 3 / 7`（与 `k` 一致） |
@@ -781,6 +781,21 @@ RPSEMD 论文里的卖点是"用确定频率的辅助正弦把**靠得很近**�
 
 ---
 
+### 9.6 默认值变更记录（A/1024 单例 Pareto）
+
+§9.2–§9.5 记录的是 **A/B/C 三例复合 Q** 的扫描，结论是 `sin_smaple_num=8`、`separation_ratio=1.5`。
+此后又按 **A/1024 单例**（`Q = 0.5·模式捕获 + 0.5·(1−正交性指数)`）做了一轮 15 方法统一扫描
+（`tests/comparison/results/pareto/`），该口径下 `sin_smaple_num=4, separation_ratio=1.2` 明显更优，
+**据此把默认值改为 `separation_ratio=1.2`、`sin_smaple_num=4`**：
+
+| 口径 | 默认参数 | Q | 来源 |
+|---|---|---|---|
+| A/B/C 三例复合（§9.2） | `ratio=1.5, sin_num=8` | 0.7613 | `results/rpsemd_new/pareto_sweep.json` |
+| A/1024 单例（现行默认） | `ratio=1.2, sin_num=4` | **0.5891** | `results/pareto/RPSEMD.json` |
+
+新默认在 A/512 上实测 `k=6`、重构 `4.44e-16`、`282 ms`（A/1024 为 `k=10`、`31 ms`）。
+两个口径的 Q 不可直接比较（用例与度量都不同），本节只记录"默认值是按哪个口径定的"。
+
 ## 10. 架构与参数
 
 ### 10.1 参数表
@@ -788,9 +803,9 @@ RPSEMD 论文里的卖点是"用确定频率的辅助正弦把**靠得很近**�
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `num_imf` | **`10`** | 目标阶数；`-1` = 不设阶段上限，由停止判据定阶。**本族里唯一一个默认给正整数阶数的类** |
-| `separation_ratio` | **`1.5`** | 簇分离阈值：两个簇的中心频率比 `max/min > separation_ratio` 才算"分离"；论文推荐 1.5 |
+| `separation_ratio` | **`1.2`** | 簇分离阈值：两个簇的中心频率比 `max/min > separation_ratio` 才算"分离"；论文推荐 1.5 |
 | `max_clusters` | **`4`** | 最大簇数；`-1` = 不限（试到样本数）/ `None` = 信号长度 / `int ≥ 2`。**注意 `range(2, max_clusters)` 是开区间**，`4` 最多试到 3 簇 |
-| `sin_smaple_num` | **`8`** | 每阶辅助正弦的相位数（= 每阶额外的 `EMD(num_imf=1)` 次数）；相位网格 `θ_i = (2π/I)·i`（规范②，§3.4），**不是** `linspace(0, 2π, I)` |
+| `sin_smaple_num` | **`4`** | 每阶辅助正弦的相位数（= 每阶额外的 `EMD(num_imf=1)` 次数）；相位网格 `θ_i = (2π/I)·i`（规范②，§3.4），**不是** `linspace(0, 2π, I)` |
 | `res_energy` | `1e-6` | 残差能量门限（相对 `‖S₀‖²`） |
 | `standard` | `True` | 聚类时对频率用 z 分数；**返回值换回物理量纲**（§2.2 #5） |
 | `cluster_weight` | `0.0` | 选簇的能量权重门限（簇大小 × 平均幅值）；**已评估，默认不启用**（§6） |

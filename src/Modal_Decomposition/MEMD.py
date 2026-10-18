@@ -1,8 +1,8 @@
 """
-Multivariate Empirical Mode Decomposition
+Multivariate Empirical Mode Decomposition (多元经验模态分解)。
 
-Projects a multichannel signal onto direction vectors sampled on a
-hypersphere and averages the per-direction envelopes.
+把多通道信号投影到超球面上采样得到的方向向量, 对每个方向的投影取极值样条包络,
+再对 k 个方向的方向均值求平均作为局部均值。
 
 References
 ----------
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Literal
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache
 from .Utils import Check, Check_Time_and_Signal, monotonic
 
@@ -40,10 +40,9 @@ Config
 @dataclass(frozen=True, kw_only=True)
 class MEMDConfig(Config):
     """
-    Effective parameters of a MEMD run.
+    一次 MEMD 运行的有效参数。
 
-    ``d`` / ``k`` / ``max_imf`` hold the effective values of the last run,
-    i.e. ``None`` arguments are already resolved from the signal shape.
+    ``d`` / ``k`` / ``max_imf`` 存的是最近一次运行的实际取值, 即 ``None`` 已按信号形状解析完毕。
     """
     d: int | None
     k: int | None
@@ -75,20 +74,19 @@ class MEMD(Decomposer):
         Parameters
         ----------
         d : int | None
-            Number of channels; None infers it from the signal.
+            通道数; ``None`` 时由信号形状推断。
         k : int | None
-            Number of directional vectors; None selects d * 128.
+            方向向量个数; ``None`` 时取 d * 128。
         max_imf : int | None
-            Maximum number of IMFs; None selects log2(N).
+            最大 IMF 阶数; ``None`` 时取 log2(N)。
         sd_thresh : float
-            Sifting stopping threshold.
+            筛分停止阈值 (相邻两次筛分的标准差之比)。
         max_iter : int
-            Maximum sifting iterations per IMF.
+            每阶 IMF 的最大筛分迭代次数。
         spline_kind : MEMD_SPLINE_MODS | MEMD_SPLINE_MODS_ARGS
-            Interpolation kind for envelope fitting (``interp1d`` kind).
+            包络插值方式 (``interp1d`` 的 kind)。
         dtype : type | np.dtype | None
-            Working dtype of the returned IMFs. ``None`` keeps the input
-            precision; integer/bool inputs are promoted to float64.
+            返回 IMF 的工作 dtype。``None`` 沿用输入精度; int/bool 输入提升为 float64。
         """
         self.d: int | None = d
         self.k: int | None = k
@@ -172,16 +170,17 @@ class MEMD(Decomposer):
             dtype=self.dtype,
         )
 
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S, T=None, output_memmap: bool = False) -> DecompositionResult:
         """
-        Decompose the multichannel signal into IMFs and a residual.
+        把多通道信号分解为 IMF 与残差。
 
-        A 1-D signal is treated as a single channel ``(1, N)`` and keeps the
-        univariate ``(k, N)`` layout on the way out; a genuine 2-D input
-        ``(d, N)`` -- channels on the first axis -- returns ``(k, d, N)``.
-        The now axis is validated but not used by the algorithm.
+        1-D 输入按单通道 ``(1, N)`` 处理, 返回时仍给一元的 ``(k, N)`` 布局;
+        真正的 2-D 输入 ``(d, N)`` -- 通道在第一轴 -- 返回 ``(k, d, N)``。
+        时间轴会被校验但不参与计算。
         """
-        # 每次调用都从干净状态开始 (校验失败也不留下上一轮的结果)
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
+        # 每次调用都从干净状态开始 (参数校验失败也不残留上一次的结果)
         self.imfs = None
         self.res = None
         self._effective = None
@@ -210,7 +209,7 @@ class MEMD(Decomposer):
 
         T_axis = np.arange(N, dtype=np.float64)
 
-        vectors = _generate_hammersley_points(k, d)  # shape: (d, k)
+        vectors = _generate_hammersley_points(k, d)  # 形状: (d, k)
 
         imfs = []
         residue = S.copy()
@@ -239,7 +238,7 @@ class MEMD(Decomposer):
                 break
 
         if imfs:
-            imfs_array = np.asarray(imfs, dtype=S.dtype)  # shape: (n_imfs, d, N)
+            imfs_array = np.asarray(imfs, dtype=S.dtype)  # 形状: (n_imfs, d, N)
         else:
             imfs_array = np.empty((0, d, N), dtype=S.dtype)
 
@@ -251,11 +250,14 @@ class MEMD(Decomposer):
         self.res = np.asarray(residue, dtype=S.dtype)
         self._effective = (d, k, max_imf)
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info={},
-            config=self.config_generate(),
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info={},
+                config=self.config_generate(),
+            ),
+            output_memmap,
         )
 
 
@@ -283,7 +285,7 @@ def _generate_hammersley_points(k, d):
 
 
 def _radical_inverse_vdc(index):
-    """Van der Corput."""
+    """基 2 的 Van der Corput 反演值 (Hammersley 点的第一维)。"""
     bits = index
     bits = (bits << 16) | (bits >> 16)
     bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1)
@@ -327,9 +329,9 @@ def _generate_primes(n):
 
 def _compute_local_mean(signal, vectors, T, spline_kind: MEMD_SPLINE_MODS_ARGS | MEMD_SPLINE_MODS = "linear"):
     """
-    signal: now (d, N)
-    vectors: directional vectors (d, k)
-    T: now axis
+    signal: 输入信号 (d, N)
+    vectors: 方向向量 (d, k)
+    T: 时间轴
     """
     spline_kind = Check.validate_mod(spline_kind, MEMD_SPLINE_MODS)
 
@@ -413,7 +415,7 @@ def _should_stop(residue):
 """
 other function for module
 """
-def f_MEMD(S: list | np.ndarray, T=None, *, d: int | None = None, k: int | None = None, max_imf: int | None = None, sd_thresh: float = 0.2, max_iter: int = 10, spline_kind: MEMD_SPLINE_MODS_ARGS | MEMD_SPLINE_MODS = "linear", dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_MEMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, d: int | None = None, k: int | None = None, max_imf: int | None = None, sd_thresh: float = 0.2, max_iter: int = 10, spline_kind: MEMD_SPLINE_MODS_ARGS | MEMD_SPLINE_MODS = "linear", dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
     memd = MEMD(
         d=d,
         k=k,
@@ -425,4 +427,4 @@ def f_MEMD(S: list | np.ndarray, T=None, *, d: int | None = None, k: int | None 
         **kwargs
     )
 
-    return memd.decompose(S, T)
+    return memd.decompose(S, T, output_memmap=output_memmap)

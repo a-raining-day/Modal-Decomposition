@@ -38,20 +38,29 @@ Memmap
 _MM_FILES: dict = {}
 _ERROR_FILES: set = set()
 
-def temp_memmap(shape, dtype=np.float64, temp_dir: Optional[str]=None) -> np.memmap | None:
+def temp_memmap(shape, dtype=np.float64, temp_dir: Optional[str]=None, *, persist: bool=False) -> np.memmap | None:
     """Create a writable temporary memmap in the system temp dir.
 
-    The backing file is registered in ``_MM_FILES`` and deleted at
-    interpreter exit (the ``mmap`` handle is closed first — required on
-    Windows); the OS temp cleaner is the fallback for hard-killed processes.
+    Parameters
+    ----------
+    persist : bool, default False
+        ``False`` 时后备文件登记进 ``_MM_FILES``，由 :func:`cleanup_memmaps` 或
+        解释器退出时删除（先关 ``mmap`` 句柄再删 —— Windows 上顺序不能反）；
+        操作系统临时目录清理器是硬杀进程时的兜底。
+        ``True`` 时文件**不登记**：本函数与 :func:`cleanup_memmaps` 都不会删它，
+        所有权交给调用方，适合需要跨进程 / 跨会话保留的结果。
     """
+    if type(persist) is not bool:
+        raise TypeError(f"`persist` must be bool, get {type(persist).__name__}!")
+
     global _MM_FILES, _ERROR_FILES
     fd, path = tempfile.mkstemp(prefix="md_memmap_", suffix=".dat", dir=temp_dir)
     os.close(fd)
 
     try:
         mm = np.memmap(path, dtype=np.dtype(dtype), mode="w+", shape=tuple(shape))
-        _MM_FILES[path] = mm
+        if not persist:
+            _MM_FILES[path] = mm
         return mm
     except BaseException as be:
         warn(f"Error happen when constructing the memmap\n>> {be}")

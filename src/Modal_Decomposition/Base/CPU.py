@@ -27,7 +27,7 @@ def total_cpu() -> int:
 
     return cpu_num
 
-def set_allocable(value: int | float) -> int:  # TODO: 还没有处理如果多个线程分配 cpu 的问题
+def set_allocable(value: int | float) -> int:
     """
     set allocable_cpu_num.
     int means cpu num, [1, total];
@@ -42,7 +42,7 @@ def set_allocable(value: int | float) -> int:  # TODO: 还没有处理如果多�
         raise TypeError(f"value must be int or float, got {value!r}")
 
     if isinstance(value, int):
-        # 0 < value <= total, -1 means all.
+        # 整数是绝对核数：取值 0 < value <= cpu_num；-1 是"全部"哨兵，等价于 cpu_num。
         if value == -1:
             allocable_cpu_num = cpu_num
             return allocable_cpu_num

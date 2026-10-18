@@ -114,15 +114,15 @@ def envelope(S: np.ndarray, method: ENVELOPE_MODS_ARGS | ENVELOPE_MODS = "Hilber
         return _SCIPY_SIGNAL.filtfilt(b, a, data)
 
     match method:
-        case "Hilbert":
+        case ENVELOPE_MODS.Hilbert:
             analytic = hilbert(S, mod=hilbert_mod, **kwargs)
             env = np.abs(analytic)
 
-        case "Lowpass":
+        case ENVELOPE_MODS.Lowpass:
             env_rect = np.abs(S)
             env = (np.pi / 2.0) * _lowpass(env_rect, cutoff=cf)
 
-        case "IQ":
+        case ENVELOPE_MODS.IQ:
             T = np.arange(len(S)) / fs
             i_comp = S * np.cos(2 * np.pi * fc * T)
             q_comp = S * np.sin(2 * np.pi * fc * T)
@@ -132,7 +132,7 @@ def envelope(S: np.ndarray, method: ENVELOPE_MODS_ARGS | ENVELOPE_MODS = "Hilber
 
             env = 2 * np.sqrt(i_base ** 2 + q_base ** 2)
 
-        case "PeakInterpolation":
+        case ENVELOPE_MODS.Peak:
             result = peak(S, **kwargs)
             x = result[0]
             y = result[1]

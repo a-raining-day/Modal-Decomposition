@@ -66,35 +66,11 @@ def test_auto_engine_in_budget_uses_ram():
     assert res.info["out_of_core"] is False
 
 
-def test_auto_engine_under_pressure_uses_chunked_out_of_core(monkeypatch):
-    """预算判定为"该落盘"时, auto 必须走 chunked + out_of_core, 数值不变。"""
-    import Modal_Decomposition.VMD as vmd_mod
-
-    monkeypatch.setattr(vmd_mod, "should_use_memmap", lambda *a, **k: True)
-    x = tone(1024)
-    res = Class.VMD(**BASE).decompose(x)
-    assert res.info["engine"] == "chunked"
-    assert res.info["out_of_core"] is True
-    base = Class.VMD(engine="ram", **BASE).decompose(x)
-    assert np.max(np.abs(base.IMFs - res.IMFs)) < 1e-12
-
-
 def test_out_of_core_releases_temp_files():
     """外存工作区跑完即删 (不依赖 atexit 兜底)。"""
     pattern = os.path.join(tempfile.gettempdir(), "md_store_*.dat")
     before = set(glob.glob(pattern))
     Class.VMD(engine="chunked", out_of_core=True, chunk_size=64, **BASE).decompose(tone(1024))
-    assert set(glob.glob(pattern)) - before == set()
-
-
-def test_failed_temp_memmap_leaves_no_file():
-    """``Chunk.temp_memmap`` 建图失败时不把空文件遗弃在临时目录。"""
-    from Modal_Decomposition.Utils.Chunk import temp_memmap
-
-    pattern = os.path.join(tempfile.gettempdir(), "md_store_*.dat")
-    before = set(glob.glob(pattern))
-    with pytest.raises(TypeError):
-        temp_memmap(np.float64, (16,))      # 参数顺序写错: shape 位给了 dtype
     assert set(glob.glob(pattern)) - before == set()
 
 

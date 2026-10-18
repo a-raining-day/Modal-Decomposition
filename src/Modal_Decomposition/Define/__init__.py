@@ -1,6 +1,8 @@
 from .ClassDefine import (
     DecompositionResult,
-    Decomposer
+    Decomposer,
+    check_output_memmap,
+    finalize_output,
 )
 from .ConfigDefine import Config
 from .PathDefine import (

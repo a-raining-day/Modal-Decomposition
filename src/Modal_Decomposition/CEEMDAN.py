@@ -4,7 +4,7 @@ from typing import List
 
 from .EMD import EMD, EMDConfig
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache, set_allocable
 from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal, PEAKS_BACKEND
 
@@ -94,7 +94,7 @@ class CEEMDAN(Decomposer):
         )
 
         # 噪声预分解器: pre_decompose_noise=True 时需要; parallel=True 也需要 (worker 无状态,
-        # 每阶的噪声 IMF 必须在阶段循环开始前就备好)。这里无条件构造, 只在用不到时闲着。
+        # 每阶的噪声 IMF 必须在阶段循环开始前就备好)。始终构造, 用不到时不参与计算。
         self.pre_decompose_EMD = EMD(
             num_imf=self.emd_pre_decompose_num_imf,
             nbsym=self.emd_nbsym,
@@ -177,7 +177,7 @@ class CEEMDAN(Decomposer):
             pre_decompose_EMD_config=self.pre_decompose_EMD.config_generate() if self.pre_decompose_noise else None
         )
 
-    def decompose(self, S: List[int | float] | np.ndarray) -> DecompositionResult:
+    def decompose(self, S: List[int | float] | np.ndarray, output_memmap: bool = False) -> DecompositionResult:
         """
         Complementary EEMD with Adaptive Noise (CEEMDAN)。
 
@@ -186,10 +186,11 @@ class CEEMDAN(Decomposer):
 
         ``E_1(·)`` 就是内层 ``EMD(num_imf=1)``, 每次只剥一阶; ``E_k(w_m)`` 是第 m 个噪声实现的
         第 k 阶 IMF。噪声口径与 EEMD/CEEMD 一致: ``noise_amp`` 是**幅值系数**, 实际噪声为
-        ``noise_amp × N(0, std(S))``。因此第 1 阶加的是原始噪声、第 k 阶加的是噪声自己的第 k 阶
-        IMF —— 两者都不再额外缩放 (原实现里的 ``noises[m] / noise_amp * S.std()`` 会把系数约掉,
-        等于该参数失效, 且与第 k 阶不缩放的做法不自洽)。
+        ``noise_amp × N(0, std(S))``, 生成时即乘好, 因此第 1 阶加的是原始噪声、第 k 阶加的是
+        噪声自己的第 k 阶 IMF —— 两项都不再额外缩放, 该幅值系数才在两阶上一致生效。
         """
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, copy=self.copy)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 输入会在 avg_env /= 2 处直接 UFuncTypeError, f16 会让样条报非有限值
@@ -202,17 +203,20 @@ class CEEMDAN(Decomposer):
         noise_std = self.noise_amp * S.std()          # 实际噪声标准差, 便于追溯
 
         # 退化输入 (常量/全零/线性趋势/单峰/过短): 信号本身极大或极小不足 2 个, 内层 EMD 一个 IMF
-        # 也分不出来; 若照常加噪, 分出来的全是"我们加进去的噪声"。直接返回空 IMF 集, 与 EMD 对齐。
+        # 也分不出来; 若照常加噪, 分出来的全是注入的噪声。直接返回空 IMF 集, 与 EMD 对齐。
         _, _, peak_max = find_peaks(S, mod="both", safe="safe", backend=self.peaks_backend)
         if np.sum(peak_max) < 2 or np.sum(~peak_max) < 2:
             self.imfs = np.empty((0, N), dtype=S.dtype)
             self.res = S
-            return DecompositionResult(
-                IMFs=self.imfs,
-                Res=self.res,
-                info={"noise_std": noise_std,
-                      "emd info": [], "noise emd info": [], "rows": []},
-                config=self.config_generate()
+            return finalize_output(
+                DecompositionResult(
+                    IMFs=self.imfs,
+                    Res=self.res,
+                    info={"noise_std": noise_std,
+                          "emd info": [], "noise emd info": [], "rows": []},
+                    config=self.config_generate()
+                ),
+                output_memmap,
             )
 
         original_energy = np.dot(S, S)
@@ -252,11 +256,14 @@ class CEEMDAN(Decomposer):
                 if min_rows is None or min_rows < 1:
                     self.imfs = np.empty((0, N), dtype=S.dtype)
                     self.res = S
-                    return DecompositionResult(
-                        IMFs=self.imfs,
-                        Res=self.res,
-                        info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
-                        config=self.config_generate()
+                    return finalize_output(
+                        DecompositionResult(
+                            IMFs=self.imfs,
+                            Res=self.res,
+                            info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
+                            config=self.config_generate()
+                        ),
+                        output_memmap,
                     )
 
                 # [M, min rows, N] —— 各实现的阶数可能不同, 统一截到最小的那个;
@@ -361,11 +368,14 @@ class CEEMDAN(Decomposer):
             if min_rows is None or min_rows < 1:
                 self.imfs = np.empty((0, N), dtype=S.dtype)
                 self.res = S
-                return DecompositionResult(
-                    IMFs=self.imfs,
-                    Res=self.res,
-                    info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
-                    config=self.config_generate()
+                return finalize_output(
+                    DecompositionResult(
+                        IMFs=self.imfs,
+                        Res=self.res,
+                        info={"noise_std": noise_std, "emd info": EMD_info, "noise emd info": noisy_EMD_info, "rows": rows},
+                        config=self.config_generate()
+                    ),
+                    output_memmap,
                 )
 
             # [M, min rows, N] —— 第 k 阶要用噪声的第 k-1 阶, 所以最多只能做到 min_rows + 1 阶
@@ -389,8 +399,8 @@ class CEEMDAN(Decomposer):
             S_work: np.ndarray = S
 
             # 与串行分支的差别只在"本阶由谁算": 相邻阶是串行依赖的 (第 k 阶要第 k-1 阶的全局
-            # 平均残差), 所以不能像 EEMD/CEEMD 那样把整个分解交给一个 worker; 这里每阶 spawn
-            # 一批 worker, 收齐本阶的 M 个 E_1 之和后再进入下一阶。
+            # 平均残差), 所以不能像 EEMD/CEEMD 那样把整个分解交给一个 worker; 父进程每阶
+            # spawn 一批 worker, 收齐本阶的 M 个 E_1 之和后再进入下一阶。
             from queue import Empty
 
             while True:
@@ -507,11 +517,14 @@ class CEEMDAN(Decomposer):
             "rows": rows,
         }
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info=info,
-            config=config
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info=info,
+                config=config
+            ),
+            output_memmap,
         )
 
     def parallel_decompose(self, S, noise_block, pointer, task):
@@ -548,7 +561,7 @@ class CEEMDAN(Decomposer):
             raise
 
 
-def f_CEEMDAN(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp: float = 0.3, res_energy: float = 1e-6, M: int = 50, pre_decompose_noise: bool = False, parallel: bool = False, num_workers: int = 1, faster: bool = True, **kwargs) -> DecompositionResult:
+def f_CEEMDAN(S: List[int | float] | np.ndarray, output_memmap: bool = False, *, num_imf: int = -1, noise_amp: float = 0.3, res_energy: float = 1e-6, M: int = 50, pre_decompose_noise: bool = False, parallel: bool = False, num_workers: int = 1, faster: bool = True, **kwargs) -> DecompositionResult:
     ceemdan = CEEMDAN(
         num_imf=num_imf,
         noise_amp=noise_amp,
@@ -561,4 +574,4 @@ def f_CEEMDAN(S: List[int | float] | np.ndarray, *, num_imf: int = -1, noise_amp
         **kwargs,
     )
 
-    return ceemdan.decompose(S)
+    return ceemdan.decompose(S, output_memmap=output_memmap)

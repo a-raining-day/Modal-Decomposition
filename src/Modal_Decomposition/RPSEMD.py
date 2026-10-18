@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List, Tuple
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, SAFE_MODS, SAFE_ARGS
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, SAFE_MODS, SAFE_ARGS, check_output_memmap, finalize_output
 from .Base import Cache
 from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal, hilbert, HILBERT_MODS, HILBERT_MODS_ARGS
 
@@ -31,14 +31,14 @@ Class and Function of decomposer
 class RPSEMD(Decomposer):
     name = "RPSEMD"
 
-    def __init__(self, num_imf: int = -1, separation_ratio: float = 1.5, max_clusters: int = 4, sin_smaple_num: int = 8, res_energy: float = 1e-6, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs):
+    def __init__(self, num_imf: int = -1, separation_ratio: float = 1.2, max_clusters: int = 4, sin_smaple_num: int = 4, res_energy: float = 1e-6, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs):
         self.num_imf: int = num_imf
         self.separation_ratio: float = separation_ratio
-        self.max_clusters: int = max_clusters  # `-1` means while True | `None` means equal to S.size(length) | `int` means limited
+        self.max_clusters: int = max_clusters  # `-1` = 不设上限 (逐个试到满足分离条件) | `None` = 取信号长度 | `int` = 设上限
         self.sin_smaple_num: int = sin_smaple_num
         self.res_energy: float = res_energy
         self.standard: bool = standard
-        self.cluster_weight: float = cluster_weight  # 选簇时的能量权重门限: 权重 = 簇大小 × 平均幅值; 只有 >= cluster_weight × 总权重 的簇才参与"取最高频簇"。0 = 不过滤 (原行为)。
+        self.cluster_weight: float = cluster_weight  # 选簇时的能量权重门限: 权重 = 簇大小 × 平均幅值; 只有 >= cluster_weight × 总权重 的簇才参与"取最高频簇"。0 = 不过滤。
         self.cluster_max_samples: int = cluster_max_samples  # 聚类前的抽稀上限: linkage 是 O(N^2), 而聚类只用来找中心频率, 均匀抽稀即可。
         self.hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = hilbert_mod
         self.copy: bool = copy
@@ -174,7 +174,9 @@ class RPSEMD(Decomposer):
         )
 
 
-    def decompose(self, S: List[int | float] | np.ndarray) -> DecompositionResult:
+    def decompose(self, S: List[int | float] | np.ndarray, output_memmap: bool = False) -> DecompositionResult:
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         S, T, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=True, safe=self.safe, copy=self.copy)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 会让 S -= float 直接报错; f16 会让内层 EMD 的样条出非有限值
@@ -232,7 +234,7 @@ class RPSEMD(Decomposer):
                 step = int(np.ceil(amp_cluster.size / self.cluster_max_samples))
                 freq_cluster, amp_cluster = freq_cluster[::step], amp_cluster[::step]
 
-            # 注意顺序: hierarchical_clustering(x, y) 里 x 是被聚类的**频率**、y 是**幅值**。
+            # 参数顺序: hierarchical_clustering(x, y) 里 x 是被聚类的**频率**、y 是**幅值**。
             # 传反了会把"平均幅值"当成中心频率(>Nyquist)、把"平均瞬时频率"当成正弦幅值。
             center_freq, center_amp, cluster_info = self.hierarchical_clustering(freq_cluster, amp_cluster, max_clusters=max_clusters, compare=self.separation_ratio, standard=self.standard, cluster_weight=self.cluster_weight)
 
@@ -308,11 +310,14 @@ class RPSEMD(Decomposer):
             "rows": n_imf,
         }
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info=info,
-            config=config
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info=info,
+                config=config
+            ),
+            output_memmap,
         )
 
 
@@ -446,12 +451,12 @@ class RPSEMD(Decomposer):
                 best_n_clusters = 2
                 best_labels = sch.fcluster(Z, best_n_clusters, criterion='maxclust')
 
-        # 找到频率最高的簇（目标内在模态）。注意: 簇划分用的是 z 分数,
+        # 找到频率最高的簇（目标内在模态）。簇划分用的是 z 分数,
         # 但目标簇的"中心频率/平均幅值"必须回到**物理量纲** (x 本身)。
         #
         # cluster_weight > 0 时先按"能量权重"过滤: 权重 = 簇大小 × 平均幅值。Hilbert 变换的
         # 边界跳变会在 Nyquist 附近造出**样本少、幅值尖**的小簇, 它常常是最高频簇, 于是被
-        # 当成目标频率 —— 过滤掉权重可忽略的簇即可避开。cluster_weight=0 时与原行为逐位相同。
+        # 当成目标频率 —— 过滤掉权重可忽略的簇即可避开。cluster_weight=0 时不过滤任何簇。
         cluster_x = {}
         cluster_w = {}
         for label in set(best_labels):
@@ -480,7 +485,7 @@ class RPSEMD(Decomposer):
 """
 other function for module
 """
-def f_RPSEMD(S: List[int | float] | np.ndarray, *, num_imf: int = -1, separation_ratio: float = 1.5, max_clusters: int = 4, sin_smaple_num: int = 8, res_energy: float = 1e-06, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs) -> DecompositionResult:
+def f_RPSEMD(S: List[int | float] | np.ndarray, output_memmap: bool = False, *, num_imf: int = -1, separation_ratio: float = 1.2, max_clusters: int = 4, sin_smaple_num: int = 4, res_energy: float = 1e-06, standard: bool = True, cluster_weight: float = 0.0, cluster_max_samples: int = 512, hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = "FFT", copy: bool = True, store_more_info: bool = False, **kwargs) -> DecompositionResult:
     rpsemd = RPSEMD(
         num_imf=num_imf,
         separation_ratio=separation_ratio,
@@ -496,4 +501,4 @@ def f_RPSEMD(S: List[int | float] | np.ndarray, *, num_imf: int = -1, separation
         **kwargs
     )
 
-    return rpsemd.decompose(S)
+    return rpsemd.decompose(S, output_memmap=output_memmap)

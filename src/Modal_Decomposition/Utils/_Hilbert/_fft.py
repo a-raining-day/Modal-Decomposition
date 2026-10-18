@@ -1,14 +1,10 @@
-# src/Modal_Decomposition/Utils/_Hilbert/_fft.py
-"""``"FFT"`` 后端 —— 实半谱 (rfft/irfft) 解析信号。
-
-本文件原为 0 字节占位符；现承载 ``HILBERT_MODS.FFT`` 的实现。
+"""``"FFT"`` 后端 —— 实半谱 (rfft/irfft) 解析信号，即 ``HILBERT_MODS.FFT`` 的实现。
 
 算法
 ----
 ``scipy.signal.hilbert`` 用 **两次复数 FFT**（``fft`` + ``ifft``）。本模块用
 **一次 ``rfft`` + 一次 ``irfft``**（两次*实*变换，即两个半长复 FFT），工作量约为
-scipy 的 1/2；因此在本机所有尺寸上都更快（实测 0.59–0.99×，见
-``docs/test/Hilbert_Backend_Report.md`` §3 / §7）。
+scipy 的 1/2；因此在本机所有尺寸上都更快（实测 0.59–0.99×）。
 
 数学推导
 --------

@@ -1,4 +1,3 @@
-# src/Modal_Decomposition/Utils/_Hilbert/_fht.py
 """快速 Hartley 变换 (FHT) 与 Hilbert 变换 —— 对外统一入口。
 
 本模块是 ``Modal-Decomposition`` 对外提供 FHT / Hilbert 变换的统一入口
@@ -27,9 +26,8 @@
     上面的"自动零填充"只对 ``fht_forward`` / ``fht_inverse`` /
     ``hilbert_transform`` 这三个**原语**成立。用它们算**解析信号**时, 零填充
     会非线性地改变结果 —— 非 2 的幂长度上相对 L2 误差 0.5%–6%, 逐点误差
-    O(1), 且伪影从两端按 1/距离缓慢衰减 (见
-    ``docs/test/Hilbert_Backend_Report.md`` §5.2)。因此后端入口 ``_hilbert``
-    **不再**对任意长度直接调用 SAO 内核, 而是自适应分发 (见下)。
+    O(1), 且伪影从两端按 1/距离缓慢衰减。因此后端入口 ``_hilbert``
+    对任意长度都不直接调用 SAO 内核, 而是自适应分发 (见下)。
 
 自适应分发 (``_hilbert``):
     * ``n`` 为 2 的幂且 ``n <= _SMALL_NATIVE_MAX`` (512) → SAO 编译内核
@@ -210,7 +208,7 @@ def _hilbert(signal: np.ndarray, matlab_phase: bool = True) -> np.ndarray:
     这是 Modal-Decomposition 库对外的统一入口。
     matlab_phase=True 时与 MATLAB / scipy 的相位约定一致。
 
-    自适应实现 (2026-10-19 引入; 见 docs/test/Hilbert_Backend_Report.md §7)
+    自适应实现
     ------------------------------------------------------------------
     解析信号是非局部算子, 用 SAO 的 ``hilbert()`` 时必须把输入零填充到 2 的
     幂, 这会改变结果 (相对 L2 误差 0.5%–6%)。所以本入口按尺寸选内核:

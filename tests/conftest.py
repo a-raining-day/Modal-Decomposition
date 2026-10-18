@@ -1,33 +1,31 @@
 """
 Shared pytest configuration for the Modal-Decomposition test suite.
 
-Adds src_new to sys.path so tests import the rebuilt package, and provides
-shared fixtures.
+把仓库的 ``src/`` 加入 ``sys.path`` (包未安装时也能直接 ``pytest tests/``),
+并在每个用例结束后重置进程级全局种子。
 """
 
 import sys
 from pathlib import Path
 
-SRC_NEW = Path(__file__).resolve().parents[1] / "src_new"
-if str(SRC_NEW) not in sys.path:
-    sys.path.insert(0, str(SRC_NEW))
+SRC = Path(__file__).resolve().parents[1] / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 import numpy as np
 import pytest
 
-import src.Modal_Decomposition as Modal_Decomposition
-# import Modal_Decomposition
+import Modal_Decomposition
 
-from _cases import OPTIONAL_DEPENDENCIES
+try:
+    from _cases import OPTIONAL_DEPENDENCIES
+except ImportError:                      # pytest 未把 tests/ 加入 sys.path 时
+    from tests._cases import OPTIONAL_DEPENDENCIES
 
 
 def pytest_collection_modifyitems(config, items):
     """
-    可选依赖缺失时, 自动跳过相关方法的全部用例。
-
-    ``EWTpy`` 需要可选第三方包 ``ewtpy``; 未安装时 (例如只装了
-    ``pip install Modal-Decomposition`` 而未装 extras) 不该让整个测试套件失败,
-    故在此集中打 skip, 而不是逐个测试文件写 importorskip。
+    可选依赖缺失时自动跳过相关方法的全部用例 (用例 id 里带 ``[METHOD]``)。
     """
     import importlib.util
 
@@ -65,17 +63,14 @@ def multichannel_signal(signal):
 
 @pytest.fixture(autouse=True)
 def _reset_global_seed():
-    """Keep the process-level seed isolated between tests.
-
-    ``set_seed`` 目前挂在 ``Utils`` 上 (``Modal_Decomposition.Utils.set_seed``),
-    包的 ``__init__`` 尚未导出它; 这里两种位置都兼容, 缺失时静默跳过,
-    避免整轮测试在 teardown 阶段集体报 AttributeError。
-    """
+    """把进程级全局种子恢复成默认值, 避免用例之间互相污染。"""
     yield
     setter = getattr(Modal_Decomposition, "set_seed", None)
-    if setter is None:
-        try:
-            from src.Modal_Decomposition.Utils import set_seed as setter
-        except ImportError:            # 极端情况下 Utils 也导不出
-            return
-    setter(None)
+    if setter is not None:
+        setter(42)
+        return
+    try:
+        from Modal_Decomposition.Base import Seed
+        Seed().GLOBAL_SEED = 42
+    except (ImportError, AttributeError):
+        return

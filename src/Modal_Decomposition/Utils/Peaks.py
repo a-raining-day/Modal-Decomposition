@@ -1,31 +1,37 @@
 """
-Peak detection (统一峰检测)。
+峰检测 (极大 / 极小 / 两者)。
 
-优化内容 (相对旧版)
---------------------
-- **numpy 后端修复**: 旧实现 ``logical_xor(S[:-1]-S[1:], S[1:]-S[:-1])`` 对
-  任意符号都恒为 False, 且返回的是长度 n-1 的掩码而非峰索引。现改为与
-  :func:`scipy.signal.find_peaks` 同语义的向量化检测, 返回 ``int64`` 索引;
-- **统一返回契约**: 所有后端都返回 ``(indices: np.ndarray(int64),
-  values: np.ndarray)``; ``values`` 恒为**原信号**幅值 (``mod="min"`` 也不取负);
-- **峰型与后端解耦**: ``mod`` 选峰型 (``"max"`` / ``"min"`` / ``"both"``),
-  ``backend`` 选实现 (``"numpy"`` / ``"scipy"`` / ``"numba"``); 极小内核是极大内核的
-  镜像, 不物化 ``-S``。``"both"`` 一次给出两组并按样本序归并 (O(P), 不用
-  ``argsort``), 因此**多返回一个类型掩码** ``is_max``;
-- **统一过滤参数**: numpy / numba 后端识别 ``height`` / ``threshold`` /
-  ``distance`` (scipy 语义, 按峰型方向解释), 其余键忽略 (``Envelope`` 等调用方
-  会把自家参数一并透传); scipy 后端全参数透传;
-- **依赖获取**: scipy / numba 经 ``cache.import_module`` 惰性获取 (一次
-  import, 无 try/except 样板), 移除了旧式模块级 ``Cache`` 用法;
-- **numba 分支修复**: 旧代码引用未定义变量 ``module``。现改为把向量化
-  检测内核按需 ``njit`` 编译 (``lru_cache`` 保证每进程只编译一次), 过滤
-  逻辑与 numpy 后端共用同一份 Python 代码, 保证两后端结果一致;
-- **输入校验**: 1-D、长度 >= 3、实数数值 dtype。
+``mod`` 选峰型 (``"max"`` / ``"min"`` / ``"both"``), ``backend`` 选实现
+(``"numpy"`` / ``"scipy"`` / ``"numba"``); 三个后端共享同一返回契约与过滤语义。
 
-注意: scipy 的 plateau (平台) 规则复杂 (取平台中点等), numpy / numba
-后端采用基础规则 ``S[i-1] < S[i] >= S[i+1]`` (``mod="min"`` 为其镜像
-``S[i-1] > S[i] <= S[i+1]``), 平台场景请使用 ``"scipy"`` 后端。NaN 在比较中为
-False, 不会成为峰 (与 scipy 行为一致)。
+返回契约
+--------
+所有后端返回 ``(indices: np.ndarray(int64), values: np.ndarray)``; ``values``
+恒为**原信号**幅值 (``mod="min"`` 也不取负)。``mod="both"`` 多返回一个类型掩码
+``is_max``, 两组极值按样本序归并 (O(P), 不用 ``argsort``)。
+
+过滤器
+------
+numpy / numba 后端识别 ``height`` / ``threshold`` / ``distance`` (scipy 语义,
+按峰型方向解释), 其余键忽略 (``Envelope`` 等调用方会把自家参数一并透传);
+scipy 后端全参数透传。
+
+依赖
+----
+scipy / numba 经 :meth:`Base.Cache.cache.import_module` 惰性获取 (每进程一次
+import), 缺失时 warn 并回退到 numpy 后端。numba 后端把基础检测内核按需
+``njit`` 编译 (``lru_cache`` 保证每进程只编译一次), 过滤逻辑与 numpy 后端共用
+同一份 Python 代码, 所以两者结果一致。
+
+注意事项
+--------
+scipy 的 plateau (平台) 规则复杂 (取平台中点等), numpy / numba 后端采用基础
+规则 ``S[i-1] < S[i] >= S[i+1]`` (``mod="min"`` 为其镜像
+``S[i-1] > S[i] <= S[i+1]``), 平台场景请使用 ``"scipy"`` 后端。
+
+NaN 的处理取决于 ``safe``: 默认的 ``safe="unknown"`` 会在 ``Check.to_array``
+的有限性检查处抛 ``ValueError("NaN or Inf found")``; ``safe="safe"`` 跳过该
+检查, 此时 NaN 参与比较恒为 False, 不会成为峰 (与 scipy 行为一致)。
 """
 
 import bisect
@@ -70,24 +76,26 @@ def find_peaks(
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Find peaks in a 1-D signal.
+    在 1-D 信号上检测峰 (极大 / 极小 / 两者)。
 
     Parameters
     ----------
     S : array-like
-        1-D real numeric signal (length >= 3; shorter inputs yield every index).
+        1-D 实值数值信号; ``size < 3`` 时无法判定极值方向, 走下面的短输入捷径。
     mod : {"max", "min", "both"}
         峰型: ``"max"`` (默认) 取极大 ``S[i-1] < S[i] >= S[i+1]``;
         ``"min"`` 取极小 ``S[i-1] > S[i] <= S[i+1]`` (极大内核的镜像);
         ``"both"`` 两种都要 —— 各自检测 / 各自过滤后按样本序归并,
         **多返回一个类型掩码** (见 Returns)。
     backend : {"numpy", "scipy", "numba"}
-        ``"numpy"`` (``DEFAULT_BACKEND``) — 纯 numpy 向量化实现;
+        ``"numpy"`` (默认) — 纯 numpy 向量化实现;
         ``"scipy"`` — :func:`scipy.signal.find_peaks` (全参数支持, 含 plateau 规则;
         取极小时内部对 ``-S`` 找峰);
-        ``"numba"`` — numpy 内核经 njit 编译的可选加速 (需安装 numba)。
+        ``"numba"`` — numpy 内核经 njit 编译的可选加速 (需安装 numba, 缺失时回退)。
     safe : Literal["safe", "unknown"] | SAFE_MODS
-        安全等级。unknown需要严格检查，safe不需要。
+        输入校验等级。``"unknown"`` (默认) 走 ``Check.to_array`` 的完整校验,
+        含有限性检查, 遇 NaN / Inf 抛 ``ValueError``; ``"safe"`` 跳过校验,
+        由调用方保证输入合法, 此时 NaN 不会成为峰; ``"suspicious"`` 不受支持。
     **kwargs
         过滤参数 (scipy 语义): `height` / `threshold` / `distance`, 按峰型方向
         解释 (``mod="min"`` 等价于在 ``-S`` 上施加同样的过滤)。
@@ -100,7 +108,7 @@ def find_peaks(
     -------
     (indices, values)            # mod="max" / "min"
         indices: np.ndarray (int64)
-            Peak positions
+            峰的位置
         values: np.ndarray
             S[indices] —— 原信号幅值, ``mod="min"`` 时也不取负
     (indices, values, is_max)    # mod="both"
@@ -114,14 +122,15 @@ def find_peaks(
     Raises
     ------
     ValueError
-        非 1-D / 非实数数值输入, 或未知 mod / backend。
-    Warning
-        scipy / numba 后端在对应库缺失时。
+        ``safe="unknown"`` 下非 1-D / 非实数数值 / 含 NaN 或 Inf 的输入,
+        或未知 mod / backend / safe。
+    UserWarning
+        scipy / numba 缺失时发出, 并回退到 numpy 后端 (不中断调用)。
 
     Notes
     -----
     ``S.size < 3`` 的捷径对 ``"both"`` 返回**空集 + 空掩码** (样本太短时无法区分
-    方向, 不能声称每个样本既是极大又是极小); 单峰型仍沿用旧行为 (每个下标都是峰)。
+    方向, 不能声称每个样本既是极大又是极小); 单峰型则返回全部下标 (每个样本都算峰)。
     """
     safe = Check.validate_safe(safe)
     if safe == SAFE_MODS.Suspicious:
@@ -133,7 +142,7 @@ def find_peaks(
     S = Check.to_array(S, safe=safe)
 
     if 1 <= S.size < 3:
-        # 太短: 无法区分极值方向。单峰型沿用旧行为 (每个下标都是"峰");
+        # 太短: 无法区分极值方向。单峰型返回全部下标 (每个样本都当作峰);
         # both 不能声称每个样本既是极大又是极小 -> 空集 + 空掩码。
         indices = np.array(np.arange(S.size), dtype=np.int64)
         if mod is PEAKS_MODS.Both:
@@ -157,7 +166,6 @@ def find_peaks(
     else:
         return result
 
-# 分支
 def _peaks_scipy(S: np.ndarray, mod: PEAKS_MODS, kwargs: dict):
     ss = cache.import_module("scipy.signal",verbose=False)
     if ss is None:
@@ -240,7 +248,6 @@ def _merge_both(max_idx: np.ndarray, min_idx: np.ndarray, S: np.ndarray):
 
     return idx, S[idx], is_max
 
-# 函数
 def _apply_filters(idx: np.ndarray, S: np.ndarray, mod: PEAKS_MODS, kwargs: dict) -> np.ndarray:
     """
     对候选峰应用 height / threshold / distance 过滤 (numpy/numba 共用)。
@@ -310,10 +317,3 @@ def _detect_kernel(S: np.ndarray, sign: int) -> np.ndarray:
 def _get_compiled(numba):
     """按需 njit 编译检测内核 (每进程最多编译一次)。"""
     return numba.njit(nogil=True)(_detect_kernel)
-
-if __name__ == "__main__":
-    S = np.array([0, 1, 0, 2, 0, 3, 0], dtype=np.float64)
-    idx, vals = find_peaks(S, mod="max", backend="numpy", height=1.5)
-    print(idx, vals)
-    idx, vals = find_peaks(S, mod="min", backend="numpy")
-    print(idx, vals)

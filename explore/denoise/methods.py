@@ -16,7 +16,7 @@ from scipy.ndimage import median_filter, uniform_filter1d
 from scipy.signal import butter, filtfilt, savgol_filter, wiener
 
 from Modal_Decomposition.EEMD import EEMD
-from Modal_Decomposition.NoisyEnvelopeIteration import NoisyEnvelopeMeanIteration
+from .envelope_iteration import NoisyEnvelopeMeanIteration
 
 from .metrics import clean_bandwidth
 

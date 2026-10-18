@@ -2,12 +2,12 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache
 from .Utils import Check, monotonic, mirror, find_peaks, Check_Time_and_Signal
 
 """
-Config
+配置
 """
 @dataclass(frozen=True, kw_only=True)
 class EMDConfig(Config):
@@ -29,26 +29,44 @@ class EMDConfig(Config):
 
 
 """
-Class and Function of decomposer
+分解器
 """
 class EMD(Decomposer):
     name = "EMD"
 
     def __init__(self, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, copy: bool = True, **kwargs):
         """
+        构造 EMD 分解器并校验参数。
 
-        :param num_imf:
-        :param nbsym:
-        :param internal_delta:
-        :param internal_iter:
-        :param res_energy:
-        :param faster:
-        :param store_iter_info:
-        :param copy: 是否让 ``Check_Time_and_Signal`` 交回一份归本函数所有的信号副本。
-                     默认 True: 残差可以直接原地 ``S -= imf``, 不必每轮分配等长数组,
-                     调用方的输入也不会被改写。传 ``False`` 时不复制 (省一份 N 长数组,
-                     且保留 memmap 支撑), 但 ``decompose`` 会**原地覆盖调用方的输入数组**。
-        :param kwargs:
+        Parameters
+        ----------
+        num_imf : int
+            目标 IMF 个数; ``-1`` 表示不设上限, 由停止判据自行决定。
+        nbsym : int
+            每端用于端点延拓的极值个数; ``0`` 表示不延拓。
+        internal_delta : float
+            内层筛分的 Cauchy SD 阈值, 取值 ``[0, 1)``。
+        internal_iter : int
+            内层最大筛分次数; ``-1`` 表示不设上限。
+        res_energy : float
+            残差能量下限, 按原始信号能量归一 (故对幅值尺度不变)。
+        faster : bool
+            ``True`` 时内层只要求 Cauchy SD 达标; ``False`` 时还要通过 ``end`` 的
+            IMF 必要条件, 单阶更慢但更贴近 IMF 定义。
+        store_iter_info : bool
+            是否在 ``info`` 里保留每阶内层迭代的中间分量与收敛标记。
+        copy : bool
+            是否让 ``Check_Time_and_Signal`` 交回一份归本函数所有的信号副本。
+            默认 True: 残差可以直接原地 ``S -= imf``, 不必每轮分配等长数组,
+            调用方的输入也不会被改写。传 ``False`` 时不复制 (省一份 N 长数组,
+            且保留 memmap 支撑), 但 ``decompose`` 会**原地覆盖调用方的输入数组**。
+        **kwargs
+            ``pre_num_imfs`` (IMFs 预分配行数, 不足时按此步长扩容, 默认 10)、
+            ``dtype`` (工作 dtype, 默认跟随输入)、``safe`` (校验等级, 默认
+            ``"unknown"``)、``need_squeeze``、``mirror_mod`` (端点延拓模式, 默认
+            ``"extrema"``)、``poly_order`` / ``time_poly_order`` (仅
+            ``mirror_mod="polynomial"``)、``peaks_backend`` (极值检测后端, 默认
+            ``"numpy"``)。未知关键字抛 ``TypeError``。
         """
 
         self.num_imf: int = num_imf
@@ -78,7 +96,7 @@ class EMD(Decomposer):
         self.time_poly_order: int = kwargs.get("time_poly_order", 2)
         self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")
 
-        # self.config: EMDConfig = config  # 暂时先不考虑 config 输入, 有一些问题需要解决
+        # config 只由 ``config_generate`` 产出; 构造时不接受 config 对象, 参数一律走上面的关键字。
 
         self.param_check()
 
@@ -179,7 +197,9 @@ class EMD(Decomposer):
             faster=self.faster,
         )
 
-    def decompose(self, S: list | np.ndarray) -> DecompositionResult:
+    def decompose(self, S: list | np.ndarray, output_memmap: bool = False) -> DecompositionResult:
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         si = Cache.import_module("scipy.interpolate")
 
         S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name, dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
@@ -201,7 +221,6 @@ class EMD(Decomposer):
         num_imf = 0
         self.res = None
 
-
         iterations: List[int] = []
         final_sds: List[float] = []
 
@@ -216,10 +235,10 @@ class EMD(Decomposer):
                 self.res = S
                 break
 
-            # 内层筛分
+            # 内层筛分: 每轮减去上下包络的均值, 直到 SD 达标、极值不足或达到 internal_iter
             if grid is None:
                 grid = np.arange(N, dtype=np.float64)
-            h = S  # 可省略为 h = S
+            h = S
             last_h = None
             last_sd = float("nan")
             inner_iter = 0
@@ -255,8 +274,8 @@ class EMD(Decomposer):
                 min_spline = si.CubicSpline(mirror_x[~mirror_max], mirror_arr[~mirror_max])
                 max_env = np.asarray(max_spline(grid), dtype=h.dtype)
                 min_env = np.asarray(min_spline(grid), dtype=h.dtype)
-                # 求局部均值。此处不能像以前那样就地复用 max_env 的缓冲: faster=False 时
-                # end() 要用原样的上/下包络做"包络异号"判定 (代价: 多一份 N 长数组)
+                # 求局部均值。均值必须由独立的和算出: faster=False 时 end() 需要未就地改写过的
+                # 上/下包络来判"包络异号" (代价: 多一份 N 长数组)
                 avg_env = np.add(max_env, min_env)
                 avg_env /= 2
 
@@ -271,8 +290,8 @@ class EMD(Decomposer):
                         delta = last_h - h_new
                         SD = np.dot(delta, delta) / denominator
                     last_sd = SD
-                    # faster=True : Cauchy SD 收敛即放行 (高速档)
-                    # faster=False: 还要通过 end() 的 IMF 必要条件 (对标 OLD / PyEMD)
+                    # faster=True 只看 Cauchy SD 是否达标; faster=False 还要通过 end() 的 IMF
+                    # 必要条件 (PyEMD check_imf 口径)
                     if SD <= self.internal_delta and (self.faster or self.end(h_new, h, max_env, min_env)):
                         h = h_new
                         if self.store_iter_info:
@@ -289,12 +308,11 @@ class EMD(Decomposer):
 
             imf = h
 
-            # 无进展保护: 本次没提取出有效分量 -> 残差不再变化, 外层循环必须终止
-            #   * ``imf is S``       : 内层首次迭代就因极值不足退出, h 从未被改写,
-            #                          残差与输入同一对象 (短/单峰信号), 不得当成 IMF;
-            #   * 幅值可忽略          : BLCSE 等会伪造极值的模式绕过了极值守卫, 筛分塌缩成
-            #                          零分量; 没有这一条就会退化成"零分量无限循环 +
-            #                          self.imfs 无界增长"。
+            # 无进展保护: 本次没提取出有效分量 -> 残差不再变化, 外层循环必须终止。
+            #   * ``imf is S``: 内层首次迭代就因极值不足退出, h 从未被改写, 残差与输入
+            #                    是同一对象 (短/单峰信号), 不得当成 IMF;
+            #   * 幅值可忽略   : BLCSE 等会伪造极值的模式绕过了极值守卫, 筛分会塌缩成零分量;
+            #                    拦不住就退化成"零分量无限循环 + self.imfs 无界增长"。
             if (imf is S) or max(float(imf.max()), -float(imf.min())) <= 1e-12 * max(np.sqrt(original_energy / N), np.finfo(float).tiny):
                 self.res = S
                 break
@@ -328,41 +346,41 @@ class EMD(Decomposer):
             info["iter_temp_imf"] = self.temp_imf_arr
             info["iter_convergence"] = self.iter_convergence
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info=info,
-            config=config
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info=info,
+                config=config
+            ),
+            output_memmap,
         )
 
     def end(self, h: np.ndarray, h_old: np.ndarray, up: np.ndarray, dn: np.ndarray) -> bool:
         """
-        ``faster=False`` 的额外放行判定 (仅供 ``decompose`` 在 SD 判据已通过后调用)。
+        ``faster=False`` 的额外放行判定 (仅供 ``decompose`` 在 Cauchy SD 判据已通过后调用)。
 
         Cauchy SD 只说明"相邻两次筛分不再显著变化", 并不保证筛出来的东西是 IMF。
-        本方法参照 OLD 0.3.0 与 PyEMD 1.9 的内层停筛条件, 再补三道 IMF 必要条件,
-        全部通过才允许该阶收敛:
+        本方法凑齐三道 IMF 必要条件才允许该阶收敛:
 
         1. **窄带平衡** ``|过零数 − 极值数| <= 1``
-           —— OLD ``faster=False`` 的窄带门, 也等价于 PyEMD 的 ``f2 = |extNo − nzm| < 2``。
-           过零用 PyEMD ``indzer`` 口径 (严格符号积 < 0, 零点段按段计), 极值用库内
-           ``Utils.Peaks`` 规则, 与 OLD ``_narrowband_ok`` 逐字一致。
+           —— 过零按严格符号积 < 0 计、零点段按段计 (PyEMD ``indzer`` 口径),
+           极值按库内 ``Utils.Peaks`` 规则计。
         2. **包络异号** ``up >= 0`` 且 ``dn <= 0``
-           —— PyEMD ``check_imf`` 的首要条件 (局部极大必须为正、局部极小必须为负)。
+           —— 上包络处处非负、下包络处处非正 (局部极大必为正、局部极小必为负)。
         3. **收敛量级** ``svar = ||h_old − h||² / (max(h_old) − min(h_old)) < 0.001``
            或 ``std = Σ((h_old − h) / h)² < 0.2``
-           —— PyEMD ``check_imf`` 的两个主判据 (其 ``energy_ratio`` 已由本函数的调用方
-           用 Cauchy SD 承担, 故不重复)。
+           —— 两条判据任一成立即放行; 能量比由调用方的 Cauchy SD 承担, 此处不重复。
 
-        刻意不含 PyEMD 的 ``sum(imf_new²) < 1e-10`` 绝对下限: 那是绝对能量阈值, 会像
-        ``res_energy`` 一样破坏幅值尺度不变性; 全零/极小幅度分量由 ``decompose`` 外层
-        的"无进展保护"拦截。
+        刻意不含绝对能量下限 (如 PyEMD ``check_imf`` 的 ``sum(imf_new²) < 1e-10``):
+        绝对阈值会像 ``res_energy`` 一样破坏幅值尺度不变性; 全零 / 极小幅度分量由
+        ``decompose`` 外层的"无进展保护"拦截。
 
         Parameters
         ----------
-        h : 当前候选 (已做完本轮 ``h <- h - mean``)
-        h_old : 上一轮候选
-        up, dn : 本轮的上 / 下包络 (必须是未就地改写过的原值)
+        h : 当前候选 (已做完本次 ``h <- h - mean``)
+        h_old : 上一次迭代的候选
+        up, dn : 上 / 下包络 (必须是未就地改写过的原值)
 
         Returns
         -------
@@ -400,7 +418,12 @@ class EMD(Decomposer):
         return std < 0.2
 
 
-def f_EMD(S: list | np.ndarray, *, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, **kwargs):
+def f_EMD(S: list | np.ndarray, output_memmap: bool = False, *, num_imf: int = -1, nbsym: int = 4, internal_delta: float = 0.2, internal_iter: int = 50, res_energy: float = 1e-6, faster: bool = True, store_iter_info: bool = False, **kwargs):
+    """
+    函数式入口: 按给定参数构造 ``EMD`` 并立即分解 ``S`` (参数含义见 ``EMD.__init__``)。
+
+    ``output_memmap`` 属于分解期参数, 故位于 ``*`` 之前并直接透传给 ``decompose``。
+    """
     emd = EMD(
         num_imf=num_imf,
         nbsym=nbsym,
@@ -412,8 +435,8 @@ def f_EMD(S: list | np.ndarray, *, num_imf: int = -1, nbsym: int = 4, internal_d
         **kwargs
     )
 
-    return emd.decompose(S)
+    return emd.decompose(S, output_memmap=output_memmap)
 
 """
-other function for module
+模块级函数入口
 """

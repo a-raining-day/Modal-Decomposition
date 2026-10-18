@@ -1,25 +1,24 @@
 """
-Local Mean Decomposition
+Local Mean Decomposition (局部均值分解)。
 
-Extracts product functions by iteratively smoothing the local mean and
-envelope estimate from extrema interpolation.
+由极值插值迭代出局部均值与包络估计, 逐阶分离乘积函数 (PF)。
 
 包络概念区分 (Hilbert vs Spline)
 --------------------------------
 - 模态分解筛分迭代里的"包络 / 局部均值"是对**极值**做插值得到 —— 本方法默认
   ``envelope="midpoint"`` (Smith 经典筛分): 幅度包络用保形 Pchip 插值,
   局部均值用自然三次样条 (均经 ``scipy.interpolate`` 提供; 极值端点镜像由
-  本模块顶层的 ``mirror_extrema`` 完成)。自然三次样条曾因极值间过冲导致幅度
-  爆炸 (峰值 ~1e12, 重构损失 ~2.4e-4), 故幅度一律走 Pchip; 最后一次筛分的
-  局部均值按经典 LMD 语义留在残差中。
+  本模块顶层的 ``mirror_extrema`` 完成)。自然三次样条在极值之间会过冲, 幅度经
+  乘法累积后可放大到 ~1e12 量级 (重构损失 ~2.4e-4), 故幅度一律走 Pchip;
+  最后一次筛分的局部均值按经典 LMD 语义留在残差中。
 - 解析 Hilbert 包络 ``a(t) = |H[h(t)]|`` **不是**筛分迭代中的包络: 只有确实
   需要解析幅度时才使用 (``envelope="hilbert"`` 显式选择, 单次解调 / 实验
-  对比)。迭代该解调在多分量信号上不收敛 (包络拍频、极值数发散), 故该变体
-  是搁置的历史选项。Hilbert 后端经 ``hilbert_mod`` 传入, 取 ``Utils.Hilbert``
+  对比)。该解调一旦进入迭代就会在多分量信号上发散 (包络拍频、极值数无界增长),
+  故该变体只做单次解调。Hilbert 后端经 ``hilbert_mod`` 传入, 取 ``Utils.Hilbert``
   的 ``HILBERT_MODS`` 枚举: ``hilbert_mod="Scipy"`` (默认, scipy.signal.hilbert;
-  历史写法, 大小写归一后落到 ``HILBERT_MODS.Scipy``, canonical 值 ``"scipy"``)
+  大小写归一后落到 ``HILBERT_MODS.Scipy``, canonical 值 ``"scipy"``)
   或 ``hilbert_mod="FHT"`` (第三方 C 内核, 见 ``Utils.Hilbert``)。实例上存的
-  是 ``HILBERT_MODS`` 成员 (Enum), 不再保存裸字符串。
+  是 ``HILBERT_MODS`` 成员 (Enum), 不保存裸字符串。
 
 References
 ----------
@@ -31,7 +30,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Literal
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache
 from .Utils import (
     Check,
@@ -55,7 +54,7 @@ Config
 @dataclass(frozen=True, kw_only=True)
 class LMDConfig(Config):
     """
-    Effective parameters of an LMD run.
+    一次 LMD 运行的有效参数。
     """
     max_pf: int | None
     max_iter: int
@@ -96,70 +95,52 @@ class LMD(Decomposer):
         Parameters
         ----------
         max_pf : int | None
-            Maximum number of product functions. None selects log2(num_imfs), -1
-            decomposes completely.
+            最大乘积函数阶数。``None`` 取 log2(num_imfs), ``-1`` 表示分解到底。
         max_iter : int
-            Maximum sifting iterations per product function (midpoint
-            envelope only).
+            每阶乘积函数的最大筛分迭代次数 (仅 midpoint 包络)。
         eps : float
-            Envelope convergence threshold (midpoint envelope only).
+            包络收敛阈值 (仅 midpoint 包络)。
         eps_stable : float
-            Minimum energy of an accepted product function.
+            接受乘积函数所需的最小能量。
         min_amp : float
-            Lower bound of the amplitude estimate.
+            幅度估计的下界。
         max_amp : float
-            Upper bound of the amplitude estimate.
+            幅度估计的上界。
         converge_mean : float
-            Mean convergence threshold (midpoint envelope only).
+            局部均值收敛阈值 (仅 midpoint 包络)。
         smooth_window : int
-            Savitzky-Golay window length for the amplitude estimate.
+            幅度估计的 Savitzky-Golay 窗口长度。
         envelope : LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS
-            Amplitude-estimate strategy: ``"midpoint"`` (default) = classical
-            Smith sift with extrema (Pchip) interpolation, the modal-
-            decomposition envelope; ``"hilbert"`` = single-shot analytic
-            demodulation per PF (``|H[h(t)]|``), only for users who genuinely
-            need the analytic envelope — it is NOT the sift envelope and does
-            not converge when iterated.
+            幅度估计策略: ``"midpoint"`` (默认) = 经典 Smith 筛分, 对极值做 Pchip
+            插值, 属于模态分解意义上的包络; ``"hilbert"`` = 每阶 PF 单次解析解调
+            (``|H[h(t)]|``), 只给确实需要解析包络的场合 —— 它不是筛分包络,
+            迭代不收敛。
         hilbert_mod : HILBERT_MODS_ARGS | HILBERT_MODS
-            Hilbert backend when ``envelope="hilbert"``, taken from
-            ``Utils.Hilbert``'s ``HILBERT_MODS``: ``"Scipy"`` (default,
-            scipy.signal.hilbert; the historical spelling is case-normalised
-            onto the canonical ``"scipy"`` / ``HILBERT_MODS.Scipy``) or
-            ``"FHT"`` (compiled third-party C kernel); the remaining declared
-            names are accepted by the enum but not implemented by the
-            dispatcher. The alias ``hilbert_backend`` is also accepted.
+            ``envelope="hilbert"`` 时的 Hilbert 后端, 取 ``Utils.Hilbert`` 的
+            ``HILBERT_MODS``: ``"Scipy"`` (默认, scipy.signal.hilbert; 大小写归一后
+            落到 canonical 的 ``"scipy"`` / ``HILBERT_MODS.Scipy``) 或 ``"FHT"``
+            (编译好的第三方 C 内核); 枚举里其余已声明的名字可以传, 但分派器未实现。
+            别名 ``hilbert_backend`` 同样被接受。
         hilbert_backend : {"Scipy", "scipy", "FHT"} | None
-            Deprecated alias of ``hilbert_mod`` (kept for the historical API).
+            ``hilbert_mod`` 的别名 (向后兼容保留)。
         dtype : type | np.dtype | None
-            Working dtype of the returned product functions. ``None`` keeps
-            the input precision; integer/bool inputs are promoted to float64.
+            返回乘积函数的工作 dtype。``None`` 沿用输入精度; int/bool 输入提升为 float64。
         **kwargs
-            ``safe`` (validation level, see ``Utils.Check``) and ``copy``
-            (hand the decomposer its own copy of the signal).
+            ``safe`` (校验级别, 见 ``Utils.Check``) 与 ``copy`` (让分解器持有自己的信号副本)。
 
-        Strategy comparison (measured, n=16384, tests/comparison):
+        策略对比 (n=16384):
 
-        +------------------+------------------------------------------+------------------------------------------+
-        | strategy         | pros                                     | cons                                     |
-        +==================+==========================================+==========================================+
-        | midpoint         | classical Smith semantics; smooth PFs;  | slowest of the three (~0.13-0.19 s;      |
-        | (default)        | reconstruction fixed (~1e-15, was       | multi-round sifting per PF); weak        |
-        |                  | ~2.4e-4 = 2 ulp(1e12) from the cubic-   | separation of multi-tone/wideband        |
-        |                  | spline overshoot explosion)             | signals; requires the shape-preserving   |
-        |                  |                                          | (Pchip) amplitude interpolation          |
-        +------------------+------------------------------------------+------------------------------------------+
-        | hilbert + Scipy  | fastest (~0.009 s, single-shot          | trend recovery is weaker (~0.7 corr);    |
-        |                  | demodulation per PF, ~20x midpoint);    | iterated Hilbert demodulation does NOT   |
-        |                  | exact reconstruction (~1e-15); best     | converge on multi-component signals      |
-        |                  | AM-FM / two-tone recovery (0.99+)       | (single-shot only); envelope sensitive   |
-        |                  |                                          | to noise                                 |
-        +------------------+------------------------------------------+------------------------------------------+
-        | hilbert + FHT    | bit-identical to the Scipy path         | the C kernel itself is ~1.9x slower per  |
-        | (third-party C)  | (diff ~1e-16) in this pipeline;         | Hilbert call than scipy's FFT (hidden    |
-        |                  | independent C backend (SAO Discrete     | inside LMD); needs the compiled          |
-        |                  | Hilbert/Fourier/Hartley Transforms)     | ``_fht_native`` extension (falls back    |
-        |                  |                                          | to the NumPy reference otherwise)        |
-        +------------------+------------------------------------------+------------------------------------------+
+        * ``midpoint`` (默认): 经典 Smith 语义, PF 平滑; 重构误差 ~1e-15
+          (自然三次样条过冲会把幅度放大到 1e12 量级, 误差达 ~2.4e-4 = 2 ulp(1e12),
+          故幅度必须用保形 Pchip); 三者中最慢 (~0.13-0.19 s, 每阶多轮筛分);
+          多音 / 宽带信号的分离较弱。
+        * ``hilbert`` + Scipy: 最快 (~0.009 s, 每阶单次解调, 约 20x midpoint);
+          精确重构 (~1e-15); AM-FM / 双音恢复最好 (0.99+); 趋势恢复较弱
+          (~0.7 相关); 解调只能单次 (迭代不收敛); 包络对噪声敏感。
+        * ``hilbert`` + FHT (第三方 C): 与 Scipy 路径逐位一致 (差 ~1e-16);
+          独立 C 后端 (SAO Discrete Hilbert/Fourier/Hartley Transforms);
+          单次 Hilbert 调用比 scipy 的 FFT 慢 ~1.9x (在 LMD 总耗时里被稀释);
+          需要编译好的 ``_fht_native`` 扩展 (缺失时回退 NumPy 参考实现)。
         """
         self.max_pf: int | None = max_pf
         self.max_iter: int = max_iter
@@ -171,7 +152,8 @@ class LMD(Decomposer):
         self.smooth_window: int = smooth_window
         self.envelope: LMD_ENVELOPE_MODS | LMD_ENVELOPE_MODS_ARGS = envelope
 
-        # 历史别名: hilbert_mod 仍是默认写法 (未显式给出) 时用 hilbert_backend 覆盖
+        # hilbert_backend 是 hilbert_mod 的别名: 仅在 hilbert_mod 未显式给出
+        # (仍是默认的 "Scipy") 时用它覆盖
         if hilbert_backend is not None and hilbert_mod in ("Scipy", HILBERT_MODS.Scipy):
             hilbert_mod = hilbert_backend
         self.hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = hilbert_mod
@@ -193,8 +175,8 @@ class LMD(Decomposer):
     def param_check(self) -> None:
         self.envelope = Check.validate_mod(self.envelope, LMD_ENVELOPE_MODS)
 
-        # ``HILBERT_MODS`` 的成员值是 canonical 名 (``"scipy"`` 小写), 历史写法
-        # ``"Scipy"`` 直接喂给 ``HILBERT_MODS("Scipy")`` 会 ValueError; 失败后按
+        # ``HILBERT_MODS`` 的成员值是 canonical 名 (``"scipy"`` 小写), 直接把
+        # ``"Scipy"`` 喂给 ``HILBERT_MODS("Scipy")`` 会 ValueError; 失败后按
         # 大小写归一再匹配一次, 最终实例上一定是 Enum 成员。
         try:
             self.hilbert_mod = Check.validate_mod(self.hilbert_mod, HILBERT_MODS)
@@ -222,10 +204,12 @@ class LMD(Decomposer):
             dtype=self.dtype,
         )
 
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S, T=None, output_memmap: bool = False) -> DecompositionResult:
         """
-        Decompose the signal into product functions and a residual.
+        把信号分解为乘积函数与残差。
         """
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         scipy_signal = Cache.import_module("scipy.signal")
         argrelextrema = scipy_signal.argrelextrema
         savgol_filter = scipy_signal.savgol_filter
@@ -271,34 +255,31 @@ class LMD(Decomposer):
             "max_pf": max_pf,
         }
 
-        return DecompositionResult(
-            IMFs=self.imfs,
-            Res=self.res,
-            info=info,
-            config=self.config_generate(),
+        return finalize_output(
+            DecompositionResult(
+                IMFs=self.imfs,
+                Res=self.res,
+                info=info,
+                config=self.config_generate(),
+            ),
+            output_memmap,
         )
 
     # ------------------------------------------------------------------
     def _sift_midpoint(self, S, n_samples, t, max_pf, argrelextrema, savgol_filter):
         """
-        Extrema-midpoint sift with two safeguards against the historical
-        amplitude explosion (see module docstring):
+        极值中点筛分, 带两道防幅度爆炸的护栏 (背景见模块 docstring):
 
-        * the amplitude envelope is interpolated with shape-preserving Pchip
-          (no overshoot), and
-        * the accumulated amplitude and the PF samples are clamped to
-          1e4 x the ORIGINAL signal scale (ill-conditioned demodulation
-          points with tiny envelopes can otherwise inject huge spikes).
+        * 幅度包络用保形 Pchip 插值 (不过冲), 且
+        * 累积幅度与 PF 采样都钳在**原始**信号尺度的 1e4 倍以内
+          (病态解调点上的极小包络会把尖峰放大)。
 
-        The local mean of the final sift iteration stays in the residue on
-        purpose (classical LMD semantics); it is NOT part of the
-        reconstruction error.
+        最后一次筛分的局部均值按经典 LMD 语义有意留在残差里, 它不属于重构误差。
         """
         residue = S.copy()
         PFs: list[np.ndarray] = []
 
-        # Physical scale fixed at the ORIGINAL signal (not the residue, whose
-        # scale is inflated by any spike that already leaked into a PF):
+        # 物理尺度锚在**原始**信号上, 不用残差: 一旦有尖峰漏进 PF, 残差尺度会被抬高
         amp_ref = max(float(np.max(np.abs(S))), self.min_amp)
         amp_cap = min(self.max_amp, 1e4 * amp_ref)
         pf_cap = min(self.max_amp, 1e4 * amp_ref)
@@ -365,15 +346,12 @@ class LMD(Decomposer):
     # ------------------------------------------------------------------
     def _sift_hilbert(self, S, n_samples, t, max_pf, argrelextrema, savgol_filter):
         """
-        Hilbert-envelope variant: single-shot demodulation per PF.
+        Hilbert 包络变体: 每阶 PF 只做一次解调。
 
-            a(t) = |H[h(t)]| (smoothed),  s_FM = (h - m_t) / a,
+            a(t) = |H[h(t)]| (平滑后),  s_FM = (h - m_t) / a,
             PF = a * s_FM = h - m_t
 
-        Iterating this demodulation is deliberately NOT done: on
-        multi-component signals the analytic envelope beats and the sift
-        diverges (extrema count grows without bound), which is why the
-        historical Hilbert variant was shelved.
+        该解调不迭代: 多分量信号上解析包络会拍频, 筛分随之发散 (极值数无界增长)。
         """
         residue = S.copy()
         PFs: list[np.ndarray] = []
@@ -426,20 +404,17 @@ class LMD(Decomposer):
 
 def _validate_hilbert_mod(mod) -> HILBERT_MODS:
     """
-    Case-insensitive fallback for the ``hilbert_mod`` argument (backward
-    compatibility with the historical spelling ``"Scipy"``).
+    ``hilbert_mod`` 参数的大小写兜底。
 
-    ``Check.validate_mod`` / ``HILBERT_MODS(value)`` match the **canonical**
-    member values, and ``HILBERT_MODS.Scipy`` is ``"scipy"`` (lower case), so
-    ``HILBERT_MODS("Scipy")`` raises ``ValueError``. This helper normalises the
-    string with ``str.casefold`` and matches it against the member values once
-    more; anything that still does not hit raises ``ValueError`` just like
-    ``Check.validate_mod``.
+    ``Check.validate_mod`` / ``HILBERT_MODS(value)`` 只匹配**canonical** 成员值,
+    而 ``HILBERT_MODS.Scipy`` 的值是小写 ``"scipy"``, 所以 ``HILBERT_MODS("Scipy")``
+    会抛 ``ValueError``。本函数用 ``str.casefold`` 归一后再匹配一次; 仍不命中就
+    和 ``Check.validate_mod`` 一样抛 ``ValueError``。
 
     Returns
     -------
     HILBERT_MODS
-        The matching enum member (never the raw string).
+        命中的枚举成员 (不会是裸字符串)。
     """
     if isinstance(mod, str):
         key = mod.casefold()
@@ -475,13 +450,11 @@ def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.nda
 
 def _safe_interpolate_pchip(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
     """
-    Shape-preserving (Pchip) interpolation for the amplitude envelope
-    (scipy.interpolate.PchipInterpolator; extrapolate=False, 界外 NaN ->
-    np.interp 兜底)。
+    幅度包络的保形 (Pchip) 插值 (scipy.interpolate.PchipInterpolator;
+    extrapolate=False, 界外 NaN -> np.interp 兜底)。
 
-    Unlike the natural cubic spline, Pchip cannot overshoot between the data
-    points, which keeps ``a_t`` within the extrema amplitude range and stops
-    the multiplicative ``a_total`` explosion of the old code.
+    与自然三次样条不同, Pchip 在数据点之间不会过冲, 因此 ``a_t`` 落在极值幅度范围内,
+    乘法累积的 ``a_total`` 也就不会指数放大。
     """
     try:
         interpolate = Cache.import_module("scipy.interpolate")
@@ -607,7 +580,7 @@ def mirror_extrema(
 """
 other function for module
 """
-def f_LMD(S: list | np.ndarray, T=None, *, max_pf: int | None = None, max_iter: int = 37, eps: float = 0.05, eps_stable: float = 1e-12, min_amp: float = 1e-12, max_amp: float = 1e12, converge_mean: float = 0.001, smooth_window: int = 5, envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint", hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy", hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_LMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, max_pf: int | None = None, max_iter: int = 37, eps: float = 0.05, eps_stable: float = 1e-12, min_amp: float = 1e-12, max_amp: float = 1e12, converge_mean: float = 0.001, smooth_window: int = 5, envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint", hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy", hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
     lmd = LMD(
         max_pf=max_pf,
         max_iter=max_iter,
@@ -624,4 +597,4 @@ def f_LMD(S: list | np.ndarray, T=None, *, max_pf: int | None = None, max_iter: 
         **kwargs
     )
 
-    return lmd.decompose(S, T)
+    return lmd.decompose(S, T, output_memmap=output_memmap)

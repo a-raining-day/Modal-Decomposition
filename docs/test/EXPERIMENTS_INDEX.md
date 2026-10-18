@@ -117,3 +117,68 @@
   `tests/comparison/bench_hilbert.py` 取代；其历史结论不再作为依据。
   同轮修 `tests/conftest.py` 的 `set_seed` teardown（`Modal_Decomposition.set_seed` 已不存在，
   导致每个用例 teardown 时 `AttributeError`）。
+
+## 7. 新增九个方法（EFD / CEEFD / MEMD / SSA / FMD / LMD / VMD / EWT / SVMD）
+
+这九个方法在本轮统一为**「一方法一报告 + 一方法一测试 + 一份 Pareto JSON」**：
+
+| 方法 | docs 报告 | 测试 | Pareto 数据 |
+|---|---|---|---|
+| EFD | `EFD_Native_Engine_Report.md` | `tests/methods/test_EFD.py` | `results/pareto/EFD.json` |
+| CEEFD | `CEEFD_Native_Engine_Report.md` | `tests/methods/test_CEEFD.py` | `results/pareto/CEEFD.json` |
+| MEMD | `MEMD_Native_Engine_Report.md` | `tests/methods/test_MEMD.py` | `results/pareto/MEMD.json` |
+| SSA | `SSA_Native_Engine_Report.md` | `tests/methods/test_SSA.py` | `results/pareto/SSA.json` |
+| FMD | `FMD_Native_Engine_Report.md` | `tests/methods/test_FMD.py` | `results/pareto/FMD.json` |
+| LMD | `LMD_Native_Engine_Report.md` | `tests/methods/test_LMD.py` | `results/pareto/LMD.json` |
+| VMD | `VMD_Native_Engine_Report.md` | `tests/methods/test_VMD.py` | `results/pareto/VMD.json` |
+| EWT | `EWT_Native_Engine_Report.md` | `tests/methods/test_EWT.py` | `results/pareto/EWT.json` |
+| SVMD | `SVMD_Native_Engine_Report.md` | `tests/methods/test_SVMD.py` | `results/pareto/SVMD.json` |
+
+九份报告都由 `.scratch/eemd_new/gen_method_docs.py` 从**当前代码实测**生成（参数表取自
+`__init__` 签名、实测表取自 A 用例、Pareto 取自同名 JSON），数字与代码同步。
+
+被删除/取代的旧文档：`CEEFD_Fix_Report.md`、`EWT_Native_Report.md`、
+`SSA_Stride_and_Signal_Validation_Report.md`，以及 VMD 的
+`VMD_Large_Array_Iteration_Report.md`、`VMD_Native_vs_vmdpy_Report.md`、
+`VMD_Refactor_and_Validation_Report.md`、`VMD_Three_Way_Comparison_Report.md`
+（连同各自 `*_Results.json`），内容已并入新的单方法报告。
+
+## 8. 工具层（Base / Utils）
+
+| 内容 | docs | 测试 |
+|---|---|---|
+| 三层公开 API、`Literal \| Enum` 约定、`find_peaks`/`mirror`/`envelope`/`slepian` 的返回口径、本轮修的 3 个缺陷 | `Utils_Base_API_Report.md` | `tests/test_base_api.py`、`tests/test_utils_api.py` |
+| Hilbert 后端（FFT / FHT / scipy）实测 | `Hilbert_Backend_Report.md` + `.json` | `tests/test_hilbert.py` |
+| FFT 后端实测 | `FFT_Backend_Report.md` + `.json` | — |
+| Slepian 三后端 | `Slepian_Backend_Report.md` | 并入 `tests/test_utils_api.py` |
+
+已删除的旧工具文档（接口随重构消失）：`CacheConventions.md`、`CacheSpeedReport.md`、
+`Cache_Use.txt`、`ChunkReport.md`、`PeaksReport.md`、`Slepian_Cache_Report.md`、
+`ComponentStatisticsReport.md`、`Decomposition_Methods_Timing_Report.md`。
+
+## 9. Pareto 扫描（15 个方法）
+
+- 脚本：`.scratch/eemd_new/pareto_all.py`（逐方法串行）、`.scratch/eemd_new/pareto_report.py`（决策表）。
+- 数据：`tests/comparison/results/pareto/<METHOD>.json`，口径与结论见该目录 `README.md`。
+- 结论：12/15 的当前默认已在选点 2% 以内；FMD / LMD / MEMD / SVMD 全部组合 `leak > 5%`（算法特性）；
+  **RPSEMD 与 EWT 已按用户决定改为 Pareto 最优默认**（`ratio=1.2, sin_num=4`；`num_imfs=8`），SSA 因 `rank_rule="svht"` 属有损截断而保留 `None`。
+
+## 10. `tests/` 结构（本轮重建后）
+
+```
+tests/
+  conftest.py            # sys.path 指向 src/, 种子重置
+  _cases.py              # 15 个方法的快速参数集
+  methods/test_<X>.py    # 15 个方法的统一契约测试 (每个 9 项)
+  test_base_api.py       # Base 公开面
+  test_utils_api.py      # Utils 公开面
+  test_hilbert.py        # Hilbert 后端
+  test_import.py         # 导入烟测
+  test_ewt.py / test_vmd.py  # 两个方法的深度补充 (保留)
+  comparison/            # 实验脚本与结果数据 (不含 pytest 用例)
+```
+
+本轮删除的旧测试（测试的是已移除 API）：`test_registry` `test_ewtpy_adapter` `test_chunk`
+`test_seed` `test_spline` `test_utils` `test_slepian` `test_ceefd` `test_ceemdan`
+`test_contract` `test_reconstruction` `test_facade` `test_fmd_lmd_refactor` `test_peaks`
+`test_mirror_new` `test_envelope` `test_monotonicity` `test_montonic` `test_cache` `ssa/`。

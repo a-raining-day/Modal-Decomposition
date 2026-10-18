@@ -1,5 +1,5 @@
 """
-Extrema endpoint mirror extension (端点镜像外拓, 全库共享)。
+端点镜像外拓 (全库共享)。
 
 模态分解 (EMD / LMD / 极值样条包络等) 都需要在信号端点外**外延样本或极值**,
 再对延拓后的序列做样条插值, 以避免端点塌陷 / 边界伪振荡。本模块统一提供
@@ -15,8 +15,8 @@ Extrema endpoint mirror extension (端点镜像外拓, 全库共享)。
 - ``BLCSE`` (边界局部特征尺度延拓): 按端点附近同类极值的平均幅值与平均间隔,
   每端补一对 (极小, 极大), 使边界处的特征尺度连续。
 
-输入约定 (关键)
---------------
+输入约定
+--------
 **所有模式的输入都是信号本身** (1-D), 极值域模式在内部检出极值:
 
 - 极大 / 极小 = ``find_peaks(S, mod="both")`` —— 一次拿到按样本序归并的极值表与
@@ -24,8 +24,9 @@ Extrema endpoint mirror extension (端点镜像外拓, 全库共享)。
   不存在"极值表里分不清极大极小"的问题 (``BLCSE`` 按掩码切出两组有序序列);
 - 时间轴是独立入参 ``T``: ``None`` 时取样本序号 (不构造 ``arange``); 给出时按
   时间重排极值, 非均匀 / 非单调仅在 ``verbose=True`` 时告警;
-- 返回值是**极值表** ``(2, L')``: 第 0 行时间, 第 1 行幅值, 按时间升序、极大极小
-  交替 (``mod="mirror"`` 例外, 它返回 1-D 信号)。
+- 返回值是 3 元组 ``(T, A, is_max)``: ``T`` / ``A`` 是等长的极值时间与幅值,
+  按时间升序、极大极小交替, ``is_max`` 标出哪些列是极大 (``mod="mirror"``
+  例外, 它只返回 1-D 信号)。
 
 """
 import numpy as np
@@ -45,11 +46,11 @@ __all__ = ["mirror", "MIRROR_MODS", "MIRROR_MODS_ARGS"]
 
 MIRROR_MODS_ARGS = Literal["mirror", "extrema", "polynomial", "parallel", "BLCSE"]
 class MIRROR_MODS(Enum):
-    Mirror = "mirror"  # mirror extension: 端点镜像
-    Extrema = "extrema"  # extrema extension: 极值延拓
-    Polynomial = "polynomial"  # polynomial fitting extension: 多项式拟合外推
-    Parallel = "parallel"  # parallel extension: 平行延拓
-    BLCSE = "BLCSE"  # boundary local characteristic scale extension: 边界局部特征尺度延拓
+    Mirror = "mirror"  # 端点镜像
+    Extrema = "extrema"  # 极值延拓
+    Polynomial = "polynomial"  # 多项式拟合外推
+    Parallel = "parallel"  # 平行延拓
+    BLCSE = "BLCSE"  # 边界局部特征尺度延拓
 
 
 def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
@@ -60,20 +61,20 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
            verbose: bool = False,
            peaks_backend: PEAKS_BACKEND_ARGS | PEAKS_BACKEND = "numpy",
            safe: SAFE_ARGS | SAFE_MODS = "unknown",
-           **kwargs) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+           **kwargs) -> np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     信号端点外拓: 端点镜像, 或"检出极值 → 外延极值表"。
 
     Parameters
     ----------
     S : np.ndarray | np.memmap
-        1-D 实数信号。所有模式都吃信号本身, 不需要调用方先给极值表。
+        1-D 实数信号。所有模式都接收信号本身, 调用方不必先给极值表。
     T : np.ndarray | None
         时间轴, 长度须与 ``S`` 一致。``None`` (默认) 时取样本序号 —— 此时不分配
         时间数组、也不做均匀性 / 单调性诊断。给出时极值一律按其值重排, 非均匀 /
         非单调仅在 ``verbose=True`` 时告警 (``mod="mirror"`` 不使用 ``T``)。
     mod : MIRROR_MODS_ARGS | MIRROR_MODS
-        延拓模式。
+        延拓模式, 默认 ``"mirror"`` (五种语义见模块 docstring)。
     nbsym : int
         每端外延的极值个数; ``mod="mirror"`` 时即每端镜像的样本数 (0 = 不处理)。
     poly_order, time_poly_order : int
@@ -82,9 +83,8 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
     verbose : bool
         是否输出 ``T`` 的诊断告警 (非均匀 / 非单调)。``False`` 时连诊断本身都
         不做, 省掉两次 O(N) 扫描。
-    backend : {"numpy", "scipy", "numba"}
-        极值检测后端, 透传 :func:`Utils.Peaks.find_peaks` (默认
-        ``DEFAULT_BACKEND``)。
+    peaks_backend : {"numpy", "scipy", "numba"}
+        极值检测后端, 透传 :func:`Utils.Peaks.find_peaks` (默认 ``"numpy"``)。
     **kwargs
         ``dtype`` (输出 dtype, 默认跟随输入: 浮点原样保留, 整数抬到 float);
         ``safe`` (校验等级, 透传 ``Check.to_array``);
@@ -92,11 +92,11 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
 
     Returns
     -------
-    np.ndarray
+    np.ndarray | tuple[np.ndarray, np.ndarray, np.ndarray]
         ``mod="mirror"``: 1-D 镜像信号, 长度 ``N + 2*nbsym``。
-    (mirror_arr, is_max)
-        其余模式: ``mirror_arr`` 是 ``(2, L')`` 极值表 (第 0 行时间、第 1 行幅值,
-        时间升序), ``is_max`` 是等长 bool 掩码 (``True`` = 该列是极大)。
+        其余模式固定返回 3 元组 ``(T, A, is_max)``: ``T`` 是极值时间 (``T=None``
+        时即样本序号)、``A`` 是极值幅值, 两者等长 ``L'`` 且按时间升序; ``is_max``
+        是等长 bool 掩码 (``True`` = 该列是极大)。
         ``extrema`` / ``polynomial`` / ``parallel`` 为 ``L' = L + 2*nbsym``,
         ``BLCSE`` 为 ``L' = L + 4`` (每端固定补一对极值, 与 ``nbsym`` 无关);
         其中 ``L`` 是检出的极值数 (极大 + 极小); ``nbsym=0`` 时只有中段。
@@ -105,8 +105,8 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
     Raises
     ------
     TypeError
-        ``mod`` / ``safe`` / ``verbose`` / ``dtype`` / ``squeeze`` / ``nbsym`` /
-        多项式阶数的类型不合法。
+        ``mod`` / ``peaks_backend`` / ``safe`` / ``verbose`` / ``dtype`` /
+        ``squeeze`` / ``nbsym`` / 多项式阶数的类型不合法。
     ValueError
         上述参数的取值不合法; 信号点数不足以检出极值; ``T`` 长度与 ``S`` 不符;
         极值太少 (不足以外延 ``nbsym`` 个) 或缺少极大 / 极小; 极值域模式收到
@@ -116,7 +116,7 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
     --------
     >>> import numpy as np
     >>> from Modal_Decomposition.Utils.Mirror import mirror
-    >>> mirror(np.arange(6.0), nbsym=2).tolist()   # 1-D, 反射不含端点
+    >>> mirror(np.arange(6.0), nbsym=2).tolist()   # 1-D: 反射不含端点
     [2.0, 1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0]
     >>> S = np.sin(np.linspace(0.0, 4.0 * np.pi, 200))
     >>> extrema_x, extrema_arr, is_max = mirror(S, mod="extrema", nbsym=2)
@@ -161,9 +161,11 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
         arr_length: int = S.size
 
         if dtype is None:
-            output_dtype = S.dtype if Check.return_dtype_kind(S) == "float" else DEFAULT_NUMPY_TYPE
+            # DEFAULT_NUMPY_TYPE 是类型对象 (np.float64) 而非 np.dtype 实例, 没有 .kind 之类的属性;
+            # 需要 dtype 属性/方法时一律先包一层 np.dtype。
+            output_dtype = S.dtype if Check.return_dtype_kind(S) == "float" else np.dtype(DEFAULT_NUMPY_TYPE)
         else:
-            output_dtype = dtype
+            output_dtype = np.dtype(dtype)
 
         if output_dtype.kind != "f":
             raise ValueError("the dtype must be float when the mod is not 'mirror'!")
@@ -172,7 +174,8 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
         if not (arr_length >= 3):
             raise ValueError(f"the signal must have at least 3 points to detect the extrema ({arr_length})!")
 
-        # 极大 / 极小: 一次 both 拿到"按样本序归并好的极值表 + 类型掩码" (归并在 find_peaks 内 O(P) 完成; 不再需要第二次检测与 searchsorted/insert)
+        # 极大 / 极小: 一次 both 拿到按样本序归并好的极值表与类型掩码 (归并在 find_peaks 内 O(P) 完成);
+        # 分开调 max / min 再归并需要额外的 searchsorted/insert, 不必走那条路
         extrema_idx, extrema_arr, is_max = find_peaks(S, mod="both", backend=peaks_backend, safe="safe")
         extrema_length: int = extrema_idx.size
 
@@ -239,8 +242,6 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             mirror_type: np.ndarray = np.empty(shape=mirror_length, dtype=bool)
 
             # 左端: 以首极值为对称中心, 把它之后的 nbsym 个极值镜像出去 (型别随镜像源照抄)
-            # mirror_arr[0, :nbsym] = 2 * extrema_T[0] - extrema_T[1: nbsym + 1][::-1]
-            # mirror_arr[1, :nbsym] = extrema_arr[1: nbsym + 1][::-1]
             mirror_arr[0, :nbsym] = 2 * extrema_T[0] - extrema_T[nbsym:0:-1]
             mirror_arr[1, :nbsym] = extrema_arr[nbsym:0:-1]
             mirror_type[:nbsym] = is_max[nbsym:0:-1]
@@ -249,8 +250,6 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             mirror_type[nbsym: mirror_length - nbsym] = is_max
 
             # 右端: 以末极值为对称中心, 把它之前的 nbsym 个极值镜像出去
-            # mirror_arr[0, mirror_length - nbsym:] = 2 * extrema_T[-1] - extrema_T[extrema_length - nbsym - 1: -1][::-1]
-            # mirror_arr[1, mirror_length - nbsym:] = extrema_arr[extrema_length - nbsym - 1: -1][::-1]
             # (起点写 mirror_length - nbsym: 用 -nbsym 的话 nbsym=0 会取到整行)
             mirror_arr[0, mirror_length - nbsym:] = 2 * extrema_T[-1] - extrema_T[-2:-nbsym - 2:-1]
             mirror_arr[1, mirror_length - nbsym:] = extrema_arr[-2:-nbsym - 2:-1]
@@ -285,10 +284,9 @@ def mirror(S: np.ndarray | np.memmap, T: np.ndarray = None,
             tail_T, tail_arr = extrema_T[extrema_length - nbsym - 1:], extrema_arr[extrema_length - nbsym - 1:]
 
             # 时间轴: 以"极值序号"为自变量拟合 T, 在越界的序号上求值
+            # (左端序号取 head_ordinal[:nbsym] - nbsym, 即 -nbsym … -1)
             head_ordinal: np.ndarray = np.arange(nbsym + 1)
             tail_ordinal: np.ndarray = np.arange(extrema_length - nbsym - 1, extrema_length)
-            # left_ordinal: np.ndarray = np.arange(-nbsym, 0)
-            # right_ordinal: np.ndarray = np.arange(extrema_length, extrema_length + nbsym)
             left_ordinal = head_ordinal[:nbsym] - nbsym
             right_ordinal = np.arange(extrema_length, extrema_length + nbsym)
 

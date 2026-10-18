@@ -1,8 +1,8 @@
 """
-Empirical Fourier Decomposition
+Empirical Fourier Decomposition (经验傅里叶分解)。
 
-Partitions the amplitude spectrum at local maxima and reconstructs modes
-from the segmented spectrum.
+在幅值谱的局部极大值处切分频带, 逐带做零相位滤波并反变换得到各阶 IMF;
+纯频域方法, 不依赖时间轴。
 
 References
 ----------
@@ -13,7 +13,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List, ClassVar
 
-from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE
+from .Define import Config, Decomposer, DecompositionResult, DEFAULT_NUMPY_TYPE, check_output_memmap, finalize_output
 from .Base import Cache
 from .Utils import Check, Check_Time_and_Signal
 
@@ -26,7 +26,7 @@ Config
 @dataclass(frozen=True, kw_only=True)
 class EFDConfig(Config):
     """
-    Effective parameters of an EFD run.
+    一次 EFD 运行的有效参数。
     """
     max_IMFs: int
     dtype: type | np.dtype | None
@@ -43,10 +43,9 @@ class EFD(Decomposer):
         Parameters
         ----------
         max_IMFs : int
-            Maximum number of IMFs; -1 returns all IMFs.
+            最大 IMF 阶数; ``-1`` 表示返回全部频带对应的 IMF。
         dtype : type | np.dtype | None
-            Working dtype of the returned IMFs. ``None`` keeps the input
-            precision; integer/bool inputs are promoted to float64.
+            返回 IMF 的工作 dtype。``None`` 沿用输入精度; int/bool 输入提升为 float64。
         """
         self.max_IMFs: int = max_IMFs
         self.dtype: type | np.dtype | None = dtype
@@ -76,10 +75,14 @@ class EFD(Decomposer):
     def config_generate(self) -> EFDConfig:
         return EFDConfig(max_IMFs=self.max_IMFs, dtype=self.dtype)
 
-    def decompose(self, S, T=None) -> DecompositionResult:
+    def decompose(self, S, T=None, output_memmap: bool = False) -> DecompositionResult:
         """
-        Decompose the signal into IMFs and a residual.
+        把信号分解为 IMF 与残差。
+
+        残差取 ``S - ΣIMFs`` 并补回均值, 因此 ``ΣIMFs + Res`` 精确等于输入信号。
         """
+        # 形参校验先于任何计算: 传错类型应立即失败, 而不是跑完整个分解再报错
+        check_output_memmap(output_memmap)
         scipy_signal = Cache.import_module("scipy.signal")
 
         # EFD 是纯频域方法, 不使用时间轴; 用 need_T=False 省掉 arange(N) 那份临时数组
@@ -94,18 +97,21 @@ class EFD(Decomposer):
         S = S - MEAN
         if float(np.max(np.abs(S))) <= np.finfo(float).tiny:
             empty = np.empty((0, N), dtype=S.dtype)
-            return DecompositionResult(
-                IMFs=empty,
-                Res=S + MEAN,
-                info={"mean": MEAN, "fft_signal": None, "magnitude": None, "phase": None},
-                config=self.config_generate()
+            return finalize_output(
+                DecompositionResult(
+                    IMFs=empty,
+                    Res=S + MEAN,
+                    info={"mean": MEAN, "fft_signal": None, "magnitude": None, "phase": None},
+                    config=self.config_generate()
+                ),
+                output_memmap,
             )
 
         F = np.fft.fft(S)
         magnitude = np.abs(F)
         phase = np.angle(F)
 
-        edge_magnitude = magnitude[: N // 2 + 1].copy()[1:] * 2  # filter the dc(loc[0])
+        edge_magnitude = magnitude[: N // 2 + 1].copy()[1:] * 2  # 去掉直流分量 (下标 0)
         freq_N = N // 2
 
         local_maximum_points_tuple = scipy_signal.argrelmax(edge_magnitude)
@@ -113,24 +119,21 @@ class EFD(Decomposer):
         local_maximum = edge_magnitude[local_maximum_points]
 
         if self.max_IMFs != -1:
-            local_maximum_zip = [(point, value) for point, value in zip(local_maximum_points, local_maximum)]
-            local_maximum_zip = sorted(local_maximum_zip, reverse=True, key=lambda x: x[1])
-            # The segmentation below yields (internal maxima + 2) bands, so
-            # m IMFs need (m - 2) internal maxima. The old code kept
-            # max_IMFs maxima and produced up to max_IMFs + 2 modes,
-            # violating the documented "maximum number of IMFs" contract.
-            internal = local_maximum_zip[: max(0, self.max_IMFs - 2)]
-            local_maximum_points = sorted(p for p, _ in internal)
+            # 分段规则产生 (内部极大值 + 2) 个频带, 所以想要 m 个 IMF 只需保留 m-2 个
+            # 内部极大值 (两端各贡献一个边界); 取能量最大的那几个极大值。
+            zipped = sorted(zip(local_maximum_points.tolist(), local_maximum.tolist()),
+                            reverse=True, key=lambda x: x[1])
+            local_maximum_points = sorted(p for p, _ in zipped[: max(0, self.max_IMFs - 2)])
 
         bounds = np.concatenate(([0], local_maximum_points, [freq_N - 1])).astype(np.int64)
         bounds = np.unique(bounds)
         bounds = np.sort(bounds)
 
         if self.max_IMFs == 1:
-            # exactly one mode: a single band over the whole spectrum
+            # 只要 1 阶时整条正频率谱就是一个频带
             wn = np.array([0, freq_N - 1])
         else:
-            wn = []  # the zero phase filter edges
+            wn = []  # 零相位滤波器的频带边界 (频点下标)
             for p in range(len(bounds) - 1):
                 next_point = bounds[p + 1]
                 current_point = bounds[p]
@@ -141,32 +144,30 @@ class EFD(Decomposer):
                     wn.append(current_point + np.argmin(edge_magnitude[current_point:next_point + 1]))
             wn = np.concatenate(([0], wn, [freq_N - 1]))
 
-        filters_arr = []
-        for edge in range(1, len(wn)):
-            filter_single = np.zeros(freq_N)
+        # 每个频带只由一对边界下标定义: 其支撑集就是闭区间 [wn[e-1], wn[e]]。
+        # 不在这里物化 N/2 长的 0/1 掩码 —— 那会让内存变成 O(N × 频带数)。
+        bands = [(int(wn[e - 1]), int(wn[e])) for e in range(1, len(wn))]
 
-            current_point = wn[edge]
-            last_point = wn[edge - 1]
-
-            filter_single[last_point: current_point + 1] = 1
-            filters_arr.append(filter_single)
-
-        IMFs = []
+        # 直接预分配 (K, N), 不用"list 追加 + asarray" —— 后者会让模态峰值翻倍
+        K: int = len(bands)
+        IMFs = np.empty((K, N), dtype=S.dtype)
         M = N // 2 + 1
-        # the spectrum is symmetric, so we just need positive, and next, only need concentrate symmetrically.
-        for _filter in filters_arr:
+        # 实信号的频谱共轭对称: 只取正频率半边, 负频率半边按共轭补回即可
+        for idx, (last_point, current_point) in enumerate(bands):
             filtered_magnitude = np.zeros(M, dtype=float)
-            filtered_magnitude[1:] = magnitude[1:M] * _filter
+            # filtered_magnitude 的下标 1+j 对应 edge_magnitude 的下标 j
+            # (下标 0 是直流, 恒置 0), 故支撑集平移到 [last_point+1, current_point+1]。
+            lo = min(max(last_point + 1, 1), M)
+            hi = min(max(current_point + 2, lo), M)
+            if hi > lo:
+                filtered_magnitude[lo:hi] = magnitude[lo:hi]
             temp_spectrum = filtered_magnitude * np.exp(1j * phase[:M])
 
             full_spectrum = np.zeros(N, dtype=complex)
-            full_spectrum[:M] = temp_spectrum  # complex temp_spectrum
-            for i in range(1, M - 1):
-                full_spectrum[N - i] = np.conj(temp_spectrum[i])
+            full_spectrum[:M] = temp_spectrum  # 正频率半边 (复数)
+            full_spectrum[N - M + 2:] = np.conj(temp_spectrum[1:M - 1][::-1])
+            IMFs[idx] = np.fft.ifft(full_spectrum).real
 
-            IMFs.append(np.fft.ifft(full_spectrum).real)
-
-        IMFs = np.asarray(IMFs, dtype=S.dtype) if len(IMFs) else np.empty((0, N), dtype=S.dtype)
         Res = S - np.sum(IMFs, axis=0) + MEAN
 
         info = \
@@ -177,22 +178,25 @@ class EFD(Decomposer):
             "phase": phase,
         }
 
-        return DecompositionResult(
-            IMFs,
-            Res,
-            info,
-            self.config_generate(),
+        return finalize_output(
+            DecompositionResult(
+                IMFs,
+                Res,
+                info,
+                self.config_generate(),
+            ),
+            output_memmap,
         )
 
 
 """
 other function for module
 """
-def f_EFD(S: list | np.ndarray, T=None, *, max_IMFs: int = -1, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_EFD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, max_IMFs: int = -1, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
     efd = EFD(
         max_IMFs=max_IMFs,
         dtype=dtype,
         **kwargs
     )
 
-    return efd.decompose(S, T)
+    return efd.decompose(S, T, output_memmap=output_memmap)

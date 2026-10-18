@@ -19,8 +19,7 @@ Layered access (cache introduced at the *getter* layer only):
 Public surface
 --------------
 ``hilbert(S, mod="FFT")``
-    按名字分发 Hilbert 后端。已实现三个 (实测耗时, 详见
-    ``docs/test/Hilbert_Backend_Report.md``):
+    按名字分发 Hilbert 后端。已实现三个:
 
     * ``"FFT"`` (**默认**) — 实半谱法 (``rfft`` + ``irfft``，两次实变换)；
       任意长度精确，约为 ``scipy.signal.hilbert`` 的 **0.59–0.99×**；

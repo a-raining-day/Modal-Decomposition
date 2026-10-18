@@ -1,9 +1,9 @@
 """
-本模块仅 Check_Time_and_Signal 主要负责对上级使用
-Check 主要用于内部
+输入校验与规范化层: 对已载入数组 (``np.ndarray`` / ``np.memmap``) 做原子检测、校验与规范化。
 
-因此, 本模块必须自实现, 可延迟导入同属同级子模块, 但是延迟导入仍然可能导致循环导入, 使用时必须谨慎!
-Base 为不同级模块, 可使用
+``Check`` 只供库内部使用; ``Check_Time_and_Signal`` 是各分解模块的统一入口。
+因此本模块必须自包含: 只依赖 ``Define`` 与 ``Base``, 对同级子模块 (如
+``Monotonicity``) 只能在函数体内延迟导入 —— 顶层导入会形成循环导入。
 """
 
 import os
@@ -20,7 +20,7 @@ from ..Base import CHUNK_MOD, Chunk, should_use_memmap, temp_memmap
 __all__ = ["Check", "Check_Time_and_Signal"]
 
 
-LIST_MEM_THRESHOLD = 10 * SIZE["1MB"]  # elements: list/tuple above this become memmaps
+LIST_MEM_THRESHOLD = 10 * SIZE["1MB"]  # 元素数: 超过它的 list/tuple 由 _load 分块写入临时 memmap
 
 
 class Check:
@@ -32,10 +32,10 @@ class Check:
       require_*      只读校验, 失败抛 ValueError, 成功静默
       to_*           唯一允许改数据的操作, 名字即行为
 
-    不做 IO, 不触发全局内存策略, 不 emit warning。
+    不做 IO, 不应用全局内存策略, 不产生 warning。
     """
 
-    # 返回各类型
+    # dtype.kind → 类型名
     @classmethod
     def return_dtype_kind(cls, S: np.ndarray | np.memmap) -> str:
         if not cls.is_numeric(S):
@@ -81,9 +81,10 @@ class Check:
             case _:
                 raise ValueError("the unknown kind of S.dtype -> {}".format(S.dtype.kind))
 
-    # 报错
+    # 类型断言 (raise_error=False 时返回 bool 而非抛错)
     @staticmethod
     def not_numpy_arr(x: Any, method: str="", raise_error: bool=True) -> bool:
+        """断言 ``x`` 是 ``np.ndarray``。"""
         prefix = f"{method}: " if method else ""
         if not isinstance(x, np.ndarray):
             if raise_error:
@@ -94,15 +95,22 @@ class Check:
 
     @staticmethod
     def not_numpy_memmap(x: Any, method: str="", raise_error: bool=True) -> bool:
+        """
+        断言 ``x`` **不是** ``np.memmap``: 只拒绝 ``np.memmap``, 普通 ``ndarray`` 通过。
+
+        名字里的 ``not`` 指的是"拒绝 memmap 输入", 不是"输入不是 ndarray" ——
+        判据只看 ``isinstance(x, np.memmap)``; ``raise_error=False`` 时命中也只
+        返回 False。
+        """
         prefix = f"{method}: " if method else ""
-        if not isinstance(x, np.memmap):
+        if isinstance(x, np.memmap):
             if raise_error:
-                raise TypeError("{}The type of input must be np.ndarray, not {}".format(prefix, type(x)))
+                raise TypeError("{}The input must not be np.memmap, got {}".format(prefix, type(x)))
             else:
                 return False
         return True
 
-    # 只读
+    # 只读谓词
     @classmethod
     def is_numeric(cls, S) -> bool:
         """dtype 为 bool / int / uint / float 之一。"""
@@ -115,11 +123,7 @@ class Check:
 
     @classmethod
     def is_0d(cls, S: np.ndarray) -> bool:
-        """
-        与 is_1d, is_2d 不同, is_0d 是指标量, 如 np.array(42)
-        :param S:
-        :return:
-        """
+        """是否 0-d 且非空, 即标量 (如 ``np.array(42)``); 空数组不算。"""
         if S.ndim == 0 and S.size != 0:
             return True
         else:
@@ -209,7 +213,7 @@ class Check:
         else:
             return np.all(np.isfinite(S))
 
-    # 校验 (抛错)
+    # 校验: 失败抛 ValueError
     @staticmethod
     def require_numeric(S, method: str = "", *, allow_bool: bool = True) -> None:
         prefix = f"{method}: " if method else ""
@@ -247,7 +251,7 @@ class Check:
                 f"{prefix}length mismatch between S ({T.shape[0]}) and S ({S.shape[-1]})"
             )
 
-    # 检测输入合规性
+    # 分支参数归一: 字符串 / Enum 成员 → 指定 Enum 的成员
     @staticmethod
     def validate_safe(safe: str | SAFE_MODS) -> SAFE_MODS:
         try:
@@ -266,7 +270,7 @@ class Check:
                 f"the parameter of `mod` can only be {MOD._member_names_}"
             )
 
-    #  规范化 (改数据)
+    # 规范化 (唯一改数据的部分)
     @classmethod
     def to_array(cls, S, *, dtype: type | np.dtype = None, safe: str | SAFE_MODS = "unknown", ndim: int | set | tuple | None = 1, need_squeeze: bool = True) -> np.ndarray:
         """
@@ -306,7 +310,7 @@ class Check:
 
             return S
         else:
-            # 1. array-ify
+            # 1. 转成 ndarray
             if not isinstance(S, np.ndarray):
                 S = np.asarray(S, dtype=DEFAULT_NUMPY_TYPE if dtype is None else dtype)
 
@@ -410,68 +414,62 @@ def Check_Time_and_Signal(
     copy: bool = True
 ) -> tuple[np.ndarray, Optional[np.ndarray], int] | tuple[np.ndarray, int]:
     """
-    Validate the signal and its now axis and return them in canonical form.
+    校验信号与其时间轴, 返回规范化后的形式。
 
     Parameters
     ----------
     S : array-like or str/os.PathLike
-        Signal, or the path of a ``.npy`` file. Input-size detection and the
-        global memory policy are applied here: oversized inputs are served
-        from a ``np.memmap`` instead of being copied into RAM. Singleton
-        dimensions are squeezed.
+        信号, 或 ``.npy`` 文件路径。输入体积判定与全局内存策略在此生效:
+        超阈值输入由 ``np.memmap`` 承载, 不复制进 RAM。单例维会被 squeeze。
     T : array-like, optional
-        Time axis. If None, defaults to ``arange(N)`` unless ``default_T``
-        is False.
+        时间轴。None 时按 ``arange(N)`` 生成, 除非 ``default_T=False``。
     ndim : set[int], optional
-        Allowed dimensionality of S. No check when None.
+        S 允许的维度; None 表示不检查。
     method : str
-        Method name used in error messages.
+        方法名, 只用作错误信息前缀。
     default_T : bool
-        When True (default) and ``S`` is None, build ``arange(N, float64)``.
-        When False, leave ``S`` as None: backends that rebuild their own
-        timeline (e.g. the PyEMD sifters, which ignore a passed now axis
-        under the default extrema detection) then avoid a one-signal-sized
-        transient allocation. Callers must only set this when their algorithm
-        does not use the returned ``S``.
+        True (默认) 且 ``T`` 为 None 时构造 ``arange(N, float64)``; False 则保持
+        ``T=None``: 自行重建时间轴的后端 (如默认极值检测下会忽略传入时间轴的
+        PyEMD sifter) 因此省掉一份与信号等长的临时数组。只有算法不使用返回的
+        ``T`` 时才可以置 False。
     dtype : {"float64", None}, optional
-        Target dtype of the returned signal. Default ``None``: **keep the
-        input's dtype** (bool/int/float 按原样, 校验为实数数值即可) —— 不再
-        默认转 float64 以避免 f16/f32 输入的内存翻倍。传 ``"float64"`` 时
-        才做统一 float64 转换 (大输入按内存策略走分块磁盘转换)。``S`` 遵循
+        返回信号的目标 dtype。默认 None: **保留输入 dtype** (bool/int/float 原样,
+        校验为实数数值即可); 转 float64 会让 f16/f32 输入的内存翻倍, 故需显式传
+        ``"float64"`` 才做统一转换 (大输入按内存策略走分块磁盘转换)。``T`` 遵循
         同一策略 (缺省生成的 ``arange(N)`` 保持 int64)。
     axis : int, optional
-        the checking axis for the signal at least 2-dim.
+        信号至少 2 维时, 重复性检查所沿的轴。
     chunk_size : int, optional
-        the size of chunk
+        分块检查的块长。
     temp_dir : str, optional
-        the temporary dir of the tempfiles.
+        临时文件所在目录。
     copy : bool, optional
         默认 True: 返回 ``S`` 的**独立副本**, 归调用方所有, 可直接原地改写
-        (``S -= imf``), 不必每一轮再分配一份等长数组。取副本的成本是 ``N`` 个元素,
-        一次付清; 对 memmap 输入则会把内容**拉回 RAM**(不可写/只读映射无法原地改)。
+        (``S -= imf``), 不必每一轮再分配一份等长数组。成本是 ``N`` 个元素,
+        一次付清; 对 memmap 输入则会把内容**拉回 RAM** (只读映射无法原地改)。
         只在确实不改写 ``S`` 且需要保留 memmap 支撑时传 ``False``。
 
     Returns
     -------
     tuple[np.ndarray, Optional[np.ndarray], int] | tuple[np.ndarray, int]
-        ``need_T=True`` (默认): ``(S, T, N)``。``S`` 默认保留输入 dtype (可能
-        memmap 支撑); 显式 ``dtype="float64"`` 时为 float64; ``T`` 为时间轴,
-        未给且 ``default_T=False`` 时为 None; ``N`` 为末轴长度。
-        ``need_T=False``: ``(S, N)`` —— 不构造 ``T``, 因而不产生
-        ``arange(N)`` 这一份与信号等长的临时数组。算法不使用时间轴时应当选它。
+        ``need_T=True`` (默认): ``(S, T, N)``。``S`` 默认保留输入 dtype (可能由
+        memmap 支撑), 显式 ``dtype="float64"`` 时为 float64; ``T`` 为时间轴,
+        未给出且 ``default_T=False`` 时为 None; ``N`` 为末轴长度。
+        ``need_T=False``: ``(S, N)`` —— 不构造 ``T``, 因而不产生 ``arange(N)``
+        这份与信号等长的临时数组; 算法不使用时间轴时应当选它。
 
     Raises
     ------
     ValueError
-        On wrong dimensionality, length mismatch, duplicate now points, an
-        unsupported file suffix, empty signal, or an invalid ``dtype`` value.
+        维度不符、长度不匹配、时间轴含重复值、文件后缀非 ``.npy``、信号为空,
+        或 ``dtype`` 取值非法。
     """
     from .Monotonicity import monotonic
 
     safe = Check.validate_safe(safe)
 
-    S: list | tuple | np.ndarray | np.memmap = _load(S, target_dtype=dtype)  # load
-    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype, safe=safe, ndim=ndim)  # transform the (list, tuple, set) to np.ndarray or np.memmap
+    S: list | tuple | np.ndarray | np.memmap = _load(S, target_dtype=dtype)  # IO / 内存策略
+    S: np.ndarray | np.memmap = Check.to_array(S=S, dtype=dtype, safe=safe, ndim=ndim)  # dtype / 维度规范化
 
     N = S.shape[-1]
     if Check.is_empty(S):
@@ -480,7 +478,7 @@ def Check_Time_and_Signal(
     if T is None:
         if default_T and need_T:
             T = np.arange(N, dtype=S.dtype)
-        # else: keep S as None (see default_T above).
+        # 否则保持 T 为 None (见 default_T / need_T)。
     else:
         T = Check.to_array(S=T, dtype=S.dtype, ndim=1)
         Check.require_1d(T, method=method)
@@ -498,7 +496,7 @@ def Check_Time_and_Signal(
                 stacklevel=2,
             )
 
-            # TODO: 这部分面对 np.memmap 能做好吗?
+            # argsort 与随后的花式索引都在内存中新建数组: memmap 支撑的 T / S 会被拉回 RAM。
             idx = np.argsort(T)
             T = T[idx]
             S = S[..., idx]

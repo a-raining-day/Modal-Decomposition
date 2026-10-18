@@ -1,8 +1,8 @@
 """
-Chunked processing utilities (统一分块工具)
+分块处理工具：按指定轴把数组切成若干块，支持内存视图与磁盘 memmap 两种模式。
 
-该模块对同属同级子模块仅能使用 Memory
-不同级模块可使用 Base
+依赖方向：同一层（``Utils``）内的子模块只能经 ``Base.Memory`` 取内存预算；
+跨层模块才可直接使用 ``Base``。
 """
 
 import os
@@ -40,58 +40,43 @@ def validate_chunk_size(chunk_size: int) -> int:
 
 class Chunk:
     """
-    Class facade over the chunking functions.
+    分块工具的门面：所有入口都是 ``@staticmethod`` / ``@classmethod``，不需要实例。
 
-    Parameters
-    ----------
-    chunk_size : int
-        Positive chunk length in elements.
-    mod : Literal["memory", "exo-memory", "None"]
-        Splitting mode: ``"memory"`` (default) yields in-RAM views;
-        ``"exo-memory"`` yields temporary disk-backed memmaps (deleted after
-        use); ``"None"`` performs no splitting (the whole array is yielded as
-        a single chunk).
-    memmap_pth : str, optional
-        Alias of ``temp_dir`` (exo-memory mode only); defaults to the OS temp
-        directory.
-    memmap_type : np.dtype, optional
-        Alias of ``dtype`` (exo-memory disk dtype); defaults to the input
-        dtype.
+    ``chunk`` 的两种模式：``"memory"``（默认）产出内存视图；``"exo-memory"`` 产出
+    临时磁盘 memmap，迭代结束即关闭句柄并尽力删除。
 
     Examples
     --------
-    >>> from Modal_Decomposition.Utils.Chunk import Chunk
     >>> import numpy as np
+    >>> from Modal_Decomposition.Base.Chunk import Chunk
     >>> S = np.arange(10)
-    >>> [c.sum() for c in Chunk(4).chunk(S)]      # memory mode
-    [6, 22, 30]
-    >>> Chunk().chunk(S, chunk_size=4, mod="memory").__next__().shape
-    (10,)
+    >>> [int(c.sum()) for c in Chunk.chunk(S, chunk_size=4)]
+    [6, 22, 17]
+    >>> next(Chunk.chunk(S, chunk_size=4)).shape
+    (4,)
     """
     @staticmethod
     def chunk_size(nbytes: int, *, chunk_ratio: float = 0.75, extras_bytes: int = 0, **kwargs) -> int:
         """
-        If `nbytes` <= `DEFAULT_FILL_CHUNK_SIZE`, use `DEFAULT_FILL_CHUNK_SIZE`.
-        Else, if `nbytes` <= `budget` * `chunk_ratio`, use `nbytes`.
-        Else, use `buget` * `chunk_ratio`.
+        自适应块大小（元素数）：小输入固定用 :data:`DEFAULT_FILL_CHUNK_SIZE`，大输入
+        取 ``min(nbytes, budget * chunk_ratio)``，让单块工作集落在全局内存预算内。
 
-        Starts from ``base`` (default 8M elements) so the working set fits the global memory policy — i.e. a **granular, policy-aware** chunk size for
-        ``chunked_fill`` / ``iter_chunks`` callers (used by ``Utils.Check`` for memmap fills and now-axis validation).
+        入参 ``nbytes`` 以字节计，返回值以元素计（与 :data:`DEFAULT_FILL_CHUNK_SIZE`
+        同单位）；传入 ``ndarray`` / ``np.memmap`` 时取其实例的 ``.nbytes`` 并告警。
 
         Parameters
         ----------
         nbytes : int
-            Input size in bytes.
+            输入体积（字节）。
         chunk_ratio : float
-            The ratio of the remaining available memory.
+            允许占用的可用内存比例，取值 ``(0, 1]``。
         extras_bytes : int
-            The extras bytes
+            预算中需预留的额外字节数，不能为负。
 
         Returns
         -------
         int
-            Adaptive chunk size (never below :data:`MIN_CHUNK_ELEMS` unless
-            ``base`` is smaller).
+            块大小（元素数）。
         """
         if isinstance(nbytes, (np.ndarray, np.memmap)):
             try:
@@ -131,9 +116,11 @@ class Chunk:
     @classmethod
     def chunk(cls, S: np.ndarray, *, chunk_size: int = None, mod: CHUNK_MOD_ARGS | CHUNK_MOD = "memory", axis: int=0, dtype=None, temp_dir: Optional[str]=None, **kwargs) -> Iterator[np.ndarray]:
         """
-        Split ``S`` according to ``mod`` — always an iterator (in ``"None"``
-        mode a single-chunk iterator over the whole array), so consumers need
-        no per-mode branching.
+        按 ``mod`` 切分 ``S``，始终返回迭代器，调用方无需按模式分支。
+
+        ``axis`` 指定切分轴；``mod`` 只接受 ``CHUNK_MOD`` 的成员或值
+        （``"memory"`` / ``"exo-memory"``）；``chunk_size=None`` 时按输入体积调用
+        ``Chunk.chunk_size`` 自适应。
         """
         if not isinstance(S, (np.ndarray, np.memmap)):
             try:
@@ -172,11 +159,12 @@ class Chunk:
 
     @staticmethod
     def _iter_chunks(S: np.ndarray, chunk_size: int, axis: int = 0) -> Iterator[np.ndarray]:
+        """沿 ``axis`` 产出内存视图分块，不复制数据。"""
         length = S.shape[axis]
         if length == 0:
             raise ValueError("chunking for goal dim requires at least 1, got 0")
 
-        head: tuple = (slice(None),) * axis  # 前 axis 维全取
+        head: tuple = (slice(None),) * axis  # 前 axis 维全取，只在 axis 上切片
         for start in range(0, length, chunk_size):
             idx = head + (slice(start, start + chunk_size),)
             yield S[idx]
@@ -190,35 +178,34 @@ class Chunk:
             dtype=None,
     ) -> Iterator[np.memmap]:
         """
-        Yield disk-backed chunks of ``S``.
+        产出 ``S`` 的磁盘分块。
 
-        Each chunk is written to a temporary ``.dat`` memmap in ``temp_dir``
-        (default: the OS temp directory). Files stay mapped for the whole
-        iteration and are closed + removed (best-effort; Windows may keep a file
-        while external views still map it) when the generator is exhausted or
-        closed.
+        每块写入 ``temp_dir``（默认系统临时目录）下的临时 ``.dat`` memmap；迭代期间
+        保持映射，生成器耗尽或被关闭时统一关闭句柄并尽力删除文件（Windows 上外部
+        视图仍持有映射时可能删不掉）。
 
         Warning
         -------
-        A yielded ``np.memmap`` is only guaranteed valid **inside its iteration
-        step**: consume (or copy) it before requesting the next chunk; do not
-        keep references past the end of the iteration.
+        产出的 ``np.memmap`` 只保证在本次迭代步内有效：取下一块之前消费或拷贝它，
+        不要越过迭代末尾继续持有引用。
 
         Parameters
         ----------
         S : array-like
-            Input array (splitting happens on axis 0).
+            输入数组。
         chunk_size : int
-            Positive chunk length.
+            块长度（元素数），必须为正。
+        axis : int
+            切分轴，默认 0。
         temp_dir : str, optional
-            Directory for the temporary files (created when missing).
+            临时文件目录，不存在时创建。
         dtype : np.dtype, optional
-            Disk dtype; defaults to ``S.dtype``.
+            磁盘 dtype，默认取 ``S.dtype``。
 
         Yields
         ------
         np.memmap
-            One disk-backed chunk per step.
+            每步一个磁盘分块。
         """
         length = S.shape[axis]
         if length == 0:
@@ -273,37 +260,33 @@ class Chunk:
         dtype=None,
     ) -> np.ndarray:
         """
-        Apply ``func`` chunk-by-chunk along axis 0, returning one array.
+        沿 0 轴逐块应用 ``func``，返回一个数组。
 
-        The peak working memory is one chunk plus the output array. ``fn`` must
-        map a chunk to an array of the same per-element shape (e.g. elementwise
-        transforms); the result is written into a preallocated output of shape
-        ``S.shape``.
+        峰值内存为「一块 + 输出数组」。``func`` 必须把一块映射成逐元素形状相同的
+        数组（逐元素变换），结果写入按 ``S.shape`` 预分配的输出。
 
         Parameters
         ----------
         func : callable
-            Per-chunk function: ``func(chunk) -> array with chunk.shape``.
+            逐块函数：``func(chunk) -> 与 chunk.shape 相同的数组``。
         S : array-like
-            Input array.
+            输入数组。
         chunk_size : int, optional
-            Chunk length; defaults to :data:`DEFAULT_FILL_CHUNK_SIZE`.
+            块长度，默认 :data:`DEFAULT_FILL_CHUNK_SIZE`。
         out : np.ndarray, optional
-            Preallocated destination (same shape as ``S``; a ``np.memmap`` keeps
-            the output disk-backed). When None, an in-RAM array is allocated
-            with ``dtype`` (or the dtype of the first chunk result).
+            预分配的目标数组，形状须与 ``S`` 相同；传 ``np.memmap`` 时输出落在磁盘。
+            为 None 时按 ``dtype``（或第一块结果的 dtype）新建内存数组。
         dtype : np.dtype, optional
-            Output dtype used when ``out`` is None.
+            ``out`` 为 None 时新建输出的 dtype。
 
         Returns
         -------
         np.ndarray
-            The concatenated result (``out`` itself when provided).
+            拼接后的结果（传了 ``out`` 则返回 ``out`` 本身）。
 
         Notes
         -----
-        For an empty input, ``out`` (or a newly allocated empty array) is
-        returned untouched.
+        输入为空时不调用 ``func``，直接返回 ``out``（未提供时返回新建的空数组）。
         """
         chunk_size = validate_chunk_size(
             DEFAULT_FILL_CHUNK_SIZE if chunk_size is None else chunk_size
@@ -346,26 +329,24 @@ class Chunk:
         chunk_size: int = DEFAULT_FILL_CHUNK_SIZE,
     ) -> np.ndarray:
         """
-        Stream ``src`` into ``dst`` chunk-wise (peak memory = one chunk).
+        逐块把 ``src`` 拷进 ``dst``，峰值内存为一块。
 
-        ``dst`` may be a plain ndarray or a ``np.memmap`` (the typical use case:
-        filling a disk-backed working copy from a large in-RAM / on-disk source
-        without materializing a second full copy).
+        ``dst`` 可以是普通 ndarray 或 ``np.memmap``；典型用法是从大输入填充磁盘
+        工作副本，而不额外物化一份全量拷贝。
 
         Parameters
         ----------
         dst : np.ndarray
-            Destination (preallocated, shape-compatible with ``src``).
+            目标数组，已预分配且形状与 ``src`` 兼容。
         src : array-like
-            Source; must broadcast-assign onto ``dst[start:end]`` slices.
+            源数组，必须能广播赋值到 ``dst[start:end]`` 切片。
         chunk_size : int
-            Chunk length in elements; defaults to
-            :data:`DEFAULT_FILL_CHUNK_SIZE`.
+            块长度（元素数），默认 :data:`DEFAULT_FILL_CHUNK_SIZE`。
 
         Returns
         -------
         np.ndarray
-            ``dst`` (now filled).
+            填好的 ``dst``。
         """
         if not isinstance(dst, (np.ndarray, np.memmap)):
             raise TypeError("dst must be an ndarray or a memmap")
@@ -387,19 +368,12 @@ class Chunk:
 
     @classmethod
     def fill_memmap(cls, fp: np.memmap, source: np.ndarray) -> None:
-        """Stream ``source`` into ``fp`` chunk-wise so the peak memory stays at
-        one chunk (delegates to ``Utils.Chunk.chunked_fill``; chunk granularity
-        comes from ``Chunk.default_chunk_size`` under the global memory policy)."""
+        """逐块把 ``source`` 流式写入 ``fp``，峰值内存为一块。
+
+        块大小取 ``Chunk.chunk_size``（受全局内存预算约束），实际写入交给
+        ``Chunk.chunked_fill``。"""
         src_nbytes = getattr(source, "nbytes", 0)
         nbytes = max(fp.nbytes, src_nbytes)
 
         chunk_size = cls.chunk_size(nbytes)
         cls.chunked_fill(fp, source, chunk_size)
-
-
-
-if __name__ == "__main__":
-    arr = np.arange(1000)
-
-    for chunk in Chunk.chunk(arr, chunk_size=Chunk.chunk_size(arr)):
-        print(chunk)

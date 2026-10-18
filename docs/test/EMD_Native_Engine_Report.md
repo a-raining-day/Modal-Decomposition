@@ -1,6 +1,6 @@
 # EMD（原生引擎）验证、调参与内存报告
 
-> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md) · [CEEMDAN](./CEEMDAN_Native_Engine_Report.md) · [ICEEMDAN](./ICEEMDAN_Native_Engine_Report.md)
+> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md) · [CEEMDAN](./CEEMDAN_Native_Engine_Report.md) · [ICEEMDAN](./ICEEMDAN_Native_Engine_Report.md) · [RPSEMD](./RPSEMD_Native_Engine_Report.md)
 >
 > 对象：`src/Modal_Decomposition/EMD.py` —— 库内原生 EMD 引擎。本轮之前它以
 > `EMD_NEW.py` 的名字做原型验证，现已在重构中**转正为正式的 `EMD.py`**（旧包装版
@@ -668,24 +668,25 @@ case B 本身含二次趋势，一个"巨量对消"的退化解也能给出 `IO 
 | 7 | `IO` 在含大趋势的信号上不是可靠判据 | 见 §6.3（巨量对消的退化解也能给出 `IO ≈ −1`，EMD_OLD 同样如此） |
 | 8 | scipy 的 `_codata.py` 仍是坏的 | 本轮用内存修复绕过；**环境层面需要重装 scipy**，否则任何新进程仍会踩到 |
 
-### 11.1 同族一致性（跨 `EMD` / `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN`）
+### 11.1 同族一致性（跨 `EMD` / `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` / `RPSEMD`）
 
-五个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
+六个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
 
 | # | 不一致项 | 现状 |
 |---|---|---|
 | 1 | **噪声参数口径** | `EMD` 无噪声参数；**`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 的 `noise_amp` 都是「幅值系数」**（`σ = noise_amp · std(S)`，无量纲），默认值分别是 **0.3 / 0.3 / 0.3 / 0.2**。`ICEEMDAN` 的 `noise_amp` 就是 `β_k` 里的 ε₀：第 1 阶注入幅值同为 `noise_amp · std(S)`，之后按 `std(r_{k−1})` 自适应。旧基线（0.3.0 wheel）与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径 `noise_width · \|max−min\|`），跨库对比前必须换算，否则噪声强度会差 `\|max−min\| / std(S)` 倍 |
 | 2 | **`num_imf` 是否必填** | `EMD` / `EEMD` / `CEEMDAN` / `ICEEMDAN` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
 | 3 | **`info` 键名** | `EMD`：无噪声键（有 `final_sd`）；`EEMD` / `CEEMD`：`noise_amp`（系数）**+** `noise_std`（绝对标准差）；**`CEEMDAN` / `ICEEMDAN`：只有 `noise_std`，没有 `noise_amp`**。另外 `ICEEMDAN` 的 `info["emd info"]` **恒为空列表**（内层局部均值 EMD 的 info 未收集） |
-| 4 | **注册机制** | 五个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它。所以上文 #6「建议补上注册装饰器」目前**无法落地** —— `register_class` 本身已不存在 |
-| 5 | **并行能力** | 只有 `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 有 `parallel`；`EMD` 无多进程路径，且 **`CEEMDAN` / `ICEEMDAN` 的并行当前无收益**（`spawn` 固定开销摊不平，见 `CEEMDAN_Native_Engine_Report.md` §9.2 与 `ICEEMDAN_Native_Engine_Report.md` §4.3） |
+| 4 | **注册机制** | 六个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它。所以上文 #6「建议补上注册装饰器」目前**无法落地** —— `register_class` 本身已不存在 |
+| 5 | **并行能力** | 只有 `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 有 `parallel`；`EMD` / `RPSEMD` 无多进程路径，且 **`CEEMDAN` / `ICEEMDAN` 的并行当前无收益**（`spawn` 固定开销摊不平，见 `CEEMDAN_Native_Engine_Report.md` §9.2 与 `ICEEMDAN_Native_Engine_Report.md` §4.3） |
+| 6 | **`RPSEMD` 的三处空缺** | **噪声口径：无噪声参数**（辅助的是确定频率的正弦，幅值来自簇的平均瞬时幅值，没有 `noise_amp` / `noise_width`）；**`info` 键名：无 `noise_std`**（只有 `cluster_infos` / `each_center_amp` / `each_center_freq` / `rows`）；**并行能力：无 `parallel` / `num_workers`**，与本引擎（`EMD`）一致。另外它默认 `num_imf=10`（本族唯一默认给正整数阶数的类），且**尚未转正**（`RPSEMD_NEW.py`，473 行；同名 `RPSEMD.py` 仍是 149 行旧实现） |
 
 **已经一致的部分**（供核对）：
 
-- **`dtype` 默认值**：五个类都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
+- **`dtype` 默认值**：六个类都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
   `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 之所以能真正做到这一点，靠的是它们各自修掉了「噪声是
   float64、`S + w` 会把工作数组升格」的问题（`.astype(S.dtype, copy=False)`）。
-- **残差语义**：五者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
+- **残差语义**：六者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
 - **内层 EMD 透传**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 都用同一套 `emd_*` 参数，默认值即本报告的
   Pareto 拐点。
 - **`peaks_backend`**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 现在都有顶层 `peaks_backend`

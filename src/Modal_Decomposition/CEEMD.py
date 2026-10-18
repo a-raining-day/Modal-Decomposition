@@ -47,6 +47,7 @@ class CEEMD(Decomposer):
             raise TypeError(f"unexpected keyword arguments: {unknown}")
 
         self.dtype: type | np.dtype | None = kwargs.get("dtype", None)
+        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")   # 本类自己 find_peaks 用的后端
 
         self.emd_num_imf: int = kwargs.get("emd_num_imf", -1)
         self.emd_nbsym: int = kwargs.get("emd_nbsym", 4)
@@ -63,7 +64,6 @@ class CEEMD(Decomposer):
         self.emd_poly_order: int = kwargs.get("emd_poly_order", 2)
         self.emd_time_poly_order: int = kwargs.get("emd_time_poly_order", 2)
         self.emd_peaks_backend: str = kwargs.get("emd_peaks_backend", "numpy")
-        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")   # 本类自己 find_peaks 用的后端
 
         self.param_check()
 

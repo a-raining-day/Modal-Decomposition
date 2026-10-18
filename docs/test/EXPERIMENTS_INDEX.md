@@ -4,9 +4,9 @@
 便于复现与追责。所有计时口径为**同进程/同脚本中位计时**（预热后测量），
 跨日绝对耗时仅作参考。
 
-## 1. EMD 家族（EMD / EEMD / CEEMD / CEEMDAN / ICEEMDAN）原生引擎验证
+## 1. EMD 家族（EMD / EEMD / CEEMD / CEEMDAN / ICEEMDAN / RPSEMD）原生引擎验证
 
-五代引擎各有一轮独立验证，报告与数据一一对应：
+六份引擎各有一轮独立验证，报告与数据一一对应：
 
 | 引擎 | 验证内容 | 实验脚本 | 原始产物 | docs 报告 |
 |---|---|---|---|---|
@@ -15,8 +15,9 @@
 | **CEEMD** | 旧版可运行性重建与**算法差异辨析**、并行实现补齐、退化输入与 `dtype` 修复、开箱默认对比、互补性收益、Pareto 调参与默认值选择、并行崩溃检测 | `.scratch/eemd_new/ceemd_bench.py`、`legacy_ceemd.py`、`fig_ceemd.py`、`pareto.py`、`test_ceemd.py`、`test_ceemd_robust.py` | `tests/comparison/results/ceemd_new/{compare,pareto_sweep}.json` | `docs/test/CEEMD_Native_Engine_Report.md` |
 | **CEEMDAN** | 半成品补齐（10 项修复 + 3 处注释位）、**每阶 spawn 的并行分支**、四方等口径对比、`valid` 偏低成因、**主导旋钮为 `M` 的 Pareto 调参与默认值选择**、并行性能实测 | `.scratch/eemd_new/ceemdan_bench.py`、`legacy_ceemdan.py`、`fig_ceemdan.py`、`pareto.py`、`test_ceemdan.py`、`test_ceemdan_parallel.py`、`test_ceemdan_speed.py` | `tests/comparison/results/ceemdan_new/{compare,pareto_sweep}.json` | `docs/test/CEEMDAN_Native_Engine_Report.md` |
 | **ICEEMDAN** | **局部均值算子 `M(·)` 口径探针**（`x − E_1(x)` vs 单次包络平均）、半成品补齐（10 项修复 + 3 处补齐）、**每阶 spawn 的并行分支与一处竞态修复**、四方对比（旧原生是唯一同类对照）、Pareto 调参与默认值选择（`ε₀=0.2`、`M=100`）、`peaks_backend` 补齐 | `.scratch/eemd_new/iceemdan_bench.py`、`legacy_iceemdan.py`、`fig_iceemdan.py`、`test_iceemdan.py`、`test_iceemdan_parallel.py`、`probe_local_mean.py`、`probe_mirror.py` | `tests/comparison/results/iceemdan_new/{compare,pareto_sweep,local_mean_probe}.json` | `docs/test/ICEEMDAN_Native_Engine_Report.md` |
+| **RPSEMD** | **半成品补齐（13 项修复，含 `amp`/`freq` 传反这个根因）**、**「为什么这么慢」的拆解计时与聚类抽稀加速**（4096 点 `linkage` 155 → 1.8 ms、A/16384 端到端 35121 → 237.7 ms）、**瞬时频率估计器评估**（试过、无稳定收益、未采用）、**加权选簇评估**（干净双音有效、基准三例综合 Q 反降，默认不启用）、四方对比（PyEMD / pysdkit 都没有 RPSEMD，旧原生是唯一同类对照）、Pareto 调参与默认值选择（`max_clusters=4`、`sin_smaple_num=8`） | `.scratch/eemd_new/rpsemd_bench.py`、`legacy_rpsemd.py`、`fig_rpsemd.py`、`test_rpsemd.py`、`probe_rpsemd_speed.py`、`probe_rpsemd_speedup.py`、`probe_rpsemd_if.py`、`probe_rpsemd_weight.py` | `tests/comparison/results/rpsemd_new/{compare,pareto_sweep}.json` | `docs/test/RPSEMD_Native_Engine_Report.md` |
 
-> 五份报告开头都有互换链接，且各含一节「同族一致性」，统一列出跨五个类的已知不一致
+> 六份报告开头都有互换链接，且各含一节「同族一致性」，统一列出跨六个类的已知不一致
 > （噪声参数口径、`num_imf` 是否必填、`info` 键名、`register_class` 缺失、并行能力）。
 
 > 本表其余行引用的 EMD 脚本与报告（`bench_emd_faster.py`、`bench_emd_stopping_variants.py`、
@@ -36,12 +37,17 @@
 > 新旧算法对照的基线使用（见 `CEEMDAN_Native_Engine_Report.md` §2.1）；新引擎已由
 > `CEEMDAN_NEW.py` **转正为 `CEEMDAN.py`**，旧实现可从提交 **`dd547f2`** 取回。
 >
-> ICEEMDAN 同理**没有删除记录**：旧的 `ICEEMDAN.py`（255 行、含 `_Registry`）**仍在工作区**，
-> 在当前代码树上直接 import 就跑不起来（`ImportError`、抽象方法未实现），需
+> ICEEMDAN 同理**没有删除记录**：旧的 `ICEEMDAN.py`（255 行、含 `_Registry`）在当前代码树上
+> 直接 import 就跑不起来（`ImportError`、抽象方法未实现），需
 > `.scratch/eemd_new/legacy_iceemdan.py` 打补丁复活，才能作为新旧算法对照的基线（见
-> `ICEEMDAN_Native_Engine_Report.md` §11.2）。本轮的新引擎仍叫 `ICEEMDAN_NEW.py`（568 行，
-> **尚未转正为 `ICEEMDAN.py`**），所以 `tests/comparison/results/iceemdan_new/` 与
-> `docs/test/ICEEMDAN_Native_Engine_Report.md` 的对象都是这个 `_NEW` 文件。
+> `ICEEMDAN_Native_Engine_Report.md` §11.2）；旧源码只在提交 **`d3eec7e`**，脚本会自动回落到那里。
+> 新引擎已由 `ICEEMDAN_NEW.py` **转正为 `ICEEMDAN.py`**（584 行，提交 `833c1f4`）。
+>
+> RPSEMD 同理**没有删除记录**：旧 `RPSEMD.py`（**149 行、含 `_Registry`**）**仍在工作区**，
+> 在当前代码树上直接 import 就跑不起来，需 `.scratch/eemd_new/legacy_rpsemd.py` 打补丁复活，
+> 才能作为新旧算法对照的基线（见 `RPSEMD_Native_Engine_Report.md` §11.2）；补丁脚本优先读工作区
+> 这份源码，若工作区已被替换则回落到提交 **`833c1f4`**。**新引擎仍叫 `RPSEMD_NEW.py`（473 行），
+> 尚未转正** —— 也就是说 `RPSEMD.py` / `RPSEMD_NEW.py` 现在并存，旧的跑不起来、新的是现役实验对象。
 >
 > **旧原生基线取源注意**：EEMD / CEEMD 的旧原生实现要从未转正前的提交
 > **`dd547f2`** 取回（`git show dd547f2:src/Modal_Decomposition/{EEMD,CEEMD}.py`，
@@ -68,6 +74,7 @@
 | Cache（缓存层）速度与约定 | `comparison/bench_cache.py`、`test_cache.py` | `docs/CacheSpeedReport.md`、`docs/CacheConventions.md` |
 | Chunk（分块/内存策略） | `test_chunk.py` | `docs/ChunkReport.md` |
 | Peaks（极值检测三后端） | `test_peaks.py` | `docs/PeaksReport.md` |
+| **Hilbert 后端**（scipy / FFT 实半谱 / 自适应 FHT / SAO 内核：正确性、计时、内存、零填充伪影、契约不一致、2026-10-19 优化记录） | `comparison/bench_hilbert.py`、`test_hilbert.py` | `docs/Hilbert_Backend_Report.md`、`docs/Hilbert_Backend_Results.json` |
 | 组件统计 | `comparison/bench_timing.py`（metrics） | `docs/ComponentStatisticsReport.md` |
 
 ## 4. 未成报告 / 推迟的项
@@ -103,4 +110,9 @@
   lmd_fixed/}` → `comparison/results/_legacy_pyemd_wrapper/`，计时类由重跑
   生成新数据；**内存类按用户要求沿用归档数据不重跑**（报告写明适用边界）；
 * 旧 `test_memory/result_for_each_decomposition/EMD.{json,csv}` 归档为
-  `EMD_legacy_pyemd_wrapper.{json,csv}`（同样沿用，不重跑）。
+  `EMD_legacy_pyemd_wrapper.{json,csv}`（同样沿用，不重跑）；
+* 删除 **`tests/test_fht.py`**（旧的 Hilbert/FHT 用例：只验 DHT 定义与自逆性，未覆盖
+  scipy 对照、非 2 的幂、内存与契约），由 `tests/test_hilbert.py` +
+  `tests/comparison/bench_hilbert.py` 取代；其历史结论不再作为依据。
+  同轮修 `tests/conftest.py` 的 `set_seed` teardown（`Modal_Decomposition.set_seed` 已不存在，
+  导致每个用例 teardown 时 `AttributeError`）。

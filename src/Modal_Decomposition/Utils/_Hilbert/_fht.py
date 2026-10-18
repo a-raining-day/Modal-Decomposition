@@ -23,6 +23,22 @@
       cas(θ) = cos(θ) + sin(θ)
     * 逆变换 = 前向变换后除以 N (DHT 的自逆性)
 
+关于零填充的精度警告 (2026-10-19 实测):
+    上面的"自动零填充"只对 ``fht_forward`` / ``fht_inverse`` /
+    ``hilbert_transform`` 这三个**原语**成立。用它们算**解析信号**时, 零填充
+    会非线性地改变结果 —— 非 2 的幂长度上相对 L2 误差 0.5%–6%, 逐点误差
+    O(1), 且伪影从两端按 1/距离缓慢衰减 (见
+    ``docs/test/Hilbert_Backend_Report.md`` §5.2)。因此后端入口 ``_hilbert``
+    **不再**对任意长度直接调用 SAO 内核, 而是自适应分发 (见下)。
+
+自适应分发 (``_hilbert``):
+    * ``n`` 为 2 的幂且 ``n <= _SMALL_NATIVE_MAX`` (512) → SAO 编译内核
+      (该区间 C 内核最快, 且无需填充, 无精度代价);
+    * 其余 (含所有非 2 的幂、以及没有编译内核时的全部尺寸) →
+      ``_fft._hilbert`` 的 rfft/irfft 实半谱法, 与 scipy 逐点一致、任意长度
+      精确、速度约为 scipy 的 0.59–0.99×。
+    两个分支在 2 的幂长度上互相一致 (≤1e-14)。
+
 第三方代码声明:
     可选的 Cython 加速内核(``_fht_native``, 见 ``setup.py`` 与 ``_C/_fht``)
     源自 Smithsonian Astrophysical Observatory (SAO) "am" 项目 (S. Paine),
@@ -36,7 +52,14 @@
 
 import numpy as np
 
+from . import _fft
+
 __all__ = ["_hilbert", "fht_forward", "fht_inverse"]
+
+# 自适应分发的阈值: 2 的幂且 n <= 该值时用 SAO 编译内核(实测最快),
+# 其余走 _fft 的实半谱法。512 是实测交叉点(n=512 内核 9.2 µs vs 半谱 12.1 µs;
+# n=1024 两者 14.9 vs 14.8 µs; n=2048 内核 28.8 µs 已明显落后)。
+_SMALL_NATIVE_MAX = 512
 
 
 def _next_pow2(n: int) -> int:
@@ -52,7 +75,7 @@ def _as_real_1d(signal) -> np.ndarray:
     x = np.asarray(signal, dtype=np.float64)
     if x.ndim != 1:
         raise ValueError(
-            f"_fht 只接受一维实信号, 当前输入维度为 {x.ndim}D")
+            f"hilbert 只接受一维实信号, 当前输入维度为 {x.ndim}D")
     return x
 
 
@@ -186,6 +209,26 @@ def _hilbert(signal: np.ndarray, matlab_phase: bool = True) -> np.ndarray:
     对实信号做 Hilbert 变换, 返回解析信号。
     这是 Modal-Decomposition 库对外的统一入口。
     matlab_phase=True 时与 MATLAB / scipy 的相位约定一致。
+
+    自适应实现 (2026-10-19 引入; 见 docs/test/Hilbert_Backend_Report.md §7)
+    ------------------------------------------------------------------
+    解析信号是非局部算子, 用 SAO 的 ``hilbert()`` 时必须把输入零填充到 2 的
+    幂, 这会改变结果 (相对 L2 误差 0.5%–6%)。所以本入口按尺寸选内核:
+
+    * ``n`` 是 2 的幂且 ``n <= _SMALL_NATIVE_MAX`` (512) → SAO 编译内核。
+      这个区间里 C 内核最快 (n=256 时 5.9 µs, 是 scipy 的 0.48×), 且不需要
+      填充, 所以没有精度代价;
+    * 其余情况 (含**所有**非 2 的幂长度、以及没编译内核时的全部尺寸) →
+      ``_fft._hilbert`` (rfft/irfft 实半谱法)。它与 ``scipy.signal.hilbert``
+      逐点一致 (≤4e-15), 任意长度精确, 速度是 scipy 的 0.59–0.99×。
+
+    两个分支的输出在 2 的幂长度上互相一致 (≤1e-14), 因此切换阈值不会改变
+    "FHT 后端"对外的语义; ``hilbert_transform`` / ``fht_forward`` 仍是纯 SAO
+    语义 (会零填充), 供需要原汁原味 FHT 的调用方使用。
     """
-    signal = _as_real_1d(signal)
-    return hilbert_transform(signal, matlab_phase=matlab_phase)
+    x = _as_real_1d(signal)
+    n = x.shape[0]
+    if (_native is not None and 0 < n <= _SMALL_NATIVE_MAX
+            and (n & (n - 1)) == 0):
+        return hilbert_transform(x, matlab_phase=matlab_phase)
+    return _fft._hilbert(x, matlab_phase=matlab_phase)

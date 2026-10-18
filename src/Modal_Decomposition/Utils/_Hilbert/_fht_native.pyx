@@ -11,6 +11,21 @@
 #
 #   相位约定: SAO 实现的 Hilbert 变换相位为 +90°, 而 MATLAB/SciPy 为 -90°;
 #   需要 MATLAB 结果时把解析信号虚部乘 -1, 即本文件的 matlab_phase=True。
+#
+# ---------------------------------------------------------------------------
+# 本项目（Modal-Decomposition）对上游代码的修改记录
+# ---------------------------------------------------------------------------
+#   上游 = 上述 GitHub 仓库拆出的 SAO C 代码 (transforms.c / transforms.h /
+#          am_sysdep.c / am_sysdep.h / math_const.h)。
+#
+#   1. **C 源码 (transforms.c 等) 未做任何修改** —— 逐字节与上游一致（见
+#      README "Acknowledgement" 的 "Modifications" 段）。
+#   2. 本 .pyx 包装层为本项目所写（上游不含 .pyx），此处记录本轮优化：
+#      2026-10-19  `hilbert_transform()` 改为零拷贝 —— 直接分配 complex128
+#      输出数组、以其 float64 视图作为 SAO `hilbert()` 的 2n-double 交错
+#      缓冲原地调用，删除了旧版"2n double 临时缓冲 + 两次跨步拷贝拼复数"
+#      （去掉 1 次分配与 2 次跨步搬运，见 docs/test/Hilbert_Backend_Report.md §7）。
+#   3. 编译选项由 setup.py 控制（本项目文件），未改动 C 语义。
 # ===========================================================================
 
 import numpy as np
@@ -80,24 +95,28 @@ def hilbert_transform(cnp.ndarray[cnp.float64_t, ndim=1] real_signal not None, b
     相位约定: SAO C 实现为 +90°, 而 MATLAB/SciPy 为 -90° —— 与 MATLAB
     对齐等价于把虚部乘 -1 (matlab_phase=True), 此时输出与
     MATLAB / scipy.signal.hilbert 一致。
+
+    实现（本项目对包装层的优化，SAO C 源码未改）:
+      SAO 的 ``hilbert()`` 接受 ``2n`` 个 double 的复数交错缓冲并**原地**改写。
+      复数数组在内存里就是实部/虚部交错的 double，因此这里直接分配
+      ``complex128`` 输出数组、用它的 ``float64`` 视图当缓冲，让 C 内核原地
+      写回 —— 省掉旧版 "``2n`` double 临时缓冲 + 两次跨步拷贝拼复数"
+      （合计 3 次跨步内存搬运）。剩下的一次跨步写只用于填实部。
     """
     cdef int n_orig = real_signal.shape[0]
     cdef int n = _next_pow2(n_orig)
-    # hilbert() 需要 2n 个 double 的复数交错数组; 只把前 n_orig 个实部
-    # 槽位填上信号, 其余自动零填充(与 fht_forward/fht_inverse 语义一致)
-    cdef cnp.ndarray[cnp.float64_t, ndim=1] z = np.zeros(2 * n, dtype=np.float64)
-    z[0:2 * n_orig:2] = real_signal  # 实部
-    cdef double[::1] view = z
+    # 复数输出数组 = 2n 个交错 double，正好是 hilbert() 要的缓冲区布局
+    cdef cnp.ndarray[cnp.complex128_t, ndim=1] analytic = np.zeros(n, dtype=np.complex128)
+    cdef cnp.ndarray[cnp.float64_t, ndim=1] flat = analytic.view(np.float64)
+    cdef double[::1] view = flat
+
+    # 实部槽位填信号 (0,2,4,...)，其余(虚部与零填充)保持 0
+    flat[0:2 * n_orig:2] = real_signal
 
     with nogil:
         hilbert(&view[0], n)
 
     if matlab_phase:
-        z[1::2] *= -1  # 对齐 MATLAB 的 -90°
+        analytic.imag *= -1  # 对齐 MATLAB 的 -90°
 
-    # 返回复数解析信号
-    cdef cnp.ndarray[cnp.complex128_t, ndim=1] analytic = \
-        np.zeros(n, dtype=np.complex128)
-    analytic.real = z[0::2]
-    analytic.imag = z[1::2]
     return analytic[:real_signal.shape[0]]

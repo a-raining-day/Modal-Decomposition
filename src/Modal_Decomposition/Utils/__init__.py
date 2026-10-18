@@ -1,6 +1,6 @@
 from .Check import Check, Check_Time_and_Signal
 from .Monotonicity import Monotony, monotonic, give_monotony, MONOTONY_MODS, MONOTONY_MODS_ARGS
-from .Hilbert import hilbert, fht_forward, fht_inverse, hilbert_transform
+from .Hilbert import hilbert, fht_forward, fht_inverse, hilbert_transform, HILBERT_MODS, HILBERT_MODS_ARGS
 from .Envelope import envelope, ENVELOPE_MODS, ENVELOPE_MODS_ARGS
 from .Peaks import (
     find_peaks,

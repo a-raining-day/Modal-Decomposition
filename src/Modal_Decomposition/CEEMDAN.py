@@ -51,6 +51,7 @@ class CEEMDAN(Decomposer):
             raise TypeError(f"unexpected keyword arguments: {unknown}")
 
         self.dtype: type | np.dtype | None = kwargs.get("dtype", None)
+        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")   # 本类自己 find_peaks 用的后端
 
         # 内层 EMD 只取 1 阶 (CEEMDAN 每次只剥一阶); 噪声预分解要留下 k-1 阶
         self.emd_num_imf: int = 1
@@ -71,7 +72,6 @@ class CEEMDAN(Decomposer):
         self.emd_poly_order: int = kwargs.get("emd_poly_order", 2)
         self.emd_time_poly_order: int = kwargs.get("emd_time_poly_order", 2)
         self.emd_peaks_backend: str = kwargs.get("emd_peaks_backend", "numpy")
-        self.peaks_backend: str = kwargs.get("peaks_backend", "numpy")   # 本类自己 find_peaks 用的后端
 
         self.param_check()
 
@@ -159,7 +159,7 @@ class CEEMDAN(Decomposer):
         if not isinstance(self.res_energy, float):
             raise TypeError("the `res_energy` must be float.")
 
-        if not (self.res_energy >= 0):
+        if not (1 > self.res_energy >= 0):
             raise ValueError("the `res_energy` must >= 0.")
 
         self.peaks_backend = Check.validate_mod(self.peaks_backend, PEAKS_BACKEND)

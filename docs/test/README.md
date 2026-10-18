@@ -113,9 +113,27 @@ Smithsonian *am* license notice:
 > clearly and conspicuously all of the information contained in the first
 > sentence of this notice.
 
+### Modifications (GPL/attribution compliance)
+
+The upstream files listed below are used under the licence above. This project
+**modified the wrapper layer only**; the downloaded C sources are byte-identical
+to upstream:
+
+| Path | Status | Notes |
+|---|---|---|
+| `_Hilbert/_C/_fht/transforms.c`, `transforms.h`, `am_sysdep.c`, `am_sysdep.h`, `math_const.h` | **unmodified** (verbatim upstream) | no edits made |
+| `_Hilbert/_fht_native.pyx` | **added + modified by this project** (upstream ships no `.pyx`) | Cython wrapper; 2026-10-19 `hilbert_transform()` rewritten to zero-copy: it allocates the `complex128` output directly and hands its `float64` view to the SAO `hilbert()` as the 2n-double interleaved buffer, deleting the old "extra 2n buffer + two strided copies" path (5–27 % faster). Recorded in the `.pyx` header ("本项目（Modal-Decomposition）对上游代码的修改记录"). |
+| `_fht.py` | **added by this project** | pure-NumPy reference implementation + adaptive dispatch (`n` a power of two and ≤ 512 → SAO kernel, otherwise real half-spectrum). No upstream code. |
+| `_fft.py` | **added by this project** | default `"FFT"` backend (rfft/irfft half spectrum). No upstream code. |
+| `setup.py` | **added by this project** | build flags only (`/O2` on MSVC, `-O3 -ffast-math` elsewhere); C semantics untouched. |
+
 **Hilbert-transform phase convention:** the SAO implementation shifts the
 phase by **+90°** — *not* **−90°** as in MATLAB/SciPy. To obtain the
 MATLAB-compatible result, multiply the component orthogonal to the input by
 `exp(j·π) = −1`, i.e. multiply the imaginary part of the analytic signal by
 −1 for a real input (`matlab_phase=True` in
 `Modal_Decomposition.Utils._Hilbert._fht`).
+
+Backend selection, accuracy, timing, the power-of-two requirement of the raw
+SAO kernel and the 2026-10-19 optimisation round are measured in
+[`Hilbert_Backend_Report.md`](Hilbert_Backend_Report.md).

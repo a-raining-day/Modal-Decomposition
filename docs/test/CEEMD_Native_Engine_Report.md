@@ -1,6 +1,6 @@
 # CEEMD（原生引擎）验证与调参报告
 
-> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md) · [CEEMDAN](./CEEMDAN_Native_Engine_Report.md) · [ICEEMDAN](./ICEEMDAN_Native_Engine_Report.md)
+> 同族报告：[EMD](./EMD_Native_Engine_Report.md) · [EEMD](./EEMD_Native_Engine_Report.md) · [CEEMD](./CEEMD_Native_Engine_Report.md) · [CEEMDAN](./CEEMDAN_Native_Engine_Report.md) · [ICEEMDAN](./ICEEMDAN_Native_Engine_Report.md) · [RPSEMD](./RPSEMD_Native_Engine_Report.md)
 >
 > 对象：`src/Modal_Decomposition/CEEMD.py` —— 库内原生互补集总经验模态分解（CEEMD）引擎。
 > 本轮之前它以 `CEEMD_NEW.py` 的名字做原型验证，现已在重构中**转正为正式的 `CEEMD.py`**
@@ -447,28 +447,29 @@ queue.put(("error", index, "类型: 描述"))                 # 出错时先回�
 | 1 | `q_C` 只有 0/7、1/7 的粗分辨率 | 使 `Q` 出现 0.0476 量级的跳变假象，非单调（§7.3）。要根治需把 C 网格加密或改用「合规行数/总行数」的池化口径 |
 | 2 | `CEEMDConfig.dtype` **显式传 `dtype` 时**存的是 `np.float32` / `np.float64` **类对象**，而非 `np.dtype` 实例 | 此时 `config.to_dict()` 无法 JSON 序列化会抛 `TypeError`；默认 `dtype=None` 时不受影响 |
 | 3 | 旧算法与现役 `CEEMD.py` **同名不同物** | 现役 `CEEMD.py` 已是新引擎，旧实现只能从 `git show dd547f2:src/Modal_Decomposition/CEEMD.py` 取回（**不是 HEAD**，HEAD 里已是新版），调用方若依赖旧算法语义需显式重建（§11.2） |
-| 4 | 五个类都未 `register_class` | `_Registry.py` 已删除，注册机制整体不存在 |
+| 4 | 六个类都未 `register_class` | `_Registry.py` 已删除，注册机制整体不存在 |
 | 5 | 15 个兄弟模块仍 `from ._Registry import register_class` **且** `from .Base import Config` | 按需 import 即失败（`ImportError: cannot import name 'Config'`），整包 `import Modal_Decomposition` 能过只是因为 `__init__` 不主动加载 |
 | 6 | `LMD.py` 有语法错误 | `IndentationError: unexpected indent (line 412)` |
 
-### 10.3 同族一致性（跨 `EMD` / `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN`）
+### 10.3 同族一致性（跨 `EMD` / `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` / `RPSEMD`）
 
-五个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
+六个引擎由不同轮次演进而来，以下是**已知的跨类不一致**，调用方需要注意：
 
 | # | 不一致项 | 现状 |
 |---|---|---|
 | 1 | **噪声参数口径** | `EMD` 无噪声参数；**`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 的 `noise_amp` 都是「幅值系数」**（`σ = noise_amp · std(S)`，无量纲），默认值分别是 **0.3 / 0.3 / 0.3 / 0.2**。`ICEEMDAN` 的 `noise_amp` 就是 `β_k` 里的 ε₀：第 1 阶注入幅值同为 `noise_amp · std(S)`，之后按 `std(r_{k−1})` 自适应。旧基线（0.3.0 wheel）与 PyEMD / PySDKit 用 `noise_width`（**峰峰值**口径 `noise_width · \|max−min\|`）。跨库对比前必须先换算，否则噪声强度会差 `\|max−min\| / std(S)` 倍 |
 | 2 | **`num_imf` 是否必填** | `EMD` / `EEMD` / `CEEMDAN` / `ICEEMDAN` 默认 `-1`（自动定阶）；**`CEEMD` 必填**，不传直接 `TypeError` |
 | 3 | **`info` 键名** | `EMD`：无噪声键（有 `final_sd`）；`EEMD` / `CEEMD`：`noise_amp`（系数）**+** `noise_std`（绝对标准差）；**`CEEMDAN` / `ICEEMDAN`：只有 `noise_std`，没有 `noise_amp`**。另外 `CEEMD` 的 `rows` 是三元组、`EMD info` 是一对（§8.3）；`ICEEMDAN` 的 `info["emd info"]` **恒为空列表**（内层局部均值 EMD 的 info 未收集） |
-| 4 | **注册机制** | 五个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它 |
-| 5 | **并行能力** | 只有 `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 有 `parallel`；`EMD` 无多进程路径，且 **`CEEMDAN` / `ICEEMDAN` 的并行当前无收益**（`spawn` 固定开销摊不平，见 `CEEMDAN_Native_Engine_Report.md` §9.2 与 `ICEEMDAN_Native_Engine_Report.md` §4.3） |
+| 4 | **注册机制** | 六个类都未 `register_class`；`_Registry.py` 已删除，还有 15 个兄弟模块在引用它 |
+| 5 | **并行能力** | 只有 `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 有 `parallel`；`EMD` / `RPSEMD` 无多进程路径，且 **`CEEMDAN` / `ICEEMDAN` 的并行当前无收益**（`spawn` 固定开销摊不平，见 `CEEMDAN_Native_Engine_Report.md` §9.2 与 `ICEEMDAN_Native_Engine_Report.md` §4.3） |
+| 6 | **`RPSEMD` 的三处空缺** | **噪声口径：无噪声参数**（辅助的是确定频率的正弦，幅值来自簇的平均瞬时幅值，没有 `noise_amp` / `noise_width`）；**`info` 键名：无 `noise_std`**（只有 `cluster_infos` / `each_center_amp` / `each_center_freq` / `rows`）；**并行能力：无 `parallel` / `num_workers`**，与 `EMD` 一致。另外它默认 `num_imf=10`（本族唯一默认给正整数阶数的类），且**尚未转正**（`RPSEMD_NEW.py`，473 行；同名 `RPSEMD.py` 仍是 149 行旧实现） |
 
 **已经一致的部分**（供核对）：
 
-- **`dtype` 默认值**：五个类都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
+- **`dtype` 默认值**：六个类都是 `None`（保持输入精度），`float32` 输入全程 `float32`。
   `EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 之所以能真正做到这一点，靠的是本轮修的 `.astype(S.dtype)` ——
   修复前 `np.random.normal(...)` 是 float64，`S + w` 会把工作数组整体升格。
-- **残差语义**：五者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
+- **残差语义**：六者都满足 `Res = S − ΣIMFs`，重建恒等式成立。
 - **内层 EMD 透传**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 都用同一套 `emd_*` 参数。
 - **`peaks_backend`**：`EEMD` / `CEEMD` / `CEEMDAN` / `ICEEMDAN` 现在都有顶层 `peaks_backend`
   （默认 `"numpy"`，`Check.validate_mod(..., PEAKS_BACKEND)` 校验），内层 EMD 仍用

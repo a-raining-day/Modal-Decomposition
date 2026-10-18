@@ -65,6 +65,17 @@ def multichannel_signal(signal):
 
 @pytest.fixture(autouse=True)
 def _reset_global_seed():
-    """Keep the process-level seed isolated between tests."""
+    """Keep the process-level seed isolated between tests.
+
+    ``set_seed`` 目前挂在 ``Utils`` 上 (``Modal_Decomposition.Utils.set_seed``),
+    包的 ``__init__`` 尚未导出它; 这里两种位置都兼容, 缺失时静默跳过,
+    避免整轮测试在 teardown 阶段集体报 AttributeError。
+    """
     yield
-    Modal_Decomposition.set_seed(None)
+    setter = getattr(Modal_Decomposition, "set_seed", None)
+    if setter is None:
+        try:
+            from src.Modal_Decomposition.Utils import set_seed as setter
+        except ImportError:            # 极端情况下 Utils 也导不出
+            return
+    setter(None)

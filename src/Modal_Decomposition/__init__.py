@@ -86,25 +86,6 @@ def get_seed() -> int:
     """读取当前进程级全局随机种子。"""
     return Seed.get()
 
-
-def _facade(name: str):
-    """
-    把模块级 ``f_X`` 包成 ``Function.X``：保留真实签名 (``__wrapped__`` 让
-    ``inspect.signature`` 跟随) 与 docstring, 但 ``__qualname__`` 记为
-    ``Function.X``, 便于自省与测试识别门面入口。
-    """
-    target = globals()[f"f_{name}"]
-
-    def facade(*args, **kwargs):
-        return target(*args, **kwargs)
-
-    facade.__wrapped__ = target
-    facade.__doc__ = target.__doc__
-    facade.__name__ = name
-    facade.__qualname__ = f"Function.{name}"
-    return staticmethod(facade)
-
-
 class Class:
     EMD = EMD
     EEMD = EEMD
@@ -112,7 +93,6 @@ class Class:
     CEEMDAN = CEEMDAN
     ICEEMDAN = ICEEMDAN
     RPSEMD = RPSEMD
-
     EFD = EFD
     CEEFD = CEEFD
     MEMD = MEMD
@@ -125,19 +105,18 @@ class Class:
 
 
 class Function:
-    EMD = _facade("EMD")
-    EEMD = _facade("EEMD")
-    CEEMD = _facade("CEEMD")
-    CEEMDAN = _facade("CEEMDAN")
-    ICEEMDAN = _facade("ICEEMDAN")
-    RPSEMD = _facade("RPSEMD")
-
-    EFD = _facade("EFD")
-    CEEFD = _facade("CEEFD")
-    MEMD = _facade("MEMD")
-    SSA = _facade("SSA")
-    FMD = _facade("FMD")
-    LMD = _facade("LMD")
-    VMD = _facade("VMD")
-    EWT = _facade("EWT")
-    SVMD = _facade("SVMD")
+    EMD = f_EMD
+    EEMD = f_EEMD
+    CEEMD = f_CEEMD
+    CEEMDAN = f_CEEMDAN
+    ICEEMDAN = f_ICEEMDAN
+    RPSEMD = f_RPSEMD
+    EFD = f_EFD
+    CEEFD = f_CEEFD
+    MEMD = f_MEMD
+    SSA = f_SSA
+    FMD = f_FMD
+    LMD = f_LMD
+    VMD = f_VMD
+    EWT = f_EWT
+    SVMD = f_SVMD

@@ -218,7 +218,7 @@ def test_facade_and_class_share_the_native_entry():
     """注册键 "EWT" 现在就是自研实现 (Class 与 Function 同源)。"""
     assert MD.Class.EWT is EWT
     assert MD.Class.EWT.__module__.split(".")[-1] == "EWT"      # 不是 EWTpy / 旧包装
-    assert MD.Function.EWT.__qualname__ == "Function.EWT"
+    assert MD.Function.EWT is MD.f_EWT       # 门面就是模块级函数本身（IDE 可识别签名）
 
 
 @pytest.mark.parametrize("mod", BOUNDARY_MODS)

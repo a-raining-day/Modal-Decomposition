@@ -26,7 +26,8 @@ classifiers = [
 ]
 dependencies = [
     "numpy",
-    "psutil"
+    "psutil",
+    "scipy"
 ]
 
 optional-dependencies = {"EMD"=["EMD-signal"], "cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "ewtpy"=["ewtpy"]}

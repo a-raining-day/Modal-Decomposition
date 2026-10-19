@@ -32,7 +32,9 @@ def _run(seed: int = 42):
 def test_registered_in_class_and_function():
     assert getattr(Class, METHOD) is not None
     assert getattr(Function, METHOD) is not None
-    assert Function.__dict__[METHOD].__qualname__ == f"Function.{METHOD}"
+    # 门面现在是直接别名（不再经过 wrapper），断言"同一对象"而不是名字，
+    # 这样 IDE 才能把 f_* 的完整签名识别为 Function.<METHOD>。
+    assert Function.__dict__[METHOD] is getattr(MD, f"f_{METHOD}")
 
 
 def test_returns_decomposition_result():

@@ -1,0 +1,25 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.eggs/
+*.egg-info/
+build/
+dist/
+wheelhouse/
+.pytest_cache/
+.venv/
+.idea/
+*.idea/
+
+# --- Cython 本地编译产物(源码树内, 若需手动 build_ext --inplace) ---
+src/Modal_Decomposition/Utils/_Hilbert/_fht_native.c
+src/Modal_Decomposition/Utils/_Hilbert/_fht_native*.pyd
+src/Modal_Decomposition/Utils/_Hilbert/_fht_native*.so
+/ref/
+/.vscode/
+/.scratch_collision/
+/.scratch/
+/src/.idea/
+/.pytest_tmp/
+/explore/

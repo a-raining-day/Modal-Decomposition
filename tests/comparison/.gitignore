@@ -1,0 +1,3 @@
+# raw per-cell artifacts of the memory axis (keep the summarized csv/json)
+results/memory/_runs/
+results/memory/*.hb.log

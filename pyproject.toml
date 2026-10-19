@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.2.0", "wheel", "Cython>=3.0", "numpy>=1.21"]
+requires = ["setuptools>=68.2.0", "wheel", "Cython>=3.0", "numpy>=1.21", "scipy>=1.15.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -29,7 +29,7 @@ dependencies = [
     "psutil"
 ]
 
-optional-dependencies = {"EMD"=["EMD-signal"], "cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "scipy"=["scipy"], "ewtpy"=["ewtpy"]}
+optional-dependencies = {"EMD"=["EMD-signal"], "cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "ewtpy"=["ewtpy"]}
 
 [project.urls]
 homepage = "https://github.com/a-raining-day/Modal-Decomposition"

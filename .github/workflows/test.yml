@@ -28,12 +28,18 @@ jobs:
         run: pip install -e .
         shell: bash
 
-      - name: Install pytest
-        run: pip install pytest
+      # pytest 是测试框架; scipy 在 pyproject 里属可选依赖, 但 EMD 族/Peaks/
+      # Slepian/Envelope 的多个用例都要用它 (其余可选后端 vmdpy/ewtpy/numba/
+      # pyfftw/cupy 由用例里的 importorskip / available_backends() 自动跳过)。
+      - name: Install test dependencies
+        run: pip install pytest scipy
         shell: bash
 
-      - name: Unit test (public pure-Python entry)
-        run: python -m pytest tests/test_fht.py -q
+      # 跑整个测试套件: 15 个分解法 + Base/Utils 13 个工具模块 + 契约/门面测试。
+      # 各平台不一致的原生后端(FFT/FHT/Slepian 的 C 扩展)由测试内部的
+      # available_backends() 自动跳过, 不会因为缺少某个后端而失败。
+      - name: Unit tests
+        run: python -m pytest tests -q
         shell: bash
 
       # 确认编译产物真的被加载, 且原生内核与纯 NumPy 参考实现数值一致

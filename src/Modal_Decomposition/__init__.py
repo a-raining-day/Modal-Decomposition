@@ -104,19 +104,40 @@ class Class:
     SVMD = SVMD
 
 
+def _facade(name: str):
+    """
+    把模块级 ``f_<NAME>`` 包装成门面里的可调用对象。
+
+    只做一层薄包装: 保留原函数的签名（``functools.wraps``）与 ``__wrapped__``，
+    并把 ``__qualname__`` 改成 ``Function.<NAME>`` —— 这样从 ``Function`` 上取到的
+    对象自报家门是门面成员，而不是模块级函数。
+    """
+    import functools
+
+    target = globals()[f"f_{name}"]
+
+    @functools.wraps(target)
+    def wrapper(*args, **kwargs):
+        return target(*args, **kwargs)
+
+    wrapper.__wrapped__ = target
+    wrapper.__qualname__ = f"Function.{name}"
+    return wrapper
+
+
 class Function:
-    EMD = f_EMD
-    EEMD = f_EEMD
-    CEEMD = f_CEEMD
-    CEEMDAN = f_CEEMDAN
-    ICEEMDAN = f_ICEEMDAN
-    RPSEMD = f_RPSEMD
-    EFD = f_EFD
-    CEEFD = f_CEEFD
-    MEMD = f_MEMD
-    SSA = f_SSA
-    FMD = f_FMD
-    LMD = f_LMD
-    VMD = f_VMD
-    EWT = f_EWT
-    SVMD = f_SVMD
+    EMD = _facade("EMD")
+    EEMD = _facade("EEMD")
+    CEEMD = _facade("CEEMD")
+    CEEMDAN = _facade("CEEMDAN")
+    ICEEMDAN = _facade("ICEEMDAN")
+    RPSEMD = _facade("RPSEMD")
+    EFD = _facade("EFD")
+    CEEFD = _facade("CEEFD")
+    MEMD = _facade("MEMD")
+    SSA = _facade("SSA")
+    FMD = _facade("FMD")
+    LMD = _facade("LMD")
+    VMD = _facade("VMD")
+    EWT = _facade("EWT")
+    SVMD = _facade("SVMD")

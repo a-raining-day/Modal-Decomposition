@@ -30,7 +30,7 @@ dependencies = [
     "scipy"
 ]
 
-optional-dependencies = {"EMD"=["EMD-signal"], "cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"], "vmdpy"=["vmdpy"], "ewtpy"=["ewtpy"]}
+optional-dependencies = {"cupy"=["cupy-cuda12x"], "pyfftw"=["pyfftw"]}
 
 [project.urls]
 homepage = "https://github.com/a-raining-day/Modal-Decomposition"

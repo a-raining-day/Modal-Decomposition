@@ -1,6 +1,6 @@
 # `results/emd_new/` —— EMD（原生引擎）验证轮的原始数据
 
-本目录是 [`docs/test/EMD_Native_Engine_Report.md`](../../../../docs/test/EMD_Native_Engine_Report.md)
+本目录是 [`docs/test/methods/EMD_Native_Engine_Report.md`](../../../../docs/test/methods/EMD_Native_Engine_Report.md)
 的全部底层数据。脚本在 `.scratch/emd_new/`，图片在 `fig/`。
 
 > **命名说明**：除 `three_way.json` 由脚本直接写入本目录外，其余 JSON 是脚本写到
@@ -172,8 +172,8 @@ $src = Join-Path $env:TEMP "emd_new_test"; $dst = "tests\comparison\results\emd_
 & $py -X utf8 -u .scratch\emd_new\t28_figures.py
 ```
 
-该脚本只读本目录的 JSON，写出 `fig/emd_pareto.png`、`fig/emd_three_way.png`、
-`fig/emd_faster.png`、`fig/emd_memory.png`、`fig/emd_architecture.png`。
+该脚本只读本目录的 JSON，写出 `fig/methods/emd/emd_pareto.png`、`fig/methods/emd/emd_three_way.png`、
+`fig/methods/emd/emd_faster.png`、`fig/methods/emd/emd_memory.png`、`fig/methods/emd/emd_architecture.png`。
 注意 `t28` 里的图注用英文（默认 matplotlib 字体无中文字形）。
 
 ---

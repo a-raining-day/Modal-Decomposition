@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+envelope,lowpass,mixed,1,131072,1048576,float64,2.865,4.883,4.0,1.0,9953.6,3,349.04,1,
+envelope,lowpass,mixed,50,6553600,52428800,float64,216.076,223.687,200.0,0.0,9953.6,3,231.4,1,
+envelope,lowpass,mixed,100,13107200,104857600,float64,391.244,443.558,400.0,0.0,9953.6,3,255.59,1,
+envelope,lowpass,mixed,200,26214400,209715200,float64,785.971,812.176,800.0,0.0,9953.6,3,254.46,1,
+envelope,lowpass,mixed,500,65536000,524288000,float64,1707.579,1771.523,2000.0,0.0,9953.6,2,292.81,1,
+envelope,lowpass,mixed,600,78643200,629145600,float64,1475.38,1513.411,2400.0,0.0,9953.6,2,406.67,1,

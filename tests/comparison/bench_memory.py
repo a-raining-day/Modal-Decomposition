@@ -54,6 +54,7 @@ from workers import IMPL_ORDER, versions
 
 CASE_WORKER = _HERE / "case_worker.py"
 DEFAULT_OUT = _HERE / "results" / "memory"
+DEFAULT_TABLE = _HERE.parents[1] / "table" / "memory"   # csv 汇总目录
 
 # Defaults follow the tests/test_memory matrix (float64 cell only).
 DEFAULT_SIZES = ["1MB", "20MB", "100MB", "500MB", "1GB"]
@@ -307,7 +308,8 @@ def main() -> int:
     for impl, records in collected.items():
         json_path = out / f"{impl}.json"
         json_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
-        with open(out / f"{impl}.csv", "w", newline="", encoding="utf-8") as fh:
+        DEFAULT_TABLE.mkdir(parents=True, exist_ok=True)
+        with open(DEFAULT_TABLE / f"{impl}.csv", "w", newline="", encoding="utf-8") as fh:
             w = csv.DictWriter(fh, fieldnames=_CSV_FIELDS)
             w.writeheader()
             for r in records:

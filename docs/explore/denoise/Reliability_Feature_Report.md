@@ -4,7 +4,7 @@
 - 环境：Python 3.10.11 · numpy 2.2.6 · scipy 1.15.3 · matplotlib 3.10.9
 - 代码：`explore/denoise/{run_reliability.py, analyze_reliability.py, make_reliability_figure.py}`
 - 结果：`explore/denoise/results/{reliability.json, reliability_summary.csv, reliability_summary.json}`
-- 图：`docs/explore/denoise/figures/reliability_cwru.png`
+- 图：`fig/explore/denoise/reliability_cwru.png`
 
 ## 1. 假设与定义
 
@@ -57,7 +57,7 @@ R(f)    = mean(f) / std(f)          # 可靠性比
 **结论：CWRU 上假设不成立。** 221.5 Hz 伪峰是一个**稳定伪影**，不是随机
 方差大的伪峰；`mean/std` 会给出“高置信度”，但置信的是错误频率。
 
-![CWRU reliability](figures/reliability_cwru.png)
+![CWRU reliability](../../../fig/explore/denoise/reliability_cwru.png)
 
 ## 3. 合成 impact 结果
 
@@ -98,7 +98,7 @@ R(f)    = mean(f) / std(f)          # 可靠性比
   只要 R 正确，SNR 也正确；0.05 甚至 R 4/5 而 SNR 5/5。
   低 aux 让“峰值正确”，但不需要 R 来纠正 SNR。
 
-![reliability vs amp](figures/reliability_amp.png)
+![reliability vs amp](../../../fig/explore/denoise/reliability_amp.png)
 
 ## 4. 总体结论
 
@@ -157,8 +157,8 @@ R(f)    = mean(f) / std(f)          # 可靠性比
 - `explore/denoise/results/reliability_amp.json`（30 条）
 - `explore/denoise/results/reliability_summary.csv`
 - `explore/denoise/results/reliability_amp_summary.csv`
-- `docs/explore/denoise/figures/reliability_cwru.png`
-- `docs/explore/denoise/figures/reliability_amp.png`
+- `fig/explore/denoise/reliability_cwru.png`
+- `fig/explore/denoise/reliability_amp.png`
 
 ## 8. 局限
 

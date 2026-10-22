@@ -93,9 +93,9 @@ class EFD(Decomposer):
             S = Check.to_dtype(S, np.dtype(np.float64))
 
         # 退化输入 (常量 / 全零): 去均值后没有能量, 频谱里也没有峰, 分不出任何模态
-        MEAN: float = float(np.mean(S))
+        MEAN: float = np.mean(S)
         S = S - MEAN
-        if float(np.max(np.abs(S))) <= np.finfo(float).tiny:
+        if np.max(np.abs(S)) <= np.finfo(float).tiny:
             empty = np.empty((0, N), dtype=S.dtype)
             return finalize_output(
                 DecompositionResult(

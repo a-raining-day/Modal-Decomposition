@@ -1,0 +1,10 @@
+backend,mod,n,best_ms,n_peaks
+numpy,max,200000,0.397,66617
+numpy,min,200000,0.409,66617
+numpy,both,200000,6.578,133234
+scipy,max,200000,0.944,66617
+scipy,min,200000,1.446,66617
+scipy,both,200000,7.907,133234
+numba,max,200000,0.852,66617
+numba,min,200000,0.84,66617
+numba,both,200000,7.359,133234

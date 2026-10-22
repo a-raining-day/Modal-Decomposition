@@ -1,7 +1,7 @@
 # `tests/comparison/results/eemd_new/` — EEMD 原生引擎对照实验原始数据
 
 本目录存放 EEMD（原生）对照轮的四份原始结果。**分析与结论见
-[`docs/test/EEMD_Native_Engine_Report.md`](../../../../docs/test/EEMD_Native_Engine_Report.md)**，
+[`docs/test/methods/EEMD_Native_Engine_Report.md`](../../../../docs/test/methods/EEMD_Native_Engine_Report.md)**，
 本文件只说明数据本身。
 
 | 文件 | 实验 | M | α | 行数 | 产出脚本 |
@@ -150,5 +150,5 @@ $env:PYTHONPATH = "$PWD\.scratch\emd_new"   # 以下脚本都依赖其中的 boo
   ```powershell
   .\.venv\Scripts\python.exe -X utf8 -u .scratch\eemd_new\figs.py
   ```
-  （输出到 `fig/eemd_speed.png`、`fig/eemd_quality.png`、`fig/eemd_recon.png`、`fig/eemd_inner.png`）
+  （输出到 `fig/methods/eemd/eemd_speed.png`、`fig/methods/eemd/eemd_quality.png`、`fig/methods/eemd/eemd_recon.png`、`fig/methods/eemd/eemd_inner.png`）
 - 并行路径需要能创建命名管道；受限沙箱下会 `PermissionError: [WinError 5]`，属环境限制。

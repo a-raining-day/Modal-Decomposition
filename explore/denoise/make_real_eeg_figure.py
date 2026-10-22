@@ -25,7 +25,7 @@ for path in (str(ROOT), str(ROOT / "src")):
 from explore.denoise.methods import run_proposed  # noqa: E402
 from explore.denoise.run_real_eeg import FS, load_eeg  # noqa: E402
 
-FIG_DIR = ROOT / "docs/explore/denoise/figures"
+FIG_DIR = ROOT / "fig/explore/denoise"
 
 
 def main() -> None:

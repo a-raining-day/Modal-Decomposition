@@ -25,7 +25,7 @@ for path in (str(ROOT), str(ROOT / "src")):
 from explore.denoise.methods import run_proposed  # noqa: E402
 from explore.denoise.run_cwru import BPFI, DATA, FS, SEGMENT, load_signal  # noqa: E402
 
-FIG_DIR = ROOT / "docs/explore/denoise/figures"
+FIG_DIR = ROOT / "fig/explore/denoise"
 
 
 def env_spectrum(y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

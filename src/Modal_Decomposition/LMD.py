@@ -15,8 +15,7 @@ Local Mean Decomposition (局部均值分解)。
   需要解析幅度时才使用 (``envelope="hilbert"`` 显式选择, 单次解调 / 实验
   对比)。该解调一旦进入迭代就会在多分量信号上发散 (包络拍频、极值数无界增长),
   故该变体只做单次解调。Hilbert 后端经 ``hilbert_mod`` 传入, 取 ``Utils.Hilbert``
-  的 ``HILBERT_MODS`` 枚举: ``hilbert_mod="Scipy"`` (默认, scipy.signal.hilbert;
-  大小写归一后落到 ``HILBERT_MODS.Scipy``, canonical 值 ``"scipy"``)
+  的 ``HILBERT_MODS`` 枚举: ``hilbert_mod="scipy"`` (默认, scipy.signal.hilbert)
   或 ``hilbert_mod="FHT"`` (第三方 C 内核, 见 ``Utils.Hilbert``)。实例上存的
   是 ``HILBERT_MODS`` 成员 (Enum), 不保存裸字符串。
 
@@ -86,9 +85,7 @@ class LMD(Decomposer):
         converge_mean: float = 1e-3,
         smooth_window: int = 5,
         envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint",
-        hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy",
-        hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None,
-        dtype: type | np.dtype | None = None,
+        hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "scipy",
         **kwargs,
     ):
         """
@@ -117,12 +114,11 @@ class LMD(Decomposer):
             迭代不收敛。
         hilbert_mod : HILBERT_MODS_ARGS | HILBERT_MODS
             ``envelope="hilbert"`` 时的 Hilbert 后端, 取 ``Utils.Hilbert`` 的
-            ``HILBERT_MODS``: ``"Scipy"`` (默认, scipy.signal.hilbert; 大小写归一后
-            落到 canonical 的 ``"scipy"`` / ``HILBERT_MODS.Scipy``) 或 ``"FHT"``
-            (编译好的第三方 C 内核); 枚举里其余已声明的名字可以传, 但分派器未实现。
-            别名 ``hilbert_backend`` 同样被接受。
-        hilbert_backend : {"Scipy", "scipy", "FHT"} | None
-            ``hilbert_mod`` 的别名 (向后兼容保留)。
+            ``HILBERT_MODS``: ``"scipy"`` (默认, scipy.signal.hilbert) 或
+            ``"FHT"`` (编译好的第三方 C 内核); 枚举里其余已声明的名字可以传,
+            但分派器未实现。取值不做大小写归一, 必须与枚举值一致。
+        hilbert_backend : {"scipy", "FHT"} | None
+            **已废弃**, 仅为兼容旧调用方保留在 ``f_LMD`` 签名里; 不再生效。
         dtype : type | np.dtype | None
             返回乘积函数的工作 dtype。``None`` 沿用输入精度; int/bool 输入提升为 float64。
         **kwargs
@@ -151,21 +147,16 @@ class LMD(Decomposer):
         self.converge_mean: float = converge_mean
         self.smooth_window: int = smooth_window
         self.envelope: LMD_ENVELOPE_MODS | LMD_ENVELOPE_MODS_ARGS = envelope
-
-        # hilbert_backend 是 hilbert_mod 的别名: 仅在 hilbert_mod 未显式给出
-        # (仍是默认的 "Scipy") 时用它覆盖
-        if hilbert_backend is not None and hilbert_mod in ("Scipy", HILBERT_MODS.Scipy):
-            hilbert_mod = hilbert_backend
         self.hilbert_mod: HILBERT_MODS | HILBERT_MODS_ARGS = hilbert_mod
 
-        self.dtype: type | np.dtype | None = dtype
 
-        unknown = set(kwargs) - {"safe", "copy"}
+        unknown = set(kwargs) - {"safe", "copy", "dtype"}
         if unknown:
             raise TypeError(f"unexpected keyword arguments: {unknown}")
 
         self.safe: str = kwargs.get("safe", "unknown")
         self.copy: bool = kwargs.get("copy", True)
+        self.dtype: type | np.dtype | None = kwargs.get("dtype", None)
 
         self.imfs: np.ndarray | None = None
         self.res: np.ndarray | None = None
@@ -174,14 +165,7 @@ class LMD(Decomposer):
 
     def param_check(self) -> None:
         self.envelope = Check.validate_mod(self.envelope, LMD_ENVELOPE_MODS)
-
-        # ``HILBERT_MODS`` 的成员值是 canonical 名 (``"scipy"`` 小写), 直接把
-        # ``"Scipy"`` 喂给 ``HILBERT_MODS("Scipy")`` 会 ValueError; 失败后按
-        # 大小写归一再匹配一次, 最终实例上一定是 Enum 成员。
-        try:
-            self.hilbert_mod = Check.validate_mod(self.hilbert_mod, HILBERT_MODS)
-        except ValueError:
-            self.hilbert_mod = _validate_hilbert_mod(self.hilbert_mod)
+        self.hilbert_mod = Check.validate_mod(self.hilbert_mod, HILBERT_MODS)
 
         if self.dtype is not None and np.dtype(self.dtype).kind != "f":
             raise ValueError("the `dtype` must be a float numpy dtype or None.")
@@ -215,8 +199,7 @@ class LMD(Decomposer):
         savgol_filter = scipy_signal.savgol_filter
 
         # LMD 只在样本序号上插值, 不使用外部时间轴
-        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name,
-                                     dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
+        S, N = Check_Time_and_Signal(S, T=None, ndim={1}, method=self.name,dtype=self.dtype, need_T=False, safe=self.safe, copy=self.copy)
 
         if not (S.dtype.kind == "f" and S.dtype.itemsize >= 4):  # int/bool 会让包络除法直接报错, f16 会让样条出非有限值
             S = Check.to_dtype(S, np.dtype(np.float64))
@@ -402,185 +385,10 @@ class LMD(Decomposer):
         return PFs, residue
 
 
-def _validate_hilbert_mod(mod) -> HILBERT_MODS:
-    """
-    ``hilbert_mod`` 参数的大小写兜底。
-
-    ``Check.validate_mod`` / ``HILBERT_MODS(value)`` 只匹配**canonical** 成员值,
-    而 ``HILBERT_MODS.Scipy`` 的值是小写 ``"scipy"``, 所以 ``HILBERT_MODS("Scipy")``
-    会抛 ``ValueError``。本函数用 ``str.casefold`` 归一后再匹配一次; 仍不命中就
-    和 ``Check.validate_mod`` 一样抛 ``ValueError``。
-
-    Returns
-    -------
-    HILBERT_MODS
-        命中的枚举成员 (不会是裸字符串)。
-    """
-    if isinstance(mod, str):
-        key = mod.casefold()
-        for member in HILBERT_MODS:
-            if member.value.casefold() == key:
-                return member
-
-    raise ValueError(
-        f"the parameter of `hilbert_mod` can only be {HILBERT_MODS._member_names_}"
-    )
-
-
-def _safe_interpolate(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
-    """自然三次样条插值 (scipy.interpolate.CubicSpline), 界外线性外延 + np.interp 兜底。"""
-    try:
-        interpolate = Cache.import_module("scipy.interpolate")
-        sp = interpolate.CubicSpline(x, y, bc_type="natural", extrapolate=True)
-        res = sp(x_new)
-    except Exception:
-        res = np.interp(x_new, x, y)
-
-    left_mask = x_new < x[0]
-    right_mask = x_new > x[-1]
-    if np.any(left_mask):
-        slope = (y[1] - y[0]) / (x[1] - x[0])
-        res[left_mask] = y[0] + slope * (x_new[left_mask] - x[0])
-    if np.any(right_mask):
-        slope = (y[-1] - y[-2]) / (x[-1] - x[-2])
-        res[right_mask] = y[-1] + slope * (x_new[right_mask] - x[-1])
-
-    return res
-
-
-def _safe_interpolate_pchip(x: np.ndarray, y: np.ndarray, x_new: np.ndarray) -> np.ndarray:
-    """
-    幅度包络的保形 (Pchip) 插值 (scipy.interpolate.PchipInterpolator;
-    extrapolate=False, 界外 NaN -> np.interp 兜底)。
-
-    与自然三次样条不同, Pchip 在数据点之间不会过冲, 因此 ``a_t`` 落在极值幅度范围内,
-    乘法累积的 ``a_total`` 也就不会指数放大。
-    """
-    try:
-        interpolate = Cache.import_module("scipy.interpolate")
-        sp = interpolate.PchipInterpolator(x, y, extrapolate=False)
-        res = sp(x_new)
-        res = np.where(np.isnan(res), np.interp(x_new, x, y), res)
-    except Exception:
-        res = np.interp(x_new, x, y)
-    return res
-
-
-def _check_convergence(m_t: np.ndarray, a_t: np.ndarray, eps: float, converge_mean) -> bool:
-    mean_ok = np.max(np.abs(m_t)) < converge_mean
-    envelope_ok = np.max(np.abs(a_t - 1.0)) < eps
-    return mean_ok and envelope_ok
-
-
-def mirror_extrema(
-    idx: np.ndarray,
-    vals: np.ndarray,
-    nbsym: int = 3,
-    edges = None,
-    _dtype: np.dtype = None
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    端点镜像外延 (EMD nbsym / LMD 边界两用, 全库共享)。
-
-    Parameters
-    ----------
-    idx : np.ndarray (1-D)
-        极值位置 (须严格递增)。
-    vals : np.ndarray (1-D)
-        与 ``idx`` 对应的极值取值 (``signal[idx]``)。
-    nbsym : int
-        EMD 语义: 每端镜像的极值个数 (默认 0 = 不镜像; 极值少于 2 个时跳过)。
-    edges : tuple[float, float, int] | None
-        LMD 语义: ``(信号首值, 信号末值, 样本数)``; None 时不补边界点。
-
-    Returns
-    -------
-    (positions, values)
-        ``positions`` : np.ndarray (float64) — 镜像后位置, 严格递增;
-        ``values``    : np.ndarray — 与输入 ``vals`` 同 dtype 的对应取值。
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from Modal_Decomposition.LMD import mirror_extrema
-    >>> idx = np.array([5, 9]); vals = np.array([2.0, 3.0])
-    >>> pos, val = mirror_extrema(idx, vals, nbsym=1)
-    >>> pos.tolist()   # 1 个左镜像 + 原极值 + 1 个右镜像
-    [1.0, 5.0, 9.0, 13.0]
-    """
-    vals = Check.to_array(vals, dtype=_dtype, ndim=1)
-
-    _dtype = vals.dtype if _dtype is None else _dtype
-
-    idx = Check.to_array(idx, dtype=_dtype, ndim=1)
-
-    if idx.size != vals.size:
-        raise ValueError("mirror_extrema requires idx == vals")
-
-    positions = idx
-    values = vals
-    if positions.size == 0:
-        return positions, values
-
-    # --- EMD nbsym 语义: 每端镜像 nbsym 个极值 ---------------------------- #
-    if nbsym > 0 and len(positions) >= 2:
-        n = min(nbsym, len(positions) - 1)
-        p = len(positions)
-        L = p + 2* n
-
-        new_positions = np.empty(L, dtype=positions.dtype)
-        new_values = np.empty(L, dtype=values.dtype)
-
-        # 左侧扩展
-        new_positions[:n] = 2 * positions[0] - positions[1:n + 1][::-1]
-        new_values[:n] = values[1:n + 1][::-1]
-
-        # 中间原始数据
-        new_positions[n:n + p] = positions
-        new_values[n:n + p] = values
-
-        # 右侧扩展
-        new_positions[n + p:] = 2 * positions[-1] - positions[-2:-(n + 2):-1]
-        new_values[n + p:] = values[-1 - n:-1][::-1]
-
-        positions = new_positions
-        values = new_values
-
-    # --- LMD 边界语义: 未覆盖边界处奇反射补点 ----------------------------- #
-    if edges is not None:
-        lo, hi, n_samples = float(edges[0]), float(edges[1]), int(edges[2])
-
-        left_pad = positions[0] > 0
-        right_pad = positions[-1] < n_samples - 1
-
-        total_len = len(positions) + int(left_pad) + int(right_pad)
-        new_positions = np.empty(total_len, dtype=positions.dtype)
-        new_values = np.empty(total_len, dtype=values.dtype)
-
-        idx = 0
-        if left_pad:
-            new_positions[0] = 0.0
-            new_values[0] = 2.0 * lo - float(values[0])
-            idx = 1
-
-        new_positions[idx:idx + len(positions)] = positions
-        new_values[idx:idx + len(values)] = values
-        idx += len(positions)
-
-        if right_pad:
-            new_positions[idx] = float(n_samples - 1)
-            new_values[idx] = 2.0 * hi - float(values[-1])
-
-        positions = new_positions
-        values = new_values
-
-    return positions, values
-
-
 """
 other function for module
 """
-def f_LMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, max_pf: int | None = None, max_iter: int = 37, eps: float = 0.05, eps_stable: float = 1e-12, min_amp: float = 1e-12, max_amp: float = 1e12, converge_mean: float = 0.001, smooth_window: int = 5, envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint", hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "Scipy", hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_LMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, max_pf: int | None = None, max_iter: int = 37, eps: float = 0.05, eps_stable: float = 1e-12, min_amp: float = 1e-12, max_amp: float = 1e12, converge_mean: float = 0.001, smooth_window: int = 5, envelope: LMD_ENVELOPE_MODS_ARGS | LMD_ENVELOPE_MODS = "midpoint", hilbert_mod: HILBERT_MODS_ARGS | HILBERT_MODS = "scipy", hilbert_backend: Literal["Scipy", "scipy", "FHT"] | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
     lmd = LMD(
         max_pf=max_pf,
         max_iter=max_iter,
@@ -592,7 +400,6 @@ def f_LMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, max_pf: 
         smooth_window=smooth_window,
         envelope=envelope,
         hilbert_mod=hilbert_mod,
-        hilbert_backend=hilbert_backend,
         dtype=dtype,
         **kwargs
     )

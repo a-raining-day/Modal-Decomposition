@@ -121,7 +121,7 @@ def cleanup_memmaps(try_times: int=5, force: bool=False) -> bool:
 
     if unexpected_files:
         warn(f"There are unexpected temporary memmap files which not be closed! ->\n>> {unexpected_files!r}")
-        _ERROR_FILES.add(unexpected_files)
+        _ERROR_FILES.update(unexpected_files)   # 是 list: 用 update 而不是 add
 
     _MM_FILES.clear()
     return True if not unexpected_files else False

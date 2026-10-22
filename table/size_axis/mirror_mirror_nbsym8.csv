@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+mirror,mirror_nbsym8,mixed,1,131072,1048576,float64,0.298,0.332,1.0,6.2,43.4,3,3355.7,1,
+mirror,mirror_nbsym8,mixed,50,6553600,52428800,float64,12.564,12.66,50.0,0.0,241.4,3,3979.62,1,
+mirror,mirror_nbsym8,mixed,100,13107200,104857600,float64,24.514,25.881,100.0,0.0,441.4,3,4079.3,1,
+mirror,mirror_nbsym8,mixed,200,26214400,209715200,float64,55.194,56.924,200.0,0.0,841.4,3,3623.58,1,
+mirror,mirror_nbsym8,mixed,500,65536000,524288000,float64,161.429,162.642,500.0,0.0,2041.4,2,3097.34,1,
+mirror,mirror_nbsym8,mixed,600,78643200,629145600,float64,190.031,196.149,600.0,0.0,2441.4,2,3157.38,1,

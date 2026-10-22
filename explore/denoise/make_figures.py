@@ -35,7 +35,7 @@ from explore.denoise.metrics import _bandpass_envelope  # noqa: E402
 from explore.denoise.signals import FS, make_observation  # noqa: E402
 
 RESULTS = ROOT / "explore/denoise/results"
-FIG_DIR = ROOT / "docs/explore/denoise/figures"
+FIG_DIR = ROOT / "fig/explore/denoise"
 BASE_SEED = 20261017
 LEVELS = (0.1, 0.3, 0.6)
 

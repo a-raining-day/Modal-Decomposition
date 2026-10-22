@@ -21,7 +21,7 @@ NS = (256, 1024, 4096, 16384)
 
 def load() -> tuple[dict, dict]:
     walls: dict[tuple, float] = {}
-    raw = _RES / "timing_raw.csv"
+    raw = _HERE.parents[1] / "table" / "methods" / _RES.name / "timing_raw.csv"
     if raw.exists():
         for r in csv.DictReader(raw.open(encoding="utf-8")):
             try:
@@ -103,7 +103,7 @@ def main() -> None:
         from matplotlib import pyplot as plt
     except Exception:
         return
-    figs = _HERE / "figs"
+    figs = _HERE.parents[1] / "fig" / "comparison"
     figs.mkdir(parents=True, exist_ok=True)
     colors = {"MD-VMD": "#c0392b", "vmdpy": "#2471a3", "PySDKit": "#1e8449"}
     style = {"MD-VMD": "-", "vmdpy": "--", "PySDKit": ":"}

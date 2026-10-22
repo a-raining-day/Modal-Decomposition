@@ -1,7 +1,7 @@
 """
 ``Base.Cache`` 单模块测试：进程级导入缓存（``Cache`` / ``cache``）。
 
-本文件与 ``docs/test/Cache_Engine_Report.md`` 的契约清单一一对应：
+本文件与 ``docs/test/base/Cache_Engine_Report.md`` 的契约清单一一对应：
 
 1. 可导入且 ``__all__`` 与实际导出一致；
 2. 公开可调用对象（``Cache.import_module``）签名合理，能接受一个模块名；

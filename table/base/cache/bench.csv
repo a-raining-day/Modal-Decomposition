@@ -1,0 +1,7 @@
+op,ns_per_call,repeat
+import_module hit,112.2,20000
+import_module negative,136.0,20000
+get hit,266.3,20000
+check hit,255.7,20000
+__contains__,303.8,20000
+len,184.6,20000

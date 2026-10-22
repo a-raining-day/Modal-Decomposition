@@ -19,7 +19,7 @@ NS = (256, 1024, 4096, 16384)
 
 def main() -> None:
     walls: dict[tuple, float] = {}
-    raw = _RES / "timing_raw.csv"
+    raw = _HERE.parents[1] / "table" / "methods" / _RES.name / "timing_raw.csv"
     if raw.exists():
         for r in csv.DictReader(raw.open(encoding="utf-8")):
             try:
@@ -94,7 +94,7 @@ def main() -> None:
         from matplotlib import pyplot as plt
     except Exception:
         return
-    figs = _HERE / "figs"
+    figs = _HERE.parents[1] / "fig" / "comparison"
     figs.mkdir(parents=True, exist_ok=True)
     colors = {"LMD-H(scipy)": "#8e44ad", "LMD-midpoint": "#c0392b",
               "LMD-H(FHT)": "#16a085", "PySDKit": "#2471a3"}

@@ -18,6 +18,7 @@
 
 import importlib
 import inspect
+import gc
 import os
 import typing
 
@@ -429,10 +430,15 @@ def test_chunk_exo_memory_roundtrip_and_cleanup(tmp_path):
     for c in Chunk.chunk(S, chunk_size=32, mod="exo-memory", temp_dir=str(tmp_path)):
         assert isinstance(c, np.memmap)
         assert c.shape[0] >= 1
-        got.append(np.array(c))                # 仅在迭代步内消费
+        got.append(np.array(c))
     assert [c.shape for c in got] == [(32,)] * 4
     assert np.array_equal(np.concatenate(got), S)
-    # 迭代结束后临时 .dat 文件应被清理
+    # 新契约：临时 .dat 登记在 Memory 注册表，drop 引用后 cleanup_memmaps() 清理
+    del got, c                      # 循环变量 c 还引用着最后一块
+    gc.collect()
+    from Modal_Decomposition.Base import cleanup_memmaps
+
+    assert cleanup_memmaps() is True
     assert os.listdir(tmp_path) == []
 
 
@@ -445,6 +451,11 @@ def test_chunk_exo_memory_creates_missing_temp_dir_and_applies_dtype(tmp_path):
     assert temp_dir.is_dir()
     assert [c.dtype for c in got] == [np.dtype(np.float32)] * 2
     assert np.array_equal(np.concatenate(got), S.astype(np.float32))
+    del got
+    gc.collect()
+    from Modal_Decomposition.Base import cleanup_memmaps
+
+    assert cleanup_memmaps() is True
     assert os.listdir(temp_dir) == []
 
 

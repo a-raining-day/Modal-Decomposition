@@ -1,0 +1,37 @@
+signal,mod,backend,n_peaks,first_peaks
+smooth,max,numpy,9,"[12, 31, 100, 169]"
+smooth,max,scipy,9,"[12, 31, 100, 169]"
+smooth,max,numba,9,"[12, 31, 100, 169]"
+smooth,min,numpy,9,"[26, 56, 144, 174]"
+smooth,min,scipy,9,"[26, 56, 144, 174]"
+smooth,min,numba,9,"[26, 56, 144, 174]"
+smooth,both,numpy,18,"[12, 26, 31, 56]"
+smooth,both,scipy,18,"[12, 26, 31, 56]"
+smooth,both,numba,18,"[12, 26, 31, 56]"
+random,max,numpy,135,"[1, 4, 6, 8]"
+random,max,scipy,135,"[1, 4, 6, 8]"
+random,max,numba,135,"[1, 4, 6, 8]"
+random,min,numpy,135,"[3, 5, 7, 9]"
+random,min,scipy,135,"[3, 5, 7, 9]"
+random,min,numba,135,"[3, 5, 7, 9]"
+random,both,numpy,270,"[1, 3, 4, 5]"
+random,both,scipy,270,"[1, 3, 4, 5]"
+random,both,numba,270,"[1, 3, 4, 5]"
+plateau,max,numpy,6,"[25, 100, 125, 199]"
+plateau,max,scipy,6,"[25, 102, 125, 199]"
+plateau,max,numba,6,"[25, 100, 125, 199]"
+plateau,min,numpy,6,"[75, 106, 175, 200]"
+plateau,min,scipy,6,"[75, 106, 175, 201]"
+plateau,min,numba,6,"[75, 106, 175, 200]"
+plateau,both,numpy,12,"[25, 75, 100, 106]"
+plateau,both,scipy,12,"[25, 75, 102, 106]"
+plateau,both,numba,12,"[25, 75, 100, 106]"
+constant,max,numpy,0,[]
+constant,max,scipy,0,[]
+constant,max,numba,0,[]
+constant,min,numpy,0,[]
+constant,min,scipy,0,[]
+constant,min,numba,0,[]
+constant,both,numpy,0,[]
+constant,both,scipy,0,[]
+constant,both,numba,0,[]

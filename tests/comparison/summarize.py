@@ -1,14 +1,14 @@
 """
 Summarize raw benchmark records into markdown tables + CSV summaries.
 
-Reads ``results/timing_raw.csv`` (+ ``results/timing_metrics.json``) and
+Reads ``table/comparison/timing_raw.csv`` (+ ``results/timing_metrics.json``) and
 ``results/memory/*.json`` and writes:
 
 * ``results/summary_timing.md``  - median wall now per (case, n, impl),
   speedup ratios and quality metrics;
 * ``results/summary_memory.md``  - per-cell memory-grid status table;
-* ``results/timing_median.csv``  - machine-readable median table;
-* ``results/memory_flat.csv``    - flattened memory grid records.
+* ``table/comparison/timing_median.csv``  - machine-readable median table;
+* ``table/comparison/memory_flat.csv``    - flattened memory grid records.
 
 Ratios are expressed as "other / MD-EMD", i.e. how many times faster/slower
 PyEMD and PySDKit are than the MD-EMD facade on the same cell.
@@ -24,6 +24,8 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 _RESULTS = _HERE / "results"
+_TABLE = _HERE.parents[1] / "table" / "comparison"
+_TABLE.mkdir(parents=True, exist_ok=True)
 
 IMPLS = ["MD-EMD", "PyEMD", "PySDKit"]
 
@@ -34,7 +36,7 @@ def _med(vals):
 
 
 def summarize_timing() -> None:
-    raw = _RESULTS / "timing_raw.csv"
+    raw = _TABLE / "timing_raw.csv"
     if not raw.exists():
         print(f"(no {raw} yet - timing axis not run)")
         return
@@ -92,7 +94,7 @@ def summarize_timing() -> None:
 
     ( _RESULTS / "summary_timing.md").write_text("\n".join(lines), encoding="utf-8")
 
-    with open(_RESULTS / "timing_median.csv", "w", newline="", encoding="utf-8") as fh:
+    with open(_TABLE / "timing_median.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["impl", "case", "n", "median_wall_s", "n_measures"])
         for key in order:
@@ -106,7 +108,7 @@ def summarize_timing() -> None:
 
 def summarize_memory() -> None:
     mem = _RESULTS / "memory"
-    flat_path = _RESULTS / "memory_flat.csv"
+    flat_path = _TABLE / "memory_flat.csv"
     if not mem.is_dir():
         print(f"(no {mem} yet - memory axis not run)")
         return

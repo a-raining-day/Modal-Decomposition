@@ -103,8 +103,10 @@ def envelope(S: np.ndarray, method: ENVELOPE_MODS_ARGS | ENVELOPE_MODS = "Hilber
     _SCIPY_SIGNAL = Cache.import_module("scipy.signal")
     _SCIPY_INTERAPT = Cache.import_module("scipy.interpolate")
 
-    peak_mod = kwargs.get("peak_mod", "numpy")
-    hilbert_mod = kwargs.get("hilbert_mod", "scipy")
+    # 这两个键是本模块自己的开关，必须从 kwargs 里摘掉再往下透传：
+    # 否则 hilbert()/CubicSpline() 会收到未声明的关键字而 TypeError。
+    peak_mod = kwargs.pop("peak_mod", "numpy")
+    hilbert_mod = kwargs.pop("hilbert_mod", "scipy")
 
     peak = lambda x, **kwargs: find_peaks(x, mod="max", backend=peak_mod, **kwargs)
 

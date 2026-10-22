@@ -139,7 +139,7 @@
 - MorphAvg5 的 rank std 也低（1.76/2.14），但平均 rank 更靠后（6.89/6.97）；
   它靠尺寸 5 换来稳定，代价是形状细节被削平。
 
-![cross-shape rank](figures/high_noise_rank.png)
+![cross-shape rank](../../../fig/explore/denoise/high_noise_rank.png)
 
 ## 4. 分形态形状误差
 
@@ -171,11 +171,11 @@
 - impact 是唯一例外：proposed 0.759，比 raw 0.561 还差；Butter250 0.460
   是唯一明显优于 raw 的固定滤波。
 
-![shape heatmap](figures/high_noise_shape_heatmap.png)
+![shape heatmap](../../../fig/explore/denoise/high_noise_shape_heatmap.png)
 
 **图：3 个代表性形态的波形**（clean / noisy / P-K2-M64 / 对应最佳形态学或 Butter）
 
-![high-noise examples](figures/high_noise_examples.png)
+![high-noise examples](../../../fig/explore/denoise/high_noise_examples.png)
 
 ## 5. 形态学滤波的尺寸敏感性
 
@@ -371,9 +371,9 @@ K1 的 2.055 抑制不足。尖峰不是它的强项。
 - `explore/denoise/results/high_noise_morph.json`（1895 条）
 - `explore/denoise/results/high_noise_summary.csv`
 - `explore/denoise/results/high_noise_ranking.csv`
-- `docs/explore/denoise/figures/high_noise_rank.png`
-- `docs/explore/denoise/figures/high_noise_shape_heatmap.png`
-- `docs/explore/denoise/figures/high_noise_examples.png`
+- `fig/explore/denoise/high_noise_rank.png`
+- `fig/explore/denoise/high_noise_shape_heatmap.png`
+- `fig/explore/denoise/high_noise_examples.png`
 
 ## 10. 局限
 

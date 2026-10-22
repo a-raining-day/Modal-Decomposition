@@ -1,0 +1,4 @@
+reserve_ratio,budget_mib,limited_by,ok
+0.1,8122.5,physical,1
+0.25,6768.7,physical,1
+0.5,4512.5,physical,1

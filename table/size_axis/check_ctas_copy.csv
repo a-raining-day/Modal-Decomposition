@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+check,ctas_copy,mixed,1,131072,1048576,float64,0.481,0.499,1.0,0.0,2439.9,3,2079.0,1,
+check,ctas_copy,mixed,50,6553600,52428800,float64,16.871,17.26,50.0,0.0,2439.9,3,2963.67,1,
+check,ctas_copy,mixed,100,13107200,104857600,float64,29.253,32.201,100.0,0.0,2439.9,3,3418.45,1,
+check,ctas_copy,mixed,200,26214400,209715200,float64,56.596,58.511,200.0,0.0,2439.9,3,3533.82,1,
+check,ctas_copy,mixed,500,65536000,524288000,float64,153.465,161.413,500.0,0.0,2439.9,2,3258.07,1,
+check,ctas_copy,mixed,600,78643200,629145600,float64,186.938,200.924,600.0,0.0,2439.9,2,3209.62,1,

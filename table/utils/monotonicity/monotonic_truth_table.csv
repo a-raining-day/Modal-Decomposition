@@ -1,0 +1,703 @@
+strict,mod,seq,got,expected,verdict
+False,increasing,"(0, 0)",True,True,PASS
+False,increasing,"(0, 1)",True,True,PASS
+False,increasing,"(0, 2)",True,True,PASS
+False,increasing,"(1, 0)",False,False,PASS
+False,increasing,"(1, 1)",True,True,PASS
+False,increasing,"(1, 2)",True,True,PASS
+False,increasing,"(2, 0)",False,False,PASS
+False,increasing,"(2, 1)",False,False,PASS
+False,increasing,"(2, 2)",True,True,PASS
+False,increasing,"(0, 0, 0)",True,True,PASS
+False,increasing,"(0, 0, 1)",True,True,PASS
+False,increasing,"(0, 0, 2)",True,True,PASS
+False,increasing,"(0, 1, 0)",False,False,PASS
+False,increasing,"(0, 1, 1)",True,True,PASS
+False,increasing,"(0, 1, 2)",True,True,PASS
+False,increasing,"(0, 2, 0)",False,False,PASS
+False,increasing,"(0, 2, 1)",False,False,PASS
+False,increasing,"(0, 2, 2)",True,True,PASS
+False,increasing,"(1, 0, 0)",False,False,PASS
+False,increasing,"(1, 0, 1)",False,False,PASS
+False,increasing,"(1, 0, 2)",False,False,PASS
+False,increasing,"(1, 1, 0)",False,False,PASS
+False,increasing,"(1, 1, 1)",True,True,PASS
+False,increasing,"(1, 1, 2)",True,True,PASS
+False,increasing,"(1, 2, 0)",False,False,PASS
+False,increasing,"(1, 2, 1)",False,False,PASS
+False,increasing,"(1, 2, 2)",True,True,PASS
+False,increasing,"(2, 0, 0)",False,False,PASS
+False,increasing,"(2, 0, 1)",False,False,PASS
+False,increasing,"(2, 0, 2)",False,False,PASS
+False,increasing,"(2, 1, 0)",False,False,PASS
+False,increasing,"(2, 1, 1)",False,False,PASS
+False,increasing,"(2, 1, 2)",False,False,PASS
+False,increasing,"(2, 2, 0)",False,False,PASS
+False,increasing,"(2, 2, 1)",False,False,PASS
+False,increasing,"(2, 2, 2)",True,True,PASS
+False,increasing,"(0, 0, 0, 0)",True,True,PASS
+False,increasing,"(0, 0, 0, 1)",True,True,PASS
+False,increasing,"(0, 0, 0, 2)",True,True,PASS
+False,increasing,"(0, 0, 1, 0)",False,False,PASS
+False,increasing,"(0, 0, 1, 1)",True,True,PASS
+False,increasing,"(0, 0, 1, 2)",True,True,PASS
+False,increasing,"(0, 0, 2, 0)",False,False,PASS
+False,increasing,"(0, 0, 2, 1)",False,False,PASS
+False,increasing,"(0, 0, 2, 2)",True,True,PASS
+False,increasing,"(0, 1, 0, 0)",False,False,PASS
+False,increasing,"(0, 1, 0, 1)",False,False,PASS
+False,increasing,"(0, 1, 0, 2)",False,False,PASS
+False,increasing,"(0, 1, 1, 0)",False,False,PASS
+False,increasing,"(0, 1, 1, 1)",True,True,PASS
+False,increasing,"(0, 1, 1, 2)",True,True,PASS
+False,increasing,"(0, 1, 2, 0)",False,False,PASS
+False,increasing,"(0, 1, 2, 1)",False,False,PASS
+False,increasing,"(0, 1, 2, 2)",True,True,PASS
+False,increasing,"(0, 2, 0, 0)",False,False,PASS
+False,increasing,"(0, 2, 0, 1)",False,False,PASS
+False,increasing,"(0, 2, 0, 2)",False,False,PASS
+False,increasing,"(0, 2, 1, 0)",False,False,PASS
+False,increasing,"(0, 2, 1, 1)",False,False,PASS
+False,increasing,"(0, 2, 1, 2)",False,False,PASS
+False,increasing,"(0, 2, 2, 0)",False,False,PASS
+False,increasing,"(0, 2, 2, 1)",False,False,PASS
+False,increasing,"(0, 2, 2, 2)",True,True,PASS
+False,increasing,"(1, 0, 0, 0)",False,False,PASS
+False,increasing,"(1, 0, 0, 1)",False,False,PASS
+False,increasing,"(1, 0, 0, 2)",False,False,PASS
+False,increasing,"(1, 0, 1, 0)",False,False,PASS
+False,increasing,"(1, 0, 1, 1)",False,False,PASS
+False,increasing,"(1, 0, 1, 2)",False,False,PASS
+False,increasing,"(1, 0, 2, 0)",False,False,PASS
+False,increasing,"(1, 0, 2, 1)",False,False,PASS
+False,increasing,"(1, 0, 2, 2)",False,False,PASS
+False,increasing,"(1, 1, 0, 0)",False,False,PASS
+False,increasing,"(1, 1, 0, 1)",False,False,PASS
+False,increasing,"(1, 1, 0, 2)",False,False,PASS
+False,increasing,"(1, 1, 1, 0)",False,False,PASS
+False,increasing,"(1, 1, 1, 1)",True,True,PASS
+False,increasing,"(1, 1, 1, 2)",True,True,PASS
+False,increasing,"(1, 1, 2, 0)",False,False,PASS
+False,increasing,"(1, 1, 2, 1)",False,False,PASS
+False,increasing,"(1, 1, 2, 2)",True,True,PASS
+False,increasing,"(1, 2, 0, 0)",False,False,PASS
+False,increasing,"(1, 2, 0, 1)",False,False,PASS
+False,increasing,"(1, 2, 0, 2)",False,False,PASS
+False,increasing,"(1, 2, 1, 0)",False,False,PASS
+False,increasing,"(1, 2, 1, 1)",False,False,PASS
+False,increasing,"(1, 2, 1, 2)",False,False,PASS
+False,increasing,"(1, 2, 2, 0)",False,False,PASS
+False,increasing,"(1, 2, 2, 1)",False,False,PASS
+False,increasing,"(1, 2, 2, 2)",True,True,PASS
+False,increasing,"(2, 0, 0, 0)",False,False,PASS
+False,increasing,"(2, 0, 0, 1)",False,False,PASS
+False,increasing,"(2, 0, 0, 2)",False,False,PASS
+False,increasing,"(2, 0, 1, 0)",False,False,PASS
+False,increasing,"(2, 0, 1, 1)",False,False,PASS
+False,increasing,"(2, 0, 1, 2)",False,False,PASS
+False,increasing,"(2, 0, 2, 0)",False,False,PASS
+False,increasing,"(2, 0, 2, 1)",False,False,PASS
+False,increasing,"(2, 0, 2, 2)",False,False,PASS
+False,increasing,"(2, 1, 0, 0)",False,False,PASS
+False,increasing,"(2, 1, 0, 1)",False,False,PASS
+False,increasing,"(2, 1, 0, 2)",False,False,PASS
+False,increasing,"(2, 1, 1, 0)",False,False,PASS
+False,increasing,"(2, 1, 1, 1)",False,False,PASS
+False,increasing,"(2, 1, 1, 2)",False,False,PASS
+False,increasing,"(2, 1, 2, 0)",False,False,PASS
+False,increasing,"(2, 1, 2, 1)",False,False,PASS
+False,increasing,"(2, 1, 2, 2)",False,False,PASS
+False,increasing,"(2, 2, 0, 0)",False,False,PASS
+False,increasing,"(2, 2, 0, 1)",False,False,PASS
+False,increasing,"(2, 2, 0, 2)",False,False,PASS
+False,increasing,"(2, 2, 1, 0)",False,False,PASS
+False,increasing,"(2, 2, 1, 1)",False,False,PASS
+False,increasing,"(2, 2, 1, 2)",False,False,PASS
+False,increasing,"(2, 2, 2, 0)",False,False,PASS
+False,increasing,"(2, 2, 2, 1)",False,False,PASS
+False,increasing,"(2, 2, 2, 2)",True,True,PASS
+False,decreasing,"(0, 0)",True,True,PASS
+False,decreasing,"(0, 1)",False,False,PASS
+False,decreasing,"(0, 2)",False,False,PASS
+False,decreasing,"(1, 0)",True,True,PASS
+False,decreasing,"(1, 1)",True,True,PASS
+False,decreasing,"(1, 2)",False,False,PASS
+False,decreasing,"(2, 0)",True,True,PASS
+False,decreasing,"(2, 1)",True,True,PASS
+False,decreasing,"(2, 2)",True,True,PASS
+False,decreasing,"(0, 0, 0)",True,True,PASS
+False,decreasing,"(0, 0, 1)",False,False,PASS
+False,decreasing,"(0, 0, 2)",False,False,PASS
+False,decreasing,"(0, 1, 0)",False,False,PASS
+False,decreasing,"(0, 1, 1)",False,False,PASS
+False,decreasing,"(0, 1, 2)",False,False,PASS
+False,decreasing,"(0, 2, 0)",False,False,PASS
+False,decreasing,"(0, 2, 1)",False,False,PASS
+False,decreasing,"(0, 2, 2)",False,False,PASS
+False,decreasing,"(1, 0, 0)",True,True,PASS
+False,decreasing,"(1, 0, 1)",False,False,PASS
+False,decreasing,"(1, 0, 2)",False,False,PASS
+False,decreasing,"(1, 1, 0)",True,True,PASS
+False,decreasing,"(1, 1, 1)",True,True,PASS
+False,decreasing,"(1, 1, 2)",False,False,PASS
+False,decreasing,"(1, 2, 0)",False,False,PASS
+False,decreasing,"(1, 2, 1)",False,False,PASS
+False,decreasing,"(1, 2, 2)",False,False,PASS
+False,decreasing,"(2, 0, 0)",True,True,PASS
+False,decreasing,"(2, 0, 1)",False,False,PASS
+False,decreasing,"(2, 0, 2)",False,False,PASS
+False,decreasing,"(2, 1, 0)",True,True,PASS
+False,decreasing,"(2, 1, 1)",True,True,PASS
+False,decreasing,"(2, 1, 2)",False,False,PASS
+False,decreasing,"(2, 2, 0)",True,True,PASS
+False,decreasing,"(2, 2, 1)",True,True,PASS
+False,decreasing,"(2, 2, 2)",True,True,PASS
+False,decreasing,"(0, 0, 0, 0)",True,True,PASS
+False,decreasing,"(0, 0, 0, 1)",False,False,PASS
+False,decreasing,"(0, 0, 0, 2)",False,False,PASS
+False,decreasing,"(0, 0, 1, 0)",False,False,PASS
+False,decreasing,"(0, 0, 1, 1)",False,False,PASS
+False,decreasing,"(0, 0, 1, 2)",False,False,PASS
+False,decreasing,"(0, 0, 2, 0)",False,False,PASS
+False,decreasing,"(0, 0, 2, 1)",False,False,PASS
+False,decreasing,"(0, 0, 2, 2)",False,False,PASS
+False,decreasing,"(0, 1, 0, 0)",False,False,PASS
+False,decreasing,"(0, 1, 0, 1)",False,False,PASS
+False,decreasing,"(0, 1, 0, 2)",False,False,PASS
+False,decreasing,"(0, 1, 1, 0)",False,False,PASS
+False,decreasing,"(0, 1, 1, 1)",False,False,PASS
+False,decreasing,"(0, 1, 1, 2)",False,False,PASS
+False,decreasing,"(0, 1, 2, 0)",False,False,PASS
+False,decreasing,"(0, 1, 2, 1)",False,False,PASS
+False,decreasing,"(0, 1, 2, 2)",False,False,PASS
+False,decreasing,"(0, 2, 0, 0)",False,False,PASS
+False,decreasing,"(0, 2, 0, 1)",False,False,PASS
+False,decreasing,"(0, 2, 0, 2)",False,False,PASS
+False,decreasing,"(0, 2, 1, 0)",False,False,PASS
+False,decreasing,"(0, 2, 1, 1)",False,False,PASS
+False,decreasing,"(0, 2, 1, 2)",False,False,PASS
+False,decreasing,"(0, 2, 2, 0)",False,False,PASS
+False,decreasing,"(0, 2, 2, 1)",False,False,PASS
+False,decreasing,"(0, 2, 2, 2)",False,False,PASS
+False,decreasing,"(1, 0, 0, 0)",True,True,PASS
+False,decreasing,"(1, 0, 0, 1)",False,False,PASS
+False,decreasing,"(1, 0, 0, 2)",False,False,PASS
+False,decreasing,"(1, 0, 1, 0)",False,False,PASS
+False,decreasing,"(1, 0, 1, 1)",False,False,PASS
+False,decreasing,"(1, 0, 1, 2)",False,False,PASS
+False,decreasing,"(1, 0, 2, 0)",False,False,PASS
+False,decreasing,"(1, 0, 2, 1)",False,False,PASS
+False,decreasing,"(1, 0, 2, 2)",False,False,PASS
+False,decreasing,"(1, 1, 0, 0)",True,True,PASS
+False,decreasing,"(1, 1, 0, 1)",False,False,PASS
+False,decreasing,"(1, 1, 0, 2)",False,False,PASS
+False,decreasing,"(1, 1, 1, 0)",True,True,PASS
+False,decreasing,"(1, 1, 1, 1)",True,True,PASS
+False,decreasing,"(1, 1, 1, 2)",False,False,PASS
+False,decreasing,"(1, 1, 2, 0)",False,False,PASS
+False,decreasing,"(1, 1, 2, 1)",False,False,PASS
+False,decreasing,"(1, 1, 2, 2)",False,False,PASS
+False,decreasing,"(1, 2, 0, 0)",False,False,PASS
+False,decreasing,"(1, 2, 0, 1)",False,False,PASS
+False,decreasing,"(1, 2, 0, 2)",False,False,PASS
+False,decreasing,"(1, 2, 1, 0)",False,False,PASS
+False,decreasing,"(1, 2, 1, 1)",False,False,PASS
+False,decreasing,"(1, 2, 1, 2)",False,False,PASS
+False,decreasing,"(1, 2, 2, 0)",False,False,PASS
+False,decreasing,"(1, 2, 2, 1)",False,False,PASS
+False,decreasing,"(1, 2, 2, 2)",False,False,PASS
+False,decreasing,"(2, 0, 0, 0)",True,True,PASS
+False,decreasing,"(2, 0, 0, 1)",False,False,PASS
+False,decreasing,"(2, 0, 0, 2)",False,False,PASS
+False,decreasing,"(2, 0, 1, 0)",False,False,PASS
+False,decreasing,"(2, 0, 1, 1)",False,False,PASS
+False,decreasing,"(2, 0, 1, 2)",False,False,PASS
+False,decreasing,"(2, 0, 2, 0)",False,False,PASS
+False,decreasing,"(2, 0, 2, 1)",False,False,PASS
+False,decreasing,"(2, 0, 2, 2)",False,False,PASS
+False,decreasing,"(2, 1, 0, 0)",True,True,PASS
+False,decreasing,"(2, 1, 0, 1)",False,False,PASS
+False,decreasing,"(2, 1, 0, 2)",False,False,PASS
+False,decreasing,"(2, 1, 1, 0)",True,True,PASS
+False,decreasing,"(2, 1, 1, 1)",True,True,PASS
+False,decreasing,"(2, 1, 1, 2)",False,False,PASS
+False,decreasing,"(2, 1, 2, 0)",False,False,PASS
+False,decreasing,"(2, 1, 2, 1)",False,False,PASS
+False,decreasing,"(2, 1, 2, 2)",False,False,PASS
+False,decreasing,"(2, 2, 0, 0)",True,True,PASS
+False,decreasing,"(2, 2, 0, 1)",False,False,PASS
+False,decreasing,"(2, 2, 0, 2)",False,False,PASS
+False,decreasing,"(2, 2, 1, 0)",True,True,PASS
+False,decreasing,"(2, 2, 1, 1)",True,True,PASS
+False,decreasing,"(2, 2, 1, 2)",False,False,PASS
+False,decreasing,"(2, 2, 2, 0)",True,True,PASS
+False,decreasing,"(2, 2, 2, 1)",True,True,PASS
+False,decreasing,"(2, 2, 2, 2)",True,True,PASS
+False,monotonic,"(0, 0)",True,True,PASS
+False,monotonic,"(0, 1)",True,True,PASS
+False,monotonic,"(0, 2)",True,True,PASS
+False,monotonic,"(1, 0)",True,True,PASS
+False,monotonic,"(1, 1)",True,True,PASS
+False,monotonic,"(1, 2)",True,True,PASS
+False,monotonic,"(2, 0)",True,True,PASS
+False,monotonic,"(2, 1)",True,True,PASS
+False,monotonic,"(2, 2)",True,True,PASS
+False,monotonic,"(0, 0, 0)",True,True,PASS
+False,monotonic,"(0, 0, 1)",True,True,PASS
+False,monotonic,"(0, 0, 2)",True,True,PASS
+False,monotonic,"(0, 1, 0)",False,False,PASS
+False,monotonic,"(0, 1, 1)",True,True,PASS
+False,monotonic,"(0, 1, 2)",True,True,PASS
+False,monotonic,"(0, 2, 0)",False,False,PASS
+False,monotonic,"(0, 2, 1)",False,False,PASS
+False,monotonic,"(0, 2, 2)",True,True,PASS
+False,monotonic,"(1, 0, 0)",True,True,PASS
+False,monotonic,"(1, 0, 1)",False,False,PASS
+False,monotonic,"(1, 0, 2)",False,False,PASS
+False,monotonic,"(1, 1, 0)",True,True,PASS
+False,monotonic,"(1, 1, 1)",True,True,PASS
+False,monotonic,"(1, 1, 2)",True,True,PASS
+False,monotonic,"(1, 2, 0)",False,False,PASS
+False,monotonic,"(1, 2, 1)",False,False,PASS
+False,monotonic,"(1, 2, 2)",True,True,PASS
+False,monotonic,"(2, 0, 0)",True,True,PASS
+False,monotonic,"(2, 0, 1)",False,False,PASS
+False,monotonic,"(2, 0, 2)",False,False,PASS
+False,monotonic,"(2, 1, 0)",True,True,PASS
+False,monotonic,"(2, 1, 1)",True,True,PASS
+False,monotonic,"(2, 1, 2)",False,False,PASS
+False,monotonic,"(2, 2, 0)",True,True,PASS
+False,monotonic,"(2, 2, 1)",True,True,PASS
+False,monotonic,"(2, 2, 2)",True,True,PASS
+False,monotonic,"(0, 0, 0, 0)",True,True,PASS
+False,monotonic,"(0, 0, 0, 1)",True,True,PASS
+False,monotonic,"(0, 0, 0, 2)",True,True,PASS
+False,monotonic,"(0, 0, 1, 0)",False,False,PASS
+False,monotonic,"(0, 0, 1, 1)",True,True,PASS
+False,monotonic,"(0, 0, 1, 2)",True,True,PASS
+False,monotonic,"(0, 0, 2, 0)",False,False,PASS
+False,monotonic,"(0, 0, 2, 1)",False,False,PASS
+False,monotonic,"(0, 0, 2, 2)",True,True,PASS
+False,monotonic,"(0, 1, 0, 0)",False,False,PASS
+False,monotonic,"(0, 1, 0, 1)",False,False,PASS
+False,monotonic,"(0, 1, 0, 2)",False,False,PASS
+False,monotonic,"(0, 1, 1, 0)",False,False,PASS
+False,monotonic,"(0, 1, 1, 1)",True,True,PASS
+False,monotonic,"(0, 1, 1, 2)",True,True,PASS
+False,monotonic,"(0, 1, 2, 0)",False,False,PASS
+False,monotonic,"(0, 1, 2, 1)",False,False,PASS
+False,monotonic,"(0, 1, 2, 2)",True,True,PASS
+False,monotonic,"(0, 2, 0, 0)",False,False,PASS
+False,monotonic,"(0, 2, 0, 1)",False,False,PASS
+False,monotonic,"(0, 2, 0, 2)",False,False,PASS
+False,monotonic,"(0, 2, 1, 0)",False,False,PASS
+False,monotonic,"(0, 2, 1, 1)",False,False,PASS
+False,monotonic,"(0, 2, 1, 2)",False,False,PASS
+False,monotonic,"(0, 2, 2, 0)",False,False,PASS
+False,monotonic,"(0, 2, 2, 1)",False,False,PASS
+False,monotonic,"(0, 2, 2, 2)",True,True,PASS
+False,monotonic,"(1, 0, 0, 0)",True,True,PASS
+False,monotonic,"(1, 0, 0, 1)",False,False,PASS
+False,monotonic,"(1, 0, 0, 2)",False,False,PASS
+False,monotonic,"(1, 0, 1, 0)",False,False,PASS
+False,monotonic,"(1, 0, 1, 1)",False,False,PASS
+False,monotonic,"(1, 0, 1, 2)",False,False,PASS
+False,monotonic,"(1, 0, 2, 0)",False,False,PASS
+False,monotonic,"(1, 0, 2, 1)",False,False,PASS
+False,monotonic,"(1, 0, 2, 2)",False,False,PASS
+False,monotonic,"(1, 1, 0, 0)",True,True,PASS
+False,monotonic,"(1, 1, 0, 1)",False,False,PASS
+False,monotonic,"(1, 1, 0, 2)",False,False,PASS
+False,monotonic,"(1, 1, 1, 0)",True,True,PASS
+False,monotonic,"(1, 1, 1, 1)",True,True,PASS
+False,monotonic,"(1, 1, 1, 2)",True,True,PASS
+False,monotonic,"(1, 1, 2, 0)",False,False,PASS
+False,monotonic,"(1, 1, 2, 1)",False,False,PASS
+False,monotonic,"(1, 1, 2, 2)",True,True,PASS
+False,monotonic,"(1, 2, 0, 0)",False,False,PASS
+False,monotonic,"(1, 2, 0, 1)",False,False,PASS
+False,monotonic,"(1, 2, 0, 2)",False,False,PASS
+False,monotonic,"(1, 2, 1, 0)",False,False,PASS
+False,monotonic,"(1, 2, 1, 1)",False,False,PASS
+False,monotonic,"(1, 2, 1, 2)",False,False,PASS
+False,monotonic,"(1, 2, 2, 0)",False,False,PASS
+False,monotonic,"(1, 2, 2, 1)",False,False,PASS
+False,monotonic,"(1, 2, 2, 2)",True,True,PASS
+False,monotonic,"(2, 0, 0, 0)",True,True,PASS
+False,monotonic,"(2, 0, 0, 1)",False,False,PASS
+False,monotonic,"(2, 0, 0, 2)",False,False,PASS
+False,monotonic,"(2, 0, 1, 0)",False,False,PASS
+False,monotonic,"(2, 0, 1, 1)",False,False,PASS
+False,monotonic,"(2, 0, 1, 2)",False,False,PASS
+False,monotonic,"(2, 0, 2, 0)",False,False,PASS
+False,monotonic,"(2, 0, 2, 1)",False,False,PASS
+False,monotonic,"(2, 0, 2, 2)",False,False,PASS
+False,monotonic,"(2, 1, 0, 0)",True,True,PASS
+False,monotonic,"(2, 1, 0, 1)",False,False,PASS
+False,monotonic,"(2, 1, 0, 2)",False,False,PASS
+False,monotonic,"(2, 1, 1, 0)",True,True,PASS
+False,monotonic,"(2, 1, 1, 1)",True,True,PASS
+False,monotonic,"(2, 1, 1, 2)",False,False,PASS
+False,monotonic,"(2, 1, 2, 0)",False,False,PASS
+False,monotonic,"(2, 1, 2, 1)",False,False,PASS
+False,monotonic,"(2, 1, 2, 2)",False,False,PASS
+False,monotonic,"(2, 2, 0, 0)",True,True,PASS
+False,monotonic,"(2, 2, 0, 1)",False,False,PASS
+False,monotonic,"(2, 2, 0, 2)",False,False,PASS
+False,monotonic,"(2, 2, 1, 0)",True,True,PASS
+False,monotonic,"(2, 2, 1, 1)",True,True,PASS
+False,monotonic,"(2, 2, 1, 2)",False,False,PASS
+False,monotonic,"(2, 2, 2, 0)",True,True,PASS
+False,monotonic,"(2, 2, 2, 1)",True,True,PASS
+False,monotonic,"(2, 2, 2, 2)",True,True,PASS
+True,increasing,"(0, 0)",False,False,PASS
+True,increasing,"(0, 1)",True,True,PASS
+True,increasing,"(0, 2)",True,True,PASS
+True,increasing,"(1, 0)",False,False,PASS
+True,increasing,"(1, 1)",False,False,PASS
+True,increasing,"(1, 2)",True,True,PASS
+True,increasing,"(2, 0)",False,False,PASS
+True,increasing,"(2, 1)",False,False,PASS
+True,increasing,"(2, 2)",False,False,PASS
+True,increasing,"(0, 0, 0)",False,False,PASS
+True,increasing,"(0, 0, 1)",False,False,PASS
+True,increasing,"(0, 0, 2)",False,False,PASS
+True,increasing,"(0, 1, 0)",False,False,PASS
+True,increasing,"(0, 1, 1)",False,False,PASS
+True,increasing,"(0, 1, 2)",True,True,PASS
+True,increasing,"(0, 2, 0)",False,False,PASS
+True,increasing,"(0, 2, 1)",False,False,PASS
+True,increasing,"(0, 2, 2)",False,False,PASS
+True,increasing,"(1, 0, 0)",False,False,PASS
+True,increasing,"(1, 0, 1)",False,False,PASS
+True,increasing,"(1, 0, 2)",False,False,PASS
+True,increasing,"(1, 1, 0)",False,False,PASS
+True,increasing,"(1, 1, 1)",False,False,PASS
+True,increasing,"(1, 1, 2)",False,False,PASS
+True,increasing,"(1, 2, 0)",False,False,PASS
+True,increasing,"(1, 2, 1)",False,False,PASS
+True,increasing,"(1, 2, 2)",False,False,PASS
+True,increasing,"(2, 0, 0)",False,False,PASS
+True,increasing,"(2, 0, 1)",False,False,PASS
+True,increasing,"(2, 0, 2)",False,False,PASS
+True,increasing,"(2, 1, 0)",False,False,PASS
+True,increasing,"(2, 1, 1)",False,False,PASS
+True,increasing,"(2, 1, 2)",False,False,PASS
+True,increasing,"(2, 2, 0)",False,False,PASS
+True,increasing,"(2, 2, 1)",False,False,PASS
+True,increasing,"(2, 2, 2)",False,False,PASS
+True,increasing,"(0, 0, 0, 0)",False,False,PASS
+True,increasing,"(0, 0, 0, 1)",False,False,PASS
+True,increasing,"(0, 0, 0, 2)",False,False,PASS
+True,increasing,"(0, 0, 1, 0)",False,False,PASS
+True,increasing,"(0, 0, 1, 1)",False,False,PASS
+True,increasing,"(0, 0, 1, 2)",False,False,PASS
+True,increasing,"(0, 0, 2, 0)",False,False,PASS
+True,increasing,"(0, 0, 2, 1)",False,False,PASS
+True,increasing,"(0, 0, 2, 2)",False,False,PASS
+True,increasing,"(0, 1, 0, 0)",False,False,PASS
+True,increasing,"(0, 1, 0, 1)",False,False,PASS
+True,increasing,"(0, 1, 0, 2)",False,False,PASS
+True,increasing,"(0, 1, 1, 0)",False,False,PASS
+True,increasing,"(0, 1, 1, 1)",False,False,PASS
+True,increasing,"(0, 1, 1, 2)",False,False,PASS
+True,increasing,"(0, 1, 2, 0)",False,False,PASS
+True,increasing,"(0, 1, 2, 1)",False,False,PASS
+True,increasing,"(0, 1, 2, 2)",False,False,PASS
+True,increasing,"(0, 2, 0, 0)",False,False,PASS
+True,increasing,"(0, 2, 0, 1)",False,False,PASS
+True,increasing,"(0, 2, 0, 2)",False,False,PASS
+True,increasing,"(0, 2, 1, 0)",False,False,PASS
+True,increasing,"(0, 2, 1, 1)",False,False,PASS
+True,increasing,"(0, 2, 1, 2)",False,False,PASS
+True,increasing,"(0, 2, 2, 0)",False,False,PASS
+True,increasing,"(0, 2, 2, 1)",False,False,PASS
+True,increasing,"(0, 2, 2, 2)",False,False,PASS
+True,increasing,"(1, 0, 0, 0)",False,False,PASS
+True,increasing,"(1, 0, 0, 1)",False,False,PASS
+True,increasing,"(1, 0, 0, 2)",False,False,PASS
+True,increasing,"(1, 0, 1, 0)",False,False,PASS
+True,increasing,"(1, 0, 1, 1)",False,False,PASS
+True,increasing,"(1, 0, 1, 2)",False,False,PASS
+True,increasing,"(1, 0, 2, 0)",False,False,PASS
+True,increasing,"(1, 0, 2, 1)",False,False,PASS
+True,increasing,"(1, 0, 2, 2)",False,False,PASS
+True,increasing,"(1, 1, 0, 0)",False,False,PASS
+True,increasing,"(1, 1, 0, 1)",False,False,PASS
+True,increasing,"(1, 1, 0, 2)",False,False,PASS
+True,increasing,"(1, 1, 1, 0)",False,False,PASS
+True,increasing,"(1, 1, 1, 1)",False,False,PASS
+True,increasing,"(1, 1, 1, 2)",False,False,PASS
+True,increasing,"(1, 1, 2, 0)",False,False,PASS
+True,increasing,"(1, 1, 2, 1)",False,False,PASS
+True,increasing,"(1, 1, 2, 2)",False,False,PASS
+True,increasing,"(1, 2, 0, 0)",False,False,PASS
+True,increasing,"(1, 2, 0, 1)",False,False,PASS
+True,increasing,"(1, 2, 0, 2)",False,False,PASS
+True,increasing,"(1, 2, 1, 0)",False,False,PASS
+True,increasing,"(1, 2, 1, 1)",False,False,PASS
+True,increasing,"(1, 2, 1, 2)",False,False,PASS
+True,increasing,"(1, 2, 2, 0)",False,False,PASS
+True,increasing,"(1, 2, 2, 1)",False,False,PASS
+True,increasing,"(1, 2, 2, 2)",False,False,PASS
+True,increasing,"(2, 0, 0, 0)",False,False,PASS
+True,increasing,"(2, 0, 0, 1)",False,False,PASS
+True,increasing,"(2, 0, 0, 2)",False,False,PASS
+True,increasing,"(2, 0, 1, 0)",False,False,PASS
+True,increasing,"(2, 0, 1, 1)",False,False,PASS
+True,increasing,"(2, 0, 1, 2)",False,False,PASS
+True,increasing,"(2, 0, 2, 0)",False,False,PASS
+True,increasing,"(2, 0, 2, 1)",False,False,PASS
+True,increasing,"(2, 0, 2, 2)",False,False,PASS
+True,increasing,"(2, 1, 0, 0)",False,False,PASS
+True,increasing,"(2, 1, 0, 1)",False,False,PASS
+True,increasing,"(2, 1, 0, 2)",False,False,PASS
+True,increasing,"(2, 1, 1, 0)",False,False,PASS
+True,increasing,"(2, 1, 1, 1)",False,False,PASS
+True,increasing,"(2, 1, 1, 2)",False,False,PASS
+True,increasing,"(2, 1, 2, 0)",False,False,PASS
+True,increasing,"(2, 1, 2, 1)",False,False,PASS
+True,increasing,"(2, 1, 2, 2)",False,False,PASS
+True,increasing,"(2, 2, 0, 0)",False,False,PASS
+True,increasing,"(2, 2, 0, 1)",False,False,PASS
+True,increasing,"(2, 2, 0, 2)",False,False,PASS
+True,increasing,"(2, 2, 1, 0)",False,False,PASS
+True,increasing,"(2, 2, 1, 1)",False,False,PASS
+True,increasing,"(2, 2, 1, 2)",False,False,PASS
+True,increasing,"(2, 2, 2, 0)",False,False,PASS
+True,increasing,"(2, 2, 2, 1)",False,False,PASS
+True,increasing,"(2, 2, 2, 2)",False,False,PASS
+True,decreasing,"(0, 0)",False,False,PASS
+True,decreasing,"(0, 1)",False,False,PASS
+True,decreasing,"(0, 2)",False,False,PASS
+True,decreasing,"(1, 0)",True,True,PASS
+True,decreasing,"(1, 1)",False,False,PASS
+True,decreasing,"(1, 2)",False,False,PASS
+True,decreasing,"(2, 0)",True,True,PASS
+True,decreasing,"(2, 1)",True,True,PASS
+True,decreasing,"(2, 2)",False,False,PASS
+True,decreasing,"(0, 0, 0)",False,False,PASS
+True,decreasing,"(0, 0, 1)",False,False,PASS
+True,decreasing,"(0, 0, 2)",False,False,PASS
+True,decreasing,"(0, 1, 0)",False,False,PASS
+True,decreasing,"(0, 1, 1)",False,False,PASS
+True,decreasing,"(0, 1, 2)",False,False,PASS
+True,decreasing,"(0, 2, 0)",False,False,PASS
+True,decreasing,"(0, 2, 1)",False,False,PASS
+True,decreasing,"(0, 2, 2)",False,False,PASS
+True,decreasing,"(1, 0, 0)",False,False,PASS
+True,decreasing,"(1, 0, 1)",False,False,PASS
+True,decreasing,"(1, 0, 2)",False,False,PASS
+True,decreasing,"(1, 1, 0)",False,False,PASS
+True,decreasing,"(1, 1, 1)",False,False,PASS
+True,decreasing,"(1, 1, 2)",False,False,PASS
+True,decreasing,"(1, 2, 0)",False,False,PASS
+True,decreasing,"(1, 2, 1)",False,False,PASS
+True,decreasing,"(1, 2, 2)",False,False,PASS
+True,decreasing,"(2, 0, 0)",False,False,PASS
+True,decreasing,"(2, 0, 1)",False,False,PASS
+True,decreasing,"(2, 0, 2)",False,False,PASS
+True,decreasing,"(2, 1, 0)",True,True,PASS
+True,decreasing,"(2, 1, 1)",False,False,PASS
+True,decreasing,"(2, 1, 2)",False,False,PASS
+True,decreasing,"(2, 2, 0)",False,False,PASS
+True,decreasing,"(2, 2, 1)",False,False,PASS
+True,decreasing,"(2, 2, 2)",False,False,PASS
+True,decreasing,"(0, 0, 0, 0)",False,False,PASS
+True,decreasing,"(0, 0, 0, 1)",False,False,PASS
+True,decreasing,"(0, 0, 0, 2)",False,False,PASS
+True,decreasing,"(0, 0, 1, 0)",False,False,PASS
+True,decreasing,"(0, 0, 1, 1)",False,False,PASS
+True,decreasing,"(0, 0, 1, 2)",False,False,PASS
+True,decreasing,"(0, 0, 2, 0)",False,False,PASS
+True,decreasing,"(0, 0, 2, 1)",False,False,PASS
+True,decreasing,"(0, 0, 2, 2)",False,False,PASS
+True,decreasing,"(0, 1, 0, 0)",False,False,PASS
+True,decreasing,"(0, 1, 0, 1)",False,False,PASS
+True,decreasing,"(0, 1, 0, 2)",False,False,PASS
+True,decreasing,"(0, 1, 1, 0)",False,False,PASS
+True,decreasing,"(0, 1, 1, 1)",False,False,PASS
+True,decreasing,"(0, 1, 1, 2)",False,False,PASS
+True,decreasing,"(0, 1, 2, 0)",False,False,PASS
+True,decreasing,"(0, 1, 2, 1)",False,False,PASS
+True,decreasing,"(0, 1, 2, 2)",False,False,PASS
+True,decreasing,"(0, 2, 0, 0)",False,False,PASS
+True,decreasing,"(0, 2, 0, 1)",False,False,PASS
+True,decreasing,"(0, 2, 0, 2)",False,False,PASS
+True,decreasing,"(0, 2, 1, 0)",False,False,PASS
+True,decreasing,"(0, 2, 1, 1)",False,False,PASS
+True,decreasing,"(0, 2, 1, 2)",False,False,PASS
+True,decreasing,"(0, 2, 2, 0)",False,False,PASS
+True,decreasing,"(0, 2, 2, 1)",False,False,PASS
+True,decreasing,"(0, 2, 2, 2)",False,False,PASS
+True,decreasing,"(1, 0, 0, 0)",False,False,PASS
+True,decreasing,"(1, 0, 0, 1)",False,False,PASS
+True,decreasing,"(1, 0, 0, 2)",False,False,PASS
+True,decreasing,"(1, 0, 1, 0)",False,False,PASS
+True,decreasing,"(1, 0, 1, 1)",False,False,PASS
+True,decreasing,"(1, 0, 1, 2)",False,False,PASS
+True,decreasing,"(1, 0, 2, 0)",False,False,PASS
+True,decreasing,"(1, 0, 2, 1)",False,False,PASS
+True,decreasing,"(1, 0, 2, 2)",False,False,PASS
+True,decreasing,"(1, 1, 0, 0)",False,False,PASS
+True,decreasing,"(1, 1, 0, 1)",False,False,PASS
+True,decreasing,"(1, 1, 0, 2)",False,False,PASS
+True,decreasing,"(1, 1, 1, 0)",False,False,PASS
+True,decreasing,"(1, 1, 1, 1)",False,False,PASS
+True,decreasing,"(1, 1, 1, 2)",False,False,PASS
+True,decreasing,"(1, 1, 2, 0)",False,False,PASS
+True,decreasing,"(1, 1, 2, 1)",False,False,PASS
+True,decreasing,"(1, 1, 2, 2)",False,False,PASS
+True,decreasing,"(1, 2, 0, 0)",False,False,PASS
+True,decreasing,"(1, 2, 0, 1)",False,False,PASS
+True,decreasing,"(1, 2, 0, 2)",False,False,PASS
+True,decreasing,"(1, 2, 1, 0)",False,False,PASS
+True,decreasing,"(1, 2, 1, 1)",False,False,PASS
+True,decreasing,"(1, 2, 1, 2)",False,False,PASS
+True,decreasing,"(1, 2, 2, 0)",False,False,PASS
+True,decreasing,"(1, 2, 2, 1)",False,False,PASS
+True,decreasing,"(1, 2, 2, 2)",False,False,PASS
+True,decreasing,"(2, 0, 0, 0)",False,False,PASS
+True,decreasing,"(2, 0, 0, 1)",False,False,PASS
+True,decreasing,"(2, 0, 0, 2)",False,False,PASS
+True,decreasing,"(2, 0, 1, 0)",False,False,PASS
+True,decreasing,"(2, 0, 1, 1)",False,False,PASS
+True,decreasing,"(2, 0, 1, 2)",False,False,PASS
+True,decreasing,"(2, 0, 2, 0)",False,False,PASS
+True,decreasing,"(2, 0, 2, 1)",False,False,PASS
+True,decreasing,"(2, 0, 2, 2)",False,False,PASS
+True,decreasing,"(2, 1, 0, 0)",False,False,PASS
+True,decreasing,"(2, 1, 0, 1)",False,False,PASS
+True,decreasing,"(2, 1, 0, 2)",False,False,PASS
+True,decreasing,"(2, 1, 1, 0)",False,False,PASS
+True,decreasing,"(2, 1, 1, 1)",False,False,PASS
+True,decreasing,"(2, 1, 1, 2)",False,False,PASS
+True,decreasing,"(2, 1, 2, 0)",False,False,PASS
+True,decreasing,"(2, 1, 2, 1)",False,False,PASS
+True,decreasing,"(2, 1, 2, 2)",False,False,PASS
+True,decreasing,"(2, 2, 0, 0)",False,False,PASS
+True,decreasing,"(2, 2, 0, 1)",False,False,PASS
+True,decreasing,"(2, 2, 0, 2)",False,False,PASS
+True,decreasing,"(2, 2, 1, 0)",False,False,PASS
+True,decreasing,"(2, 2, 1, 1)",False,False,PASS
+True,decreasing,"(2, 2, 1, 2)",False,False,PASS
+True,decreasing,"(2, 2, 2, 0)",False,False,PASS
+True,decreasing,"(2, 2, 2, 1)",False,False,PASS
+True,decreasing,"(2, 2, 2, 2)",False,False,PASS
+True,monotonic,"(0, 0)",False,False,PASS
+True,monotonic,"(0, 1)",True,True,PASS
+True,monotonic,"(0, 2)",True,True,PASS
+True,monotonic,"(1, 0)",True,True,PASS
+True,monotonic,"(1, 1)",False,False,PASS
+True,monotonic,"(1, 2)",True,True,PASS
+True,monotonic,"(2, 0)",True,True,PASS
+True,monotonic,"(2, 1)",True,True,PASS
+True,monotonic,"(2, 2)",False,False,PASS
+True,monotonic,"(0, 0, 0)",False,False,PASS
+True,monotonic,"(0, 0, 1)",False,False,PASS
+True,monotonic,"(0, 0, 2)",False,False,PASS
+True,monotonic,"(0, 1, 0)",False,False,PASS
+True,monotonic,"(0, 1, 1)",False,False,PASS
+True,monotonic,"(0, 1, 2)",True,True,PASS
+True,monotonic,"(0, 2, 0)",False,False,PASS
+True,monotonic,"(0, 2, 1)",False,False,PASS
+True,monotonic,"(0, 2, 2)",False,False,PASS
+True,monotonic,"(1, 0, 0)",False,False,PASS
+True,monotonic,"(1, 0, 1)",False,False,PASS
+True,monotonic,"(1, 0, 2)",False,False,PASS
+True,monotonic,"(1, 1, 0)",False,False,PASS
+True,monotonic,"(1, 1, 1)",False,False,PASS
+True,monotonic,"(1, 1, 2)",False,False,PASS
+True,monotonic,"(1, 2, 0)",False,False,PASS
+True,monotonic,"(1, 2, 1)",False,False,PASS
+True,monotonic,"(1, 2, 2)",False,False,PASS
+True,monotonic,"(2, 0, 0)",False,False,PASS
+True,monotonic,"(2, 0, 1)",False,False,PASS
+True,monotonic,"(2, 0, 2)",False,False,PASS
+True,monotonic,"(2, 1, 0)",True,True,PASS
+True,monotonic,"(2, 1, 1)",False,False,PASS
+True,monotonic,"(2, 1, 2)",False,False,PASS
+True,monotonic,"(2, 2, 0)",False,False,PASS
+True,monotonic,"(2, 2, 1)",False,False,PASS
+True,monotonic,"(2, 2, 2)",False,False,PASS
+True,monotonic,"(0, 0, 0, 0)",False,False,PASS
+True,monotonic,"(0, 0, 0, 1)",False,False,PASS
+True,monotonic,"(0, 0, 0, 2)",False,False,PASS
+True,monotonic,"(0, 0, 1, 0)",False,False,PASS
+True,monotonic,"(0, 0, 1, 1)",False,False,PASS
+True,monotonic,"(0, 0, 1, 2)",False,False,PASS
+True,monotonic,"(0, 0, 2, 0)",False,False,PASS
+True,monotonic,"(0, 0, 2, 1)",False,False,PASS
+True,monotonic,"(0, 0, 2, 2)",False,False,PASS
+True,monotonic,"(0, 1, 0, 0)",False,False,PASS
+True,monotonic,"(0, 1, 0, 1)",False,False,PASS
+True,monotonic,"(0, 1, 0, 2)",False,False,PASS
+True,monotonic,"(0, 1, 1, 0)",False,False,PASS
+True,monotonic,"(0, 1, 1, 1)",False,False,PASS
+True,monotonic,"(0, 1, 1, 2)",False,False,PASS
+True,monotonic,"(0, 1, 2, 0)",False,False,PASS
+True,monotonic,"(0, 1, 2, 1)",False,False,PASS
+True,monotonic,"(0, 1, 2, 2)",False,False,PASS
+True,monotonic,"(0, 2, 0, 0)",False,False,PASS
+True,monotonic,"(0, 2, 0, 1)",False,False,PASS
+True,monotonic,"(0, 2, 0, 2)",False,False,PASS
+True,monotonic,"(0, 2, 1, 0)",False,False,PASS
+True,monotonic,"(0, 2, 1, 1)",False,False,PASS
+True,monotonic,"(0, 2, 1, 2)",False,False,PASS
+True,monotonic,"(0, 2, 2, 0)",False,False,PASS
+True,monotonic,"(0, 2, 2, 1)",False,False,PASS
+True,monotonic,"(0, 2, 2, 2)",False,False,PASS
+True,monotonic,"(1, 0, 0, 0)",False,False,PASS
+True,monotonic,"(1, 0, 0, 1)",False,False,PASS
+True,monotonic,"(1, 0, 0, 2)",False,False,PASS
+True,monotonic,"(1, 0, 1, 0)",False,False,PASS
+True,monotonic,"(1, 0, 1, 1)",False,False,PASS
+True,monotonic,"(1, 0, 1, 2)",False,False,PASS
+True,monotonic,"(1, 0, 2, 0)",False,False,PASS
+True,monotonic,"(1, 0, 2, 1)",False,False,PASS
+True,monotonic,"(1, 0, 2, 2)",False,False,PASS
+True,monotonic,"(1, 1, 0, 0)",False,False,PASS
+True,monotonic,"(1, 1, 0, 1)",False,False,PASS
+True,monotonic,"(1, 1, 0, 2)",False,False,PASS
+True,monotonic,"(1, 1, 1, 0)",False,False,PASS
+True,monotonic,"(1, 1, 1, 1)",False,False,PASS
+True,monotonic,"(1, 1, 1, 2)",False,False,PASS
+True,monotonic,"(1, 1, 2, 0)",False,False,PASS
+True,monotonic,"(1, 1, 2, 1)",False,False,PASS
+True,monotonic,"(1, 1, 2, 2)",False,False,PASS
+True,monotonic,"(1, 2, 0, 0)",False,False,PASS
+True,monotonic,"(1, 2, 0, 1)",False,False,PASS
+True,monotonic,"(1, 2, 0, 2)",False,False,PASS
+True,monotonic,"(1, 2, 1, 0)",False,False,PASS
+True,monotonic,"(1, 2, 1, 1)",False,False,PASS
+True,monotonic,"(1, 2, 1, 2)",False,False,PASS
+True,monotonic,"(1, 2, 2, 0)",False,False,PASS
+True,monotonic,"(1, 2, 2, 1)",False,False,PASS
+True,monotonic,"(1, 2, 2, 2)",False,False,PASS
+True,monotonic,"(2, 0, 0, 0)",False,False,PASS
+True,monotonic,"(2, 0, 0, 1)",False,False,PASS
+True,monotonic,"(2, 0, 0, 2)",False,False,PASS
+True,monotonic,"(2, 0, 1, 0)",False,False,PASS
+True,monotonic,"(2, 0, 1, 1)",False,False,PASS
+True,monotonic,"(2, 0, 1, 2)",False,False,PASS
+True,monotonic,"(2, 0, 2, 0)",False,False,PASS
+True,monotonic,"(2, 0, 2, 1)",False,False,PASS
+True,monotonic,"(2, 0, 2, 2)",False,False,PASS
+True,monotonic,"(2, 1, 0, 0)",False,False,PASS
+True,monotonic,"(2, 1, 0, 1)",False,False,PASS
+True,monotonic,"(2, 1, 0, 2)",False,False,PASS
+True,monotonic,"(2, 1, 1, 0)",False,False,PASS
+True,monotonic,"(2, 1, 1, 1)",False,False,PASS
+True,monotonic,"(2, 1, 1, 2)",False,False,PASS
+True,monotonic,"(2, 1, 2, 0)",False,False,PASS
+True,monotonic,"(2, 1, 2, 1)",False,False,PASS
+True,monotonic,"(2, 1, 2, 2)",False,False,PASS
+True,monotonic,"(2, 2, 0, 0)",False,False,PASS
+True,monotonic,"(2, 2, 0, 1)",False,False,PASS
+True,monotonic,"(2, 2, 0, 2)",False,False,PASS
+True,monotonic,"(2, 2, 1, 0)",False,False,PASS
+True,monotonic,"(2, 2, 1, 1)",False,False,PASS
+True,monotonic,"(2, 2, 1, 2)",False,False,PASS
+True,monotonic,"(2, 2, 2, 0)",False,False,PASS
+True,monotonic,"(2, 2, 2, 1)",False,False,PASS
+True,monotonic,"(2, 2, 2, 2)",False,False,PASS

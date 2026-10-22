@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+hilbert,scipy,mixed,1,131072,1048576,float64,4.71,4.772,25.4,35.0,5118.5,3,212.31,1,
+hilbert,scipy,mixed,50,6553600,52428800,float64,367.478,369.446,400.0,100.0,5118.5,3,136.06,1,
+hilbert,scipy,mixed,100,13107200,104857600,float64,737.359,800.288,800.0,200.1,5118.5,3,135.62,1,
+hilbert,scipy,mixed,200,26214400,209715200,float64,1505.91,1573.532,1600.0,400.0,5118.5,3,132.81,1,
+hilbert,scipy,mixed,500,65536000,524288000,float64,4776.247,4812.313,4000.0,1000.0,8753.5,2,104.68,1,
+hilbert,scipy,mixed,600,78643200,629145600,float64,5526.767,5707.729,4800.0,-603.7,9599.7,2,108.56,1,

@@ -1,6 +1,6 @@
 # `tests/comparison/results/rpsemd_new/`
 
-RPSEMD（原生）验证轮的原始数据。配套报告：`docs/test/RPSEMD_Native_Engine_Report.md`。
+RPSEMD（原生）验证轮的原始数据。配套报告：`docs/test/methods/RPSEMD_Native_Engine_Report.md`。
 
 > **本目录的 JSON 是"算法规范修正后"的产物**：`amp`/`freq` 只在第一阶初步 IMF 的
 > **极值点**上取（规范①），相位网格是 `θ_i = 2πi/I`（规范②）。修正项同时记录在
@@ -14,7 +14,7 @@ RPSEMD（原生）验证轮的原始数据。配套报告：`docs/test/RPSEMD_Na
 | `pareto_sweep.json` | `.scratch/eemd_new/rpsemd_bench.py`（实验 2） | Pareto 扫描：`separation_ratio × sin_smaple_num × max_clusters` 27 组 + 前沿 + 选点（成本轴 A/16384） |
 
 出图脚本是 `.scratch/eemd_new/fig_rpsemd.py`（只读 JSON，不重跑基准），产物在
-`fig/rpsemd_compare.png`、`fig/rpsemd_pareto.png`。
+`fig/methods/rpsemd/rpsemd_compare.png`、`fig/methods/rpsemd/rpsemd_pareto.png`。
 
 > 两个 JSON 由同一个脚本、同一进程产出（实验 1 + 实验 2），所以两者的 `env` / `params` 是同一份；
 > 两者都是**单次计时**。跨日 / 跨脚本的绝对毫秒数不可比。
@@ -126,7 +126,7 @@ RPSEMD（原生）验证轮的原始数据。配套报告：`docs/test/RPSEMD_Na
 # 四方对比 + Pareto 扫描（覆盖 compare.json / pareto_sweep.json；约数分钟）
 .\.venv\Scripts\python.exe -u .scratch\eemd_new\rpsemd_bench.py
 
-# 只重画图（读 JSON，不重跑基准）-> fig/rpsemd_{compare,pareto}.png
+# 只重画图（读 JSON，不重跑基准）-> fig/methods/rpsemd/rpsemd_{compare,pareto}.png
 .\.venv\Scripts\python.exe -u .scratch\eemd_new\fig_rpsemd.py
 
 # 契约验证（默认构造 / num_imf 各档 / 退化输入 / dtype / 状态复用 / hilbert / cluster_weight）

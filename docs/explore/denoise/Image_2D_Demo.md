@@ -4,7 +4,7 @@
 - 环境：Python 3.10.11 · numpy 2.2.6 · scipy 1.15.3 · matplotlib 3.10.9
 - 代码：`explore/denoise/image_2d/{run_image_demo.py, make_figure.py}`
 - 结果：`explore/denoise/results/{image_2d.json, image_2d_summary.csv}`
-- 图：`docs/explore/denoise/figures/image_2d_example.png`
+- 图：`fig/explore/denoise/image_2d_example.png`
 
 > 这是一次**概念验证**，不是完整 2-D 方法。1-D 的上下三次样条包络不能
 > 直接“按行列各做一次”就变成图像包络；2-D 包络需要 2-D 极值 + 曲面插值
@@ -78,7 +78,7 @@
 - edge corr 从 Gauss1 的 0.742 降到 proposed 的 0.591，边缘/纹理被抹平；
 - K=1 的 edge corr 只有 0.29-0.34，几乎只剩低频背景。
 
-![2-D example](figures/image_2d_example.png)
+![2-D example](../../../fig/explore/denoise/image_2d_example.png)
 
 ### 3.1 如果“减去均值面”会怎样？
 
@@ -159,7 +159,7 @@
 - 若要做“细节增强/边缘提取”，final-subtract 可作为输入；若要“去噪”，
   必须再把细节阈值收缩并加回基底，不能直接把减法结果当输出。
 
-![subtract variants](figures/image_2d_subtract.png)
+![subtract variants](../../../fig/explore/denoise/image_2d_subtract.png)
 
 ## 4. 解释
 
@@ -201,7 +201,7 @@
 
 - `explore/denoise/results/image_2d.json`
 - `explore/denoise/results/image_2d_summary.csv`
-- `docs/explore/denoise/figures/image_2d_example.png`
+- `fig/explore/denoise/image_2d_example.png`
 
 ## 7. 局限
 

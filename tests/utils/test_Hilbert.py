@@ -1,7 +1,7 @@
 """
 tests for ``Modal_Decomposition.Utils.Hilbert`` (Hilbert 三个后端).
 
-后端一览 (详见 ``docs/test/Hilbert_Backend_Report.md``):
+后端一览 (详见 ``docs/test/utils/Hilbert_Backend_Report.md``):
 
 * ``"FFT"``  — **默认**: rfft/irfft 实半谱法, 任意长度精确, 约为 scipy 的
   0.78–0.94×;
@@ -357,7 +357,7 @@ def test_hilbert_facade_exports():
 
 
 # --------------------------------------------------------------------------- #
-# 7. 性能烟测 (数字供 docs/test/Hilbert_Backend_Report.md)
+# 7. 性能烟测 (数字供 docs/test/utils/Hilbert_Backend_Report.md)
 # --------------------------------------------------------------------------- #
 def _median_seconds(fn, repeats=7):
     fn()  # warm-up

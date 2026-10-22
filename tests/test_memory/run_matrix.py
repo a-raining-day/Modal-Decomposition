@@ -50,6 +50,7 @@ from method_workers import available_methods, make_worker
 __all__ = ["run_matrix", "save_results", "DEFAULT_RESULT_DIR"]
 
 DEFAULT_RESULT_DIR = _HERE / "result_for_each_decomposition"
+DEFAULT_TABLE_DIR = _HERE.parents[1] / "table" / "memory"   # csv 汇总目录
 
 CASE_WORKER = _HERE / "case_worker.py"
 DEFAULT_SAFES = (0, 1, 2)
@@ -243,7 +244,8 @@ def save_results(method: str, records: list[dict], out_dir: Path = DEFAULT_RESUL
     with open(out_dir / f"{method}.json", "w", encoding="utf-8") as fh:
         json.dump(records, fh, indent=2, ensure_ascii=False)
 
-    with open(out_dir / f"{method}.csv", "w", newline="", encoding="utf-8") as fh:
+    DEFAULT_TABLE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(DEFAULT_TABLE_DIR / f"{method}.csv", "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=_CSV_FIELDS)
         writer.writeheader()
         for record in records:

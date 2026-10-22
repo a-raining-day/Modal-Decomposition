@@ -5,7 +5,7 @@
 - 数据：`explore/denoise/data/cwru/IR007_105_0.mat`（2.9 MB）
 - 代码：`explore/denoise/{run_cwru.py, make_cwru_figure.py}`
 - 结果：`explore/denoise/results/{cwru.json, cwru_summary.csv, cwru_summary.json}`
-- 图：`docs/explore/denoise/figures/cwru_envelope_spectrum.png`
+- 图：`fig/explore/denoise/cwru_envelope_spectrum.png`
 
 ## 1. 数据来源
 
@@ -66,7 +66,7 @@
 - 一个正确的固定基线应保留 2-5 kHz 共振（Butter3000 或带通），此时 proposed 明显落后；
 - 所以“proposed 比固定 Butter100 好”只是**基线选错**造成的字面结果，不是实用优势。
 
-![CWRU envelope](figures/cwru_envelope_spectrum.png)
+![CWRU envelope](../../../fig/explore/denoise/cwru_envelope_spectrum.png)
 
 ## 4. 结论
 
@@ -118,7 +118,7 @@ CWRU 反而确认了“冲击/包络不是它的适用场景”。**
 - `explore/denoise/results/cwru.json`（160 条）
 - `explore/denoise/results/cwru_summary.csv`
 - `explore/denoise/results/cwru_summary.json`
-- `docs/explore/denoise/figures/cwru_envelope_spectrum.png`
+- `fig/explore/denoise/cwru_envelope_spectrum.png`
 
 ## 6. 局限
 

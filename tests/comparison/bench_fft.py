@@ -9,7 +9,7 @@ FFT 后端基准: numpy / scipy / pyfftw / tiled / cupy × {1,10,100,500,1024}MB
 - **监控提交内存** (``private`` / ``vms``) 而不是工作集 RSS —— Windows 会主动裁剪
   工作集, 只看 RSS 会让"提交 10GB 而物理只剩 3GB"的进程被判为安全;
 - 每个 (后端 × 尺寸) 组合跑在**独立子进程**里, 超预算/超时即杀;
-- 结果打印 Markdown 表并写 ``docs/FFT_Backend_Results.json``。
+- 结果打印 Markdown 表并写 ``tests/comparison/results/utils/fft/FFT_Backend_Results.json``。
 
 用法
 ----
@@ -35,7 +35,8 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
 _SRC = _ROOT / "src"
-_RESULT_JSON = _ROOT / "docs" / "FFT_Backend_Results.json"
+_RESULT_JSON = (_ROOT / "tests" / "comparison" / "results" / "utils"
+                / "fft" / "FFT_Backend_Results.json")
 
 #: 后端配置: 名称 → (op, kwargs)。kwargs 直接透传给 Utils.FFT。
 CONFIGS = {
@@ -336,7 +337,7 @@ def main() -> int:
             merged[(row.get("config"), row.get("size_mb"), row.get("op", "rfft"))] = row
             print(fmt(row), flush=True)
 
-    _RESULT_JSON.parent.mkdir(exist_ok=True)
+    _RESULT_JSON.parent.mkdir(parents=True, exist_ok=True)
     all_rows = sorted(merged.values(), key=lambda r: (r.get("size_mb", 0), str(r.get("config"))))
     _RESULT_JSON.write_text(json.dumps(all_rows, indent=2), encoding="utf-8")
     print("\nraw results (%d rows) -> %s" % (len(all_rows), _RESULT_JSON))

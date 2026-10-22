@@ -26,7 +26,7 @@ from explore.denoise.methods import run_proposed  # noqa: E402
 from explore.denoise.run_cwru import BPFI, DATA, FS  # noqa: E402
 from explore.denoise.run_reliability import env_spectrum  # noqa: E402
 
-FIG_DIR = ROOT / "docs/explore/denoise/figures"
+FIG_DIR = ROOT / "fig/explore/denoise"
 SPUR = 221.5
 
 

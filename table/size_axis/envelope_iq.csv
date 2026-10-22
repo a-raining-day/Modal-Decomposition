@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+envelope,iq,mixed,1,131072,1048576,float64,8.376,8.437,8.0,0.1,9953.6,3,119.39,1,
+envelope,iq,mixed,50,6553600,52428800,float64,413.453,424.098,400.0,0.0,9953.6,3,120.93,1,
+envelope,iq,mixed,100,13107200,104857600,float64,808.579,887.838,800.0,0.0,9953.6,3,123.67,1,
+envelope,iq,mixed,200,26214400,209715200,float64,1645.737,1789.453,1600.0,0.0,9953.6,3,121.53,1,
+envelope,iq,mixed,500,65536000,524288000,float64,4241.767,4291.936,4000.0,0.0,9953.6,2,117.88,1,
+envelope,iq,mixed,600,78643200,629145600,float64,5072.246,5244.279,4800.0,0.0,9953.6,2,118.29,1,

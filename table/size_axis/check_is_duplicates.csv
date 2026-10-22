@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+check,is_duplicates,mixed,1,131072,1048576,float64,0.295,0.305,1.1,0.0,2439.9,3,3389.83,1,
+check,is_duplicates,mixed,50,6553600,52428800,float64,17.895,18.214,56.3,0.0,2439.9,3,2794.08,1,
+check,is_duplicates,mixed,100,13107200,104857600,float64,34.086,35.969,112.5,0.0,2439.9,3,2933.76,1,
+check,is_duplicates,mixed,200,26214400,209715200,float64,66.28,76.663,225.0,0.0,2439.9,3,3017.5,1,
+check,is_duplicates,mixed,500,65536000,524288000,float64,158.592,165.71,562.5,0.0,2439.9,2,3152.74,1,
+check,is_duplicates,mixed,600,78643200,629145600,float64,196.344,196.985,675.0,0.0,2439.9,2,3055.86,1,

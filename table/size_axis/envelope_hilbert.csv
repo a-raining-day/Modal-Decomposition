@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+envelope,hilbert,mixed,1,131072,1048576,float64,4.703,4.709,40.5,70.9,130.1,3,212.63,1,
+envelope,hilbert,mixed,50,6553600,52428800,float64,329.011,356.505,400.0,150.1,806.3,3,151.97,1,
+envelope,hilbert,mixed,100,13107200,104857600,float64,782.705,791.644,800.0,300.1,1656.3,3,127.76,1,
+envelope,hilbert,mixed,200,26214400,209715200,float64,1870.232,1955.891,1600.0,600.0,3356.4,3,106.94,1,
+envelope,hilbert,mixed,500,65536000,524288000,float64,5130.046,5206.461,4000.0,443.5,8155.8,2,97.47,1,
+envelope,hilbert,mixed,600,78643200,629145600,float64,12728.327,13193.343,4800.0,449.6,9953.6,2,47.14,1,

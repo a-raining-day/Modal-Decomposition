@@ -1,0 +1,17 @@
+case,outcome,detail
+chunk size=4,ok,
+chunk default size,ok,
+chunk size=0,ValueError,"chunk_size must be positive, got 0"
+chunk size=2.0,TypeError,"chunk_size must be a positive integer, got 2.0"
+chunk axis=1 on 1-D,ValueError,axis 1 out of bounds for array of ndim 1
+chunk bool dtype,ValueError,the kind of dtype of input must be int or float! not b
+chunk complex dtype,ValueError,the kind of dtype of input must be int or float! not c
+chunk list input,ValueError,"Unable to avoid copy while creating an array as requested.
+If using `n"
+chunk bad mod,ValueError,"mod must be one of ['memory', 'exo-memory'], got 'nope'"
+chunk empty,ValueError,"chunking for goal dim requires at least 1, got 0"
+chunk 0-d,ok,
+chunked_map shape mismatch,ValueError,"out shape (3,) must equal input shape (10,)"
+chunked_fill dst list,TypeError,dst must be an ndarray or a memmap
+chunk_size float nbytes,ValueError,nbytes must be int! not <class 'float'>
+chunk_size ratio=1.5,ValueError,"chunk ratio must in (0, 1], not 1.5"

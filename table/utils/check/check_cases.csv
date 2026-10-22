@@ -1,0 +1,25 @@
+section,case,expected,got,verdict
+predicate,scalar,"(True, False, False, False)","(True, False, False, False)",PASS
+predicate,empty,"(False, True, False, True)","(False, True, False, True)",PASS
+predicate,one,"(False, True, False, False)","(False, True, False, False)",PASS
+predicate,1d,"(False, True, False, False)","(False, True, False, False)",PASS
+predicate,2d,"(False, False, True, False)","(False, False, True, False)",PASS
+predicate,2d_empty,"(False, False, True, True)","(False, False, True, True)",PASS
+predicate,3d,"(False, False, False, False)","(False, False, False, False)",PASS
+dtype,bool,b/bool,b/bool,PASS
+dtype,int8,i/int,i/int,PASS
+dtype,int32,i/int,i/int,PASS
+dtype,int64,i/int,i/int,PASS
+dtype,uint8,u/uint,u/uint,PASS
+dtype,uint64,u/uint,u/uint,PASS
+dtype,float16,f/float,f/float,PASS
+dtype,float32,f/float,f/float,PASS
+dtype,float64,f/float,f/float,PASS
+dtype,complex64,c/TypeError,c/TypeError,PASS
+dtype,complex128,c/TypeError,c/TypeError,PASS
+dtype,datetime64[ns],M/TypeError,M/TypeError,PASS
+dtype,timedelta64[s],m/TypeError,m/TypeError,PASS
+dtype,object,O/TypeError,O/TypeError,PASS
+dtype,str128,U/TypeError,U/TypeError,PASS
+dtype,bytes32,S/TypeError,S/TypeError,PASS
+dtype,void32,V/TypeError,V/TypeError,PASS

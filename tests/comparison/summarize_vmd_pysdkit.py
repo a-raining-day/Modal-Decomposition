@@ -37,7 +37,7 @@ NS = (256, 1024, 4096, 16384, 65536)
 def _load(res: Path) -> tuple[dict, dict]:
     """Return ({ (impl,case,n): [wall_s,...] }, { (impl,case,n): metrics })."""
     walls: dict[tuple, list] = {}
-    raw = res / "timing_raw.csv"
+    raw = _REPO / "table" / "methods" / res.name / "timing_raw.csv"
     if raw.exists():
         for r in csv.DictReader(raw.open(encoding="utf-8")):
             try:
@@ -149,9 +149,7 @@ def main() -> int:
             if (i, c, n) in metrics
         ],
     }
-    docs = _REPO / "docs"
-    docs.mkdir(exist_ok=True)
-    out_json = docs / "VMD_Native_vs_vmdpy_vs_PySDKit_Results.json"
+    out_json = res / "VMD_Native_vs_vmdpy_vs_PySDKit_Results.json"
     out_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"\nwrote {out_md}")
     print(f"wrote {out_json}")

@@ -199,17 +199,20 @@ def _give_monotony(arr, chunk_size, chunk_mod) -> Monotony:
         if m is Monotony.No:
             return Monotony.No
 
-        if acc is not None:
-            m = _commutative_semigroup(acc, m)
-            if m is Monotony.No:
-                return Monotony.No
-
+        # 1) 先折"跨块相邻对"（它才是块与块之间的信息，不能只用来判矛盾）
         if last is not None:
             delta = _pair_monotony(last, chunk[0])
-            if _commutative_semigroup(delta, m) is Monotony.No:
+            acc = delta if acc is None else _commutative_semigroup(acc, delta)
+            if acc is Monotony.No:
                 return Monotony.No
 
-        acc = m
+        # 2) 再折块内分类。单元素块不含相邻对，它的 Equal 不是"常数块"而
+        #    是空信息 —— 合并进去会把严格位清零（块长 1 全判 Mixed 的根因）。
+        if chunk.size >= 2:
+            acc = m if acc is None else _commutative_semigroup(acc, m)
+            if acc is Monotony.No:
+                return Monotony.No
+
         last = chunk[-1]
 
     return acc if acc is not None else Monotony.Equal

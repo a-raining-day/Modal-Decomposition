@@ -19,7 +19,7 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
 _RESULTS = _HERE / "results"
-_FIGS = _HERE / "figs"
+_FIGS = _HERE.parents[1] / "fig" / "comparison"   # fig/ 分级目录
 
 IMPLS = ["MD-EMD", "PyEMD", "PySDKit"]
 _COLORS = {"MD-EMD": "#c0392b", "PyEMD": "#2471a3", "PySDKit": "#1e8449"}
@@ -28,7 +28,7 @@ _STYLE = {"MD-EMD": "-", "PyEMD": "--", "PySDKit": ":"}
 
 def _load_timing_medians() -> dict:
     med: dict[tuple, float] = {}
-    p = _RESULTS / "timing_raw.csv"
+    p = _HERE.parents[1] / "table" / "comparison" / "timing_raw.csv"
     if not p.exists():
         return med
     by_cell: dict[tuple, list[float]] = {}

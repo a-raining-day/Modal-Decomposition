@@ -1,6 +1,6 @@
 # `tests/comparison/results/iceemdan_new/`
 
-ICEEMDAN（原生）验证轮的原始数据。配套报告：`docs/test/ICEEMDAN_Native_Engine_Report.md`。
+ICEEMDAN（原生）验证轮的原始数据。配套报告：`docs/test/methods/ICEEMDAN_Native_Engine_Report.md`。
 
 ## 文件
 
@@ -11,7 +11,7 @@ ICEEMDAN（原生）验证轮的原始数据。配套报告：`docs/test/ICEEMDA
 | `local_mean_probe.json` | `.scratch/eemd_new/probe_local_mean.py` + `probe_mirror.py` | 局部均值算子 `M(·)` 的口径探针：5 组对照 |
 
 出图脚本是 `.scratch/eemd_new/fig_iceemdan.py`（只读 JSON，不重跑基准），产物在
-`fig/iceemdan_compare.png`、`fig/iceemdan_pareto.png`。
+`fig/methods/iceemdan/iceemdan_compare.png`、`fig/methods/iceemdan/iceemdan_pareto.png`。
 
 > `compare.json` 与 `pareto_sweep.json` 由同一个脚本、同一进程产出（实验 1 + 实验 2），
 > 所以两者的 `env` / `c1` 是同一份；两者都是**单次计时**。`local_mean_probe.json` 是口径探针的

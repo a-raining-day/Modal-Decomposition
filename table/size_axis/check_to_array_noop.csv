@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+check,to_array_noop,mixed,1,131072,1048576,float64,0.068,0.109,0.1,0.0,2439.9,3,14705.88,1,
+check,to_array_noop,mixed,50,6553600,52428800,float64,3.902,4.004,6.3,0.0,2439.9,3,12813.94,1,
+check,to_array_noop,mixed,100,13107200,104857600,float64,7.694,8.13,12.5,0.0,2439.9,3,12997.14,1,
+check,to_array_noop,mixed,200,26214400,209715200,float64,15.585,26.184,25.0,0.0,2439.9,3,12832.85,1,
+check,to_array_noop,mixed,500,65536000,524288000,float64,48.599,48.811,62.5,0.0,2439.9,2,10288.28,1,
+check,to_array_noop,mixed,600,78643200,629145600,float64,50.599,51.315,75.0,0.0,2439.9,2,11857.94,1,

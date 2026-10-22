@@ -106,7 +106,7 @@
 - 每形态 oracle proposed 的配置差异很大，但性能面很平；这是“低参数”叙事的核心：
   **参数最优值会变，但坏选择不多**。
 
-![per-shape cost](figures/joint_grid_cost.png)
+![per-shape cost](../../../fig/explore/denoise/joint_grid_cost.png)
 
 ## 3. 参数平台：K、M、amp 的边际效应
 
@@ -125,9 +125,9 @@
   +1% 内：3 个，`K=2, M=64, amp∈{0.5,0.6,0.8}`。
 - 这意味着：**不需要精细调参**；但“低参数”不是“无参数”，K/M/amp 仍有一个宽平台。
 
-![joint grid heatmap](figures/joint_grid_heatmap.png)
+![joint grid heatmap](../../../fig/explore/denoise/joint_grid_heatmap.png)
 
-![marginal effects](figures/joint_grid_marginal.png)
+![marginal effects](../../../fig/explore/denoise/joint_grid_marginal.png)
 
 ## 4. “低参数”叙事怎么表述才准确
 
@@ -208,7 +208,7 @@
   **固定阈值不能无损迁移**，至少要用当前噪声档的 `a` 做校准；
 - 好消息是没有出现“幅度塌缩到 0.2”的情况，所以 `a` 校准是简单线性缩放。
 
-![affine a distribution](figures/affine_a_distribution.png)
+![affine a distribution](../../../fig/explore/denoise/affine_a_distribution.png)
 
 ### 4.3 P2：真实数据检查（CWRU + EEG）
 
@@ -311,11 +311,11 @@
 - `explore/denoise/results/affine_scale.json/csv`（P1）
 - `explore/denoise/results/real_eeg.json` / `real_eeg_summary.csv`（P2-EEG）
 - `explore/denoise/results/cwru.json` / `cwru_summary.csv`（P2-CWRU）
-- `docs/explore/denoise/figures/joint_grid_heatmap.png`
-- `docs/explore/denoise/figures/joint_grid_cost.png`
-- `docs/explore/denoise/figures/joint_grid_marginal.png`
-- `docs/explore/denoise/figures/affine_a_distribution.png`
-- `docs/explore/denoise/figures/real_eeg_example.png`
+- `fig/explore/denoise/joint_grid_heatmap.png`
+- `fig/explore/denoise/joint_grid_cost.png`
+- `fig/explore/denoise/joint_grid_marginal.png`
+- `fig/explore/denoise/affine_a_distribution.png`
+- `fig/explore/denoise/real_eeg_example.png`
 
 ## 7. 局限
 

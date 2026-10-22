@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
-FIG_DIR = ROOT / "docs/explore/denoise/figures"
+FIG_DIR = ROOT / "fig/explore/denoise"
 RESULTS = ROOT / "explore/denoise/results"
 
 AMPS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2)

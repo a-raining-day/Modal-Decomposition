@@ -25,7 +25,7 @@
 
 | 方法 | 选点 | ΔQ | 与既有文档的关系 |
 |---|---|---|---|
-| RPSEMD | `sin_smaple_num=4, separation_ratio=1.2` | +24.5% | **与 `docs/test/RPSEMD_Native_Engine_Report.md` 的结论相反**：那份报告用 A/B/C 三例复合 Q，得出 `sin_smaple_num=8` 最优、`separation_ratio` 在 {1.2,1.5,2.0} 上**逐位相同**。本表的提升来自单例 A 的度量，不足以推翻它。 |
+| RPSEMD | `sin_smaple_num=4, separation_ratio=1.2` | +24.5% | **与 `docs/test/methods/RPSEMD_Native_Engine_Report.md` 的结论相反**：那份报告用 A/B/C 三例复合 Q，得出 `sin_smaple_num=8` 最优、`separation_ratio` 在 {1.2,1.5,2.0} 上**逐位相同**。本表的提升来自单例 A 的度量，不足以推翻它。 |
 | EWT | `num_imfs=8` | +6.0% | 无既有 Pareto 记录，但把默认模式数从 5 改成 8 会改变**默认输出维度**，属可见的 API 变更。 |
 | SSA | `window_size=128, rank_rule="svht"` | +2.2% | `rank_rule="svht"` 是**有损截断**；默认 `None` 才是"完美重构"。Q 只因为 IO 变好，不宜作为默认。 |
 

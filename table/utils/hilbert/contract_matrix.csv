@@ -1,0 +1,22 @@
+case,backend,outcome,shape
+2d,FFT,ValueError,"hilbert 只接受一维实信号, 当前输入维度为 2D"
+2d,FHT,ValueError,"hilbert 只接受一维实信号, 当前输入维度为 2D"
+2d,scipy,ok,"(3, 32)"
+empty,FFT,ok,"(0,)"
+empty,FHT,ok,"(0,)"
+empty,scipy,ValueError,N must be positive.
+n1,FFT,ok,"(1,)"
+n1,FHT,ok,"(1,)"
+n1,scipy,ok,"(1,)"
+nan,FFT,ok,"(2,)"
+nan,FHT,ok,"(2,)"
+nan,scipy,ok,"(2,)"
+unknown_kwarg,FFT,TypeError,_hilbert() got an unexpected keyword argument 'foo'
+unknown_kwarg,FHT,TypeError,_hilbert() got an unexpected keyword argument 'foo'
+unknown_kwarg,scipy,ok,"(16,)"
+int_dtype,FFT,ok,"(8,)"
+int_dtype,FHT,ok,"(8,)"
+int_dtype,scipy,ok,"(8,)"
+list_input,FFT,ok,"(3,)"
+list_input,FHT,ok,"(3,)"
+list_input,scipy,ok,"(3,)"

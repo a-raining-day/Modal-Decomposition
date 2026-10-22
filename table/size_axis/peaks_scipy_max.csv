@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+peaks,scipy_max,mixed,1,131072,1048576,float64,0.374,0.52,34.0,67.0,2441.2,3,2673.8,1,
+peaks,scipy_max,mixed,50,6553600,52428800,float64,9.414,11.382,75.0,-0.0,2441.2,3,5311.24,1,
+peaks,scipy_max,mixed,100,13107200,104857600,float64,25.629,28.134,150.0,0.0,2441.2,3,3901.83,1,
+peaks,scipy_max,mixed,200,26214400,209715200,float64,45.439,49.376,300.0,0.0,2441.2,3,4401.51,1,
+peaks,scipy_max,mixed,500,65536000,524288000,float64,111.102,118.061,750.0,0.0,2441.2,2,4500.37,1,
+peaks,scipy_max,mixed,600,78643200,629145600,float64,155.809,157.239,900.0,0.0,2508.1,2,3850.87,1,

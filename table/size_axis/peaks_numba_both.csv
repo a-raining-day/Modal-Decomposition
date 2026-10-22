@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+peaks,numba_both,mixed,1,131072,1048576,float64,0.432,0.44,34.4,73.6,2508.1,3,2314.81,1,
+peaks,numba_both,mixed,50,6553600,52428800,float64,14.68,17.918,100.0,0.0,2508.1,3,3405.99,1,
+peaks,numba_both,mixed,100,13107200,104857600,float64,29.946,32.85,200.0,0.0,2508.1,3,3339.34,1,
+peaks,numba_both,mixed,200,26214400,209715200,float64,55.475,58.857,400.0,0.0,2508.1,3,3605.23,1,
+peaks,numba_both,mixed,500,65536000,524288000,float64,116.457,120.485,1000.0,0.0,2508.1,2,4293.43,1,
+peaks,numba_both,mixed,600,78643200,629145600,float64,155.782,156.051,1200.0,0.0,2581.7,2,3851.54,1,

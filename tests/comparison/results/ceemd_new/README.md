@@ -1,6 +1,6 @@
 # `tests/comparison/results/ceemd_new/`
 
-CEEMD（原生）验证轮的原始数据。配套报告：`docs/test/CEEMD_Native_Engine_Report.md`。
+CEEMD（原生）验证轮的原始数据。配套报告：`docs/test/methods/CEEMD_Native_Engine_Report.md`。
 
 ## 文件
 
@@ -10,7 +10,7 @@ CEEMD（原生）验证轮的原始数据。配套报告：`docs/test/CEEMD_Nati
 | `pareto_sweep.json` | `.scratch/eemd_new/pareto.py` | Pareto 扫描：`M × alpha` 16 组 + 前沿 + 选定点 |
 
 出图脚本是 `.scratch/eemd_new/fig_ceemd.py`（只读 JSON，不重跑基准），产物在
-`fig/ceemd_compare.png`、`fig/ceemd_pareto.png`。
+`fig/methods/ceemd/ceemd_compare.png`、`fig/methods/ceemd/ceemd_pareto.png`。
 
 ## `compare.json`
 

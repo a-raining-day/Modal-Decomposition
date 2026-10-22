@@ -2,7 +2,7 @@
 ``Modal_Decomposition.Utils.Monotonicity`` 的一模块一测试。
 
 被测模块: ``src/Modal_Decomposition/Utils/Monotonicity.py``
-配套报告: ``docs/test/Monotonicity_Engine_Report.md``
+配套报告: ``docs/test/utils/Monotonicity_Engine_Report.md``
 
 覆盖的契约(与 ``gen_tool_doc.py`` 里 ``Utils`` 契约一一对应):
   1. ``__all__`` 覆盖 ``monotonic`` / ``give_monotony`` / ``MONOTONY_MODS`` /
@@ -483,40 +483,28 @@ def test_chunked_non_strict_monotonic_matches_single_shot(case, chunk_size):
 
 @pytest.mark.parametrize("chunk_size", [2, 3, 4], ids=["chunk2", "chunk3", "chunk4"])
 @pytest.mark.parametrize("case", CASE_IDS, ids=CASE_IDS)
-def test_chunked_give_monotony_keeps_direction_bit(case, chunk_size):
-    """
-    分块 ``give_monotony`` 的**方向位**(bit0-1)与整体分类一致。
+def test_chunked_give_monotony_matches_whole(case, chunk_size):
+    """分块 ``give_monotony`` 必须与整体分类**完全相同**（含严格位）。
 
-    实测已知行为: 当最后一个分块只剩 1 个元素时, 该块被分类为 ``Equal``(严格位
-    为 0), 合并后严格位被抹掉 —— 即 ``n % chunk_size == 1`` 时 ``Strict*`` 会
-    退化成同方向的 ``Mixed*``。此处按实测行为断言, 不改 src。
+    历史缺陷（本轮已修）：末块只剩 1 个元素时被分类为 ``Equal``（严格位 0），
+    合并后严格位被抹掉，``Strict*`` 退化成同方向的 ``Mixed*``。
+    修法：单元素块不含相邻对，其 ``Equal`` 属于空信息，不能参与合并。
     """
     arr, expected, _table = CASES[case]
     got = give_monotony(arr, chunk_size=chunk_size)
     assert isinstance(got, Monotony)
-    assert (got.value & 0b011) == (expected.value & 0b011)
-
-    last_chunk_is_singleton = arr.size % chunk_size == 1
-    expected_is_strict = expected in (Monotony.StrictIncreasing, Monotony.StrictDecreasing)
-    if last_chunk_is_singleton and expected_is_strict:
-        assert (got.value >> 2) == 0        # 严格位被末块的 Equal 抹掉
-        assert got in (Monotony.MixedIncreasing, Monotony.MixedDecreasing)
-    else:
-        assert got is expected
+    assert got is expected, (case, chunk_size, got, expected)
 
 
 @pytest.mark.parametrize("chunk_size", [2, 4], ids=["chunk2", "chunk4"])
-def test_chunked_strict_monotonic_mod_degrades_on_singleton_tail(chunk_size):
-    """
-    已知分块缺陷(按实测断言, 不改 src): 数组长度 5、``chunk_size`` 为 2/4 时, 末块
-    只剩 1 个元素 → 严格位丢失 → ``monotonic(strict=True, mod="monotonic")`` 对
-    一个真正严格递增的数组返回 ``False``(整体路径返回 ``True``)。
-    """
+def test_chunked_strict_monotonic_mod_is_exact(chunk_size):
+    """历史缺陷（本轮已修）：末块为单元素时 ``monotonic(strict=True, mod="monotonic")``
+    会对真正严格递增的数组返回 ``False``；现在分块与整体一致。"""
     arr = STRICT_INC                      # 长度 5, 5 % 2 == 5 % 4 == 1
     assert give_monotony(arr) is Monotony.StrictIncreasing
+    assert give_monotony(arr, chunk_size=chunk_size) is Monotony.StrictIncreasing
     assert monotonic(arr, strict=True, mod="monotonic") is True
-    assert monotonic(arr, strict=True, mod="monotonic", chunk_size=chunk_size) is False
-    # 但同时显式方向的严格判定仍然正确 —— 缺陷只影响 mod="monotonic" 的严格分支
+    assert monotonic(arr, strict=True, mod="monotonic", chunk_size=chunk_size) is True
     assert monotonic(arr, strict=True, mod="increasing", chunk_size=chunk_size) is True
 
 

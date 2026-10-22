@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+check,is_infinite,mixed,1,131072,1048576,float64,0.062,0.077,0.1,0.0,2439.9,3,16129.03,1,
+check,is_infinite,mixed,50,6553600,52428800,float64,3.902,4.047,6.3,0.0,2439.9,3,12813.94,1,
+check,is_infinite,mixed,100,13107200,104857600,float64,7.284,7.361,12.5,0.0,2439.9,3,13728.72,1,
+check,is_infinite,mixed,200,26214400,209715200,float64,14.439,14.577,25.0,0.0,2439.9,3,13851.37,1,
+check,is_infinite,mixed,500,65536000,524288000,float64,42.436,46.384,62.5,0.0,2439.9,2,11782.45,1,
+check,is_infinite,mixed,600,78643200,629145600,float64,61.105,70.665,75.0,0.0,2439.9,2,9819.16,1,

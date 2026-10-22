@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+monotonicity,monotonic_early_exit,mixed,1,131072,1048576,float64,0.184,0.342,0.1,0.1,5472.0,3,5434.78,1,
+monotonicity,monotonic_early_exit,mixed,50,6553600,52428800,float64,11.447,12.956,6.3,0.0,5472.0,3,4367.96,1,
+monotonicity,monotonic_early_exit,mixed,100,13107200,104857600,float64,15.515,16.444,12.5,0.0,5472.0,3,6445.38,1,
+monotonicity,monotonic_early_exit,mixed,200,26214400,209715200,float64,40.496,40.926,25.0,0.0,5597.0,3,4938.76,1,
+monotonicity,monotonic_early_exit,mixed,500,65536000,524288000,float64,96.248,96.786,62.5,0.0,6119.0,2,5194.91,1,
+monotonicity,monotonic_early_exit,mixed,600,78643200,629145600,float64,84.622,102.341,75.0,0.0,6181.2,2,7090.35,1,

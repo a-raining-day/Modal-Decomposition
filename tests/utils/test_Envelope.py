@@ -51,7 +51,7 @@ import Modal_Decomposition.Utils as U
 from Modal_Decomposition.Utils import ENVELOPE_MODS, ENVELOPE_MODS_ARGS, envelope
 from Modal_Decomposition.Utils.Envelope import __all__ as ENVELOPE_ALL
 
-# 与 ``docs/test/Envelope_Engine_Report.md`` 的复现口径一致
+# 与 ``docs/test/utils/Envelope_Engine_Report.md`` 的复现口径一致
 FS, FC, CF = 1.0, 0.1, 0.2
 PARAMS = dict(fs=FS, fc=FC, cf=CF)
 

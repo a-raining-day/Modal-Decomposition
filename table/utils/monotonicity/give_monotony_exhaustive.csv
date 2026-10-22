@@ -1,0 +1,118 @@
+seq,got,expected
+"(0, 0)",Equal,Equal
+"(0, 1)",StrictIncreasing,StrictIncreasing
+"(0, 2)",StrictIncreasing,StrictIncreasing
+"(1, 0)",StrictDecreasing,StrictDecreasing
+"(1, 1)",Equal,Equal
+"(1, 2)",StrictIncreasing,StrictIncreasing
+"(2, 0)",StrictDecreasing,StrictDecreasing
+"(2, 1)",StrictDecreasing,StrictDecreasing
+"(2, 2)",Equal,Equal
+"(0, 0, 0)",Equal,Equal
+"(0, 0, 1)",MixedIncreasing,MixedIncreasing
+"(0, 0, 2)",MixedIncreasing,MixedIncreasing
+"(0, 1, 0)",No,No
+"(0, 1, 1)",MixedIncreasing,MixedIncreasing
+"(0, 1, 2)",StrictIncreasing,StrictIncreasing
+"(0, 2, 0)",No,No
+"(0, 2, 1)",No,No
+"(0, 2, 2)",MixedIncreasing,MixedIncreasing
+"(1, 0, 0)",MixedDecreasing,MixedDecreasing
+"(1, 0, 1)",No,No
+"(1, 0, 2)",No,No
+"(1, 1, 0)",MixedDecreasing,MixedDecreasing
+"(1, 1, 1)",Equal,Equal
+"(1, 1, 2)",MixedIncreasing,MixedIncreasing
+"(1, 2, 0)",No,No
+"(1, 2, 1)",No,No
+"(1, 2, 2)",MixedIncreasing,MixedIncreasing
+"(2, 0, 0)",MixedDecreasing,MixedDecreasing
+"(2, 0, 1)",No,No
+"(2, 0, 2)",No,No
+"(2, 1, 0)",StrictDecreasing,StrictDecreasing
+"(2, 1, 1)",MixedDecreasing,MixedDecreasing
+"(2, 1, 2)",No,No
+"(2, 2, 0)",MixedDecreasing,MixedDecreasing
+"(2, 2, 1)",MixedDecreasing,MixedDecreasing
+"(2, 2, 2)",Equal,Equal
+"(0, 0, 0, 0)",Equal,Equal
+"(0, 0, 0, 1)",MixedIncreasing,MixedIncreasing
+"(0, 0, 0, 2)",MixedIncreasing,MixedIncreasing
+"(0, 0, 1, 0)",No,No
+"(0, 0, 1, 1)",MixedIncreasing,MixedIncreasing
+"(0, 0, 1, 2)",MixedIncreasing,MixedIncreasing
+"(0, 0, 2, 0)",No,No
+"(0, 0, 2, 1)",No,No
+"(0, 0, 2, 2)",MixedIncreasing,MixedIncreasing
+"(0, 1, 0, 0)",No,No
+"(0, 1, 0, 1)",No,No
+"(0, 1, 0, 2)",No,No
+"(0, 1, 1, 0)",No,No
+"(0, 1, 1, 1)",MixedIncreasing,MixedIncreasing
+"(0, 1, 1, 2)",MixedIncreasing,MixedIncreasing
+"(0, 1, 2, 0)",No,No
+"(0, 1, 2, 1)",No,No
+"(0, 1, 2, 2)",MixedIncreasing,MixedIncreasing
+"(0, 2, 0, 0)",No,No
+"(0, 2, 0, 1)",No,No
+"(0, 2, 0, 2)",No,No
+"(0, 2, 1, 0)",No,No
+"(0, 2, 1, 1)",No,No
+"(0, 2, 1, 2)",No,No
+"(0, 2, 2, 0)",No,No
+"(0, 2, 2, 1)",No,No
+"(0, 2, 2, 2)",MixedIncreasing,MixedIncreasing
+"(1, 0, 0, 0)",MixedDecreasing,MixedDecreasing
+"(1, 0, 0, 1)",No,No
+"(1, 0, 0, 2)",No,No
+"(1, 0, 1, 0)",No,No
+"(1, 0, 1, 1)",No,No
+"(1, 0, 1, 2)",No,No
+"(1, 0, 2, 0)",No,No
+"(1, 0, 2, 1)",No,No
+"(1, 0, 2, 2)",No,No
+"(1, 1, 0, 0)",MixedDecreasing,MixedDecreasing
+"(1, 1, 0, 1)",No,No
+"(1, 1, 0, 2)",No,No
+"(1, 1, 1, 0)",MixedDecreasing,MixedDecreasing
+"(1, 1, 1, 1)",Equal,Equal
+"(1, 1, 1, 2)",MixedIncreasing,MixedIncreasing
+"(1, 1, 2, 0)",No,No
+"(1, 1, 2, 1)",No,No
+"(1, 1, 2, 2)",MixedIncreasing,MixedIncreasing
+"(1, 2, 0, 0)",No,No
+"(1, 2, 0, 1)",No,No
+"(1, 2, 0, 2)",No,No
+"(1, 2, 1, 0)",No,No
+"(1, 2, 1, 1)",No,No
+"(1, 2, 1, 2)",No,No
+"(1, 2, 2, 0)",No,No
+"(1, 2, 2, 1)",No,No
+"(1, 2, 2, 2)",MixedIncreasing,MixedIncreasing
+"(2, 0, 0, 0)",MixedDecreasing,MixedDecreasing
+"(2, 0, 0, 1)",No,No
+"(2, 0, 0, 2)",No,No
+"(2, 0, 1, 0)",No,No
+"(2, 0, 1, 1)",No,No
+"(2, 0, 1, 2)",No,No
+"(2, 0, 2, 0)",No,No
+"(2, 0, 2, 1)",No,No
+"(2, 0, 2, 2)",No,No
+"(2, 1, 0, 0)",MixedDecreasing,MixedDecreasing
+"(2, 1, 0, 1)",No,No
+"(2, 1, 0, 2)",No,No
+"(2, 1, 1, 0)",MixedDecreasing,MixedDecreasing
+"(2, 1, 1, 1)",MixedDecreasing,MixedDecreasing
+"(2, 1, 1, 2)",No,No
+"(2, 1, 2, 0)",No,No
+"(2, 1, 2, 1)",No,No
+"(2, 1, 2, 2)",No,No
+"(2, 2, 0, 0)",MixedDecreasing,MixedDecreasing
+"(2, 2, 0, 1)",No,No
+"(2, 2, 0, 2)",No,No
+"(2, 2, 1, 0)",MixedDecreasing,MixedDecreasing
+"(2, 2, 1, 1)",MixedDecreasing,MixedDecreasing
+"(2, 2, 1, 2)",No,No
+"(2, 2, 2, 0)",MixedDecreasing,MixedDecreasing
+"(2, 2, 2, 1)",MixedDecreasing,MixedDecreasing
+"(2, 2, 2, 2)",Equal,Equal

@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+chunk,chunked_fill_to_disk,mixed,1,131072,1048576,float64,4.981,5.223,0.1,0.1,2441.8,3,200.76,1,
+chunk,chunked_fill_to_disk,mixed,50,6553600,52428800,float64,47.342,49.968,0.0,0.0,2441.8,3,1056.14,1,
+chunk,chunked_fill_to_disk,mixed,100,13107200,104857600,float64,98.687,101.07,0.0,0.0,2441.8,3,1013.3,1,
+chunk,chunked_fill_to_disk,mixed,200,26214400,209715200,float64,193.923,217.729,0.0,0.0,2441.8,3,1031.34,1,
+chunk,chunked_fill_to_disk,mixed,500,65536000,524288000,float64,475.357,492.824,0.0,0.0,2441.8,2,1051.84,1,
+chunk,chunked_fill_to_disk,mixed,600,78643200,629145600,float64,575.473,580.555,0.0,0.0,2441.9,2,1042.62,1,

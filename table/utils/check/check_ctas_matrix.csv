@@ -1,0 +1,17 @@
+case,outcome,detail
+"1d float64, need_T=False",ok,
+"1d float64, need_T=True",ok,
+"2-D (2,8), ndim={1}",ValueError,"the ndim of input -> 2 != (1,)"
+"2-D (1,8), ndim={1,2}",ok,
+empty,ValueError,Signal must not be empty
+nan,ValueError,NaN or Inf found
+int32,ok,
+T ascending,ok,
+T duplicate,ValueError,Time axis contains duplicate values
+T descending (warn),ok,
+T wrong length,ValueError,M: length mismatch between S (5) and S (4)
+axis=1,ValueError,axis 1 out of bounds for array of ndim 1
+safe=safe + list,AttributeError,'list' object has no attribute 'shape'
+safe=suspicious + 2-D,ok,
+dtype=float64,ok,
+bad safe,ValueError,"the parameter of `safe` can only be ['safe', 'suspicious', 'unknown']"

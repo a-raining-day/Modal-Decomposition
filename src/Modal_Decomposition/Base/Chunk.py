@@ -6,8 +6,6 @@
 """
 
 import os
-import tempfile
-import uuid
 from enum import Enum
 from warnings import warn
 from typing import Callable, Iterator, Literal, Optional
@@ -15,7 +13,7 @@ from typing import Callable, Iterator, Literal, Optional
 import numpy as np
 
 from ..Define import SIZE, DEFAULT_NUMPY_TYPE
-from .Memory import memory_budget
+from .Memory import memory_budget, temp_memmap
 
 __all__ = ["Chunk", "CHUNK_MOD", "CHUNK_MOD_ARGS"]
 
@@ -42,8 +40,10 @@ class Chunk:
     """
     分块工具的门面：所有入口都是 ``@staticmethod`` / ``@classmethod``，不需要实例。
 
-    ``chunk`` 的两种模式：``"memory"``（默认）产出内存视图；``"exo-memory"`` 产出
-    临时磁盘 memmap，迭代结束即关闭句柄并尽力删除。
+    ``chunk`` 的两种模式：``"memory"``（默认）产出内存视图（零拷贝）；``"exo-memory"``
+    产出临时磁盘 memmap。磁盘块在**仍被引用期间保持有效**（迭代结束后继续读不会再
+    触发 access violation），其临时文件登记在 :mod:`Base.Memory` 的注册表里，由
+    :func:`Memory.cleanup_memmaps` 或解释器退出时统一关闭并删除。
 
     Examples
     --------
@@ -56,13 +56,16 @@ class Chunk:
     (4,)
     """
     @staticmethod
-    def chunk_size(nbytes: int, *, chunk_ratio: float = 0.75, extras_bytes: int = 0, **kwargs) -> int:
+    def chunk_size(nbytes: int, *, chunk_ratio: float = 0.75, extras_bytes: int = 0,
+                   itemsize: int = None, **kwargs) -> int:
         """
-        自适应块大小（元素数）：小输入固定用 :data:`DEFAULT_FILL_CHUNK_SIZE`，大输入
-        取 ``min(nbytes, budget * chunk_ratio)``，让单块工作集落在全局内存预算内。
+        自适应块大小（**元素数**）：小输入固定用 :data:`DEFAULT_FILL_CHUNK_SIZE`，
+        大输入取 ``min(nbytes, budget * chunk_ratio)``，让单块工作集落在全局内存预算内。
 
-        入参 ``nbytes`` 以字节计，返回值以元素计（与 :data:`DEFAULT_FILL_CHUNK_SIZE`
-        同单位）；传入 ``ndarray`` / ``np.memmap`` 时取其实例的 ``.nbytes`` 并告警。
+        入参 ``nbytes`` 以**字节**计，返回值以**元素**计 —— 两处比较都先把块长换算成
+        字节，最后再按 ``itemsize`` 换算回元素（旧实现把字节数当元素数返回，会让
+        超出预算的输入拿到 8 倍过大的块）。
+        传入 ``ndarray`` / ``np.memmap`` 时取其实例的 ``.nbytes`` 并告警。
 
         Parameters
         ----------
@@ -72,11 +75,14 @@ class Chunk:
             允许占用的可用内存比例，取值 ``(0, 1]``。
         extras_bytes : int
             预算中需预留的额外字节数，不能为负。
+        itemsize : int, optional
+            单个元素的字节数；默认按 ``DEFAULT_NUMPY_TYPE``（float64 = 8 B）折算。
+            :meth:`chunk` / :meth:`fill_memmap` 会传入实际 ``dtype.itemsize``。
 
         Returns
         -------
         int
-            块大小（元素数）。
+            块大小（元素数），恒 ``>= 1``。
         """
         if isinstance(nbytes, (np.ndarray, np.memmap)):
             try:
@@ -100,18 +106,29 @@ class Chunk:
             if not (extras_bytes >= 0):
                 raise ValueError("extras bytes must be >= 0! not {}".format(extras_bytes))
 
-        if nbytes <= DEFAULT_FILL_CHUNK_SIZE:
+        if itemsize is None:
+            itemsize = np.dtype(DEFAULT_NUMPY_TYPE).itemsize
+
+        if isinstance(itemsize, bool) or not isinstance(itemsize, (int, np.integer)):
+            raise TypeError(f"itemsize must be an int, got {itemsize!r}")
+
+        itemsize = int(itemsize)
+
+        if itemsize < 1:
+            raise ValueError(f"itemsize must be >= 1, got {itemsize!r}")
+
+        # 小输入：块长固定 8 Mi 元素（= 8 Mi × itemsize 字节）
+        if nbytes <= DEFAULT_FILL_CHUNK_SIZE * itemsize:
             return DEFAULT_FILL_CHUNK_SIZE
 
         mb = memory_budget(extras_bytes=extras_bytes, force=kwargs.get("force", False))
         limit = mb["budget"]
         limit_chunk_memory = int(limit * chunk_ratio)
 
-        if nbytes <= limit_chunk_memory:
-            return nbytes
+        # 大输入：块长 = min(输入字节, 0.75 × 预算字节)，再换算成元素数
+        chunk_bytes = nbytes if nbytes <= limit_chunk_memory else limit_chunk_memory
 
-        else:
-            return limit_chunk_memory
+        return max(1, chunk_bytes // itemsize)
 
     @classmethod
     def chunk(cls, S: np.ndarray, *, chunk_size: int = None, mod: CHUNK_MOD_ARGS | CHUNK_MOD = "memory", axis: int=0, dtype=None, temp_dir: Optional[str]=None, **kwargs) -> Iterator[np.ndarray]:
@@ -138,7 +155,7 @@ class Chunk:
             else:
                 raise ValueError("chunking requires at least 1 dimension, got 0-d array")
 
-        chunk_size = validate_chunk_size(chunk_size if chunk_size is not None else cls.chunk_size(nbytes=S.nbytes, chunk_ratio=kwargs.get("chunk_ratio", 0.75), extras_bytes=kwargs.get("extras_bytes", 0)))
+        chunk_size = validate_chunk_size(chunk_size if chunk_size is not None else cls.chunk_size(nbytes=S.nbytes, chunk_ratio=kwargs.get("chunk_ratio", 0.75), extras_bytes=kwargs.get("extras_bytes", 0), itemsize=S.itemsize))
 
         try:
             mod = CHUNK_MOD(mod)
@@ -180,14 +197,11 @@ class Chunk:
         """
         产出 ``S`` 的磁盘分块。
 
-        每块写入 ``temp_dir``（默认系统临时目录）下的临时 ``.dat`` memmap；迭代期间
-        保持映射，生成器耗尽或被关闭时统一关闭句柄并尽力删除文件（Windows 上外部
-        视图仍持有映射时可能删不掉）。
-
-        Warning
-        -------
-        产出的 ``np.memmap`` 只保证在本次迭代步内有效：取下一块之前消费或拷贝它，
-        不要越过迭代末尾继续持有引用。
+        每块由 :func:`Base.Memory.temp_memmap` 建立独立临时 ``.dat``，写好后归还。
+        映射**不在迭代结束时关闭** —— 调用方可以继续持有并读取已产出的块（旧实现
+        在生成器收尾时把所有映射一起 close，之后 dereference 会让解释器
+        access violation 崩溃）。临时文件登记在 ``Memory`` 的注册表里，由
+        :func:`Memory.cleanup_memmaps` 或解释器退出时关闭句柄并删除。
 
         Parameters
         ----------
@@ -205,7 +219,7 @@ class Chunk:
         Yields
         ------
         np.memmap
-            每步一个磁盘分块。
+            每步一个磁盘分块；只要不 ``cleanup_memmaps()``，迭代结束后仍然可读。
         """
         length = S.shape[axis]
         if length == 0:
@@ -213,43 +227,23 @@ class Chunk:
 
         head: tuple = (slice(None),) * axis
 
-        temp_dir = temp_dir if temp_dir is not None else tempfile.gettempdir()
-        os.makedirs(temp_dir, exist_ok=True)
-
-        prefix = uuid.uuid4().hex
+        if temp_dir is not None:
+            os.makedirs(temp_dir, exist_ok=True)   # temp_memmap 只负责建文件
 
         dtype = dtype if dtype is not None else S.dtype
 
-        kept: list = []  # (memmap, path) —— 迭代结束后统一关闭句柄并删除文件
+        for i in range(0, length, chunk_size):
+            idx = head + (slice(i, i + chunk_size),)
 
-        try:
-            for i in range(0, length, chunk_size):
-                idx = head + (slice(i, i + chunk_size),)
+            mm = temp_memmap(S[idx].shape, dtype, temp_dir=temp_dir)
 
-                path = os.path.join(temp_dir, f"md_chunk_{prefix}_{i // chunk_size}.dat")
+            if mm is None:                      # pragma: no cover - 建不出映射的极端情形
+                raise BaseException("it's failed to create memmap")
 
-                mm = np.memmap(
-                    path,
-                    dtype=dtype,
-                    mode="w+",
-                    shape=S[idx].shape,
-                )
-                mm[:] = S[idx]
-                mm.flush()
+            mm[:] = S[idx]
+            mm.flush()
 
-                kept.append((mm, path))
-
-                yield mm
-        finally:
-            for mm, path in kept:
-                try:
-                    mm._mmap.close()
-                except Exception:
-                    pass
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+            yield mm
 
     @staticmethod
     def chunked_map(
@@ -375,5 +369,5 @@ class Chunk:
         src_nbytes = getattr(source, "nbytes", 0)
         nbytes = max(fp.nbytes, src_nbytes)
 
-        chunk_size = cls.chunk_size(nbytes)
+        chunk_size = cls.chunk_size(nbytes, itemsize=fp.itemsize)
         cls.chunked_fill(fp, source, chunk_size)

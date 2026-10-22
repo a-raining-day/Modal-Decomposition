@@ -1,7 +1,7 @@
 """Hilbert 后端基准 (scipy vs FFT vs 自适应 FHT vs 纯 SAO 内核)。
 
-产出 ``docs/test/Hilbert_Backend_Results.json`` —— 与
-``docs/test/Hilbert_Backend_Report.md`` 一一对应。五个被测对象见
+产出 ``tests/comparison/results/utils/hilbert/Hilbert_Backend_Results.json`` —— 与
+``docs/test/utils/Hilbert_Backend_Report.md`` 一一对应。五个被测对象见
 ``_analytic()``; 简述:
 
 * ``scipy``      : ``scipy.signal.hilbert``, 基线 (两次复数 FFT);
@@ -35,7 +35,7 @@ FHT 原生内核用 ``np.zeros`` 申请缓冲区, 所以仍在统计范围内。
     python tests/comparison/bench_hilbert.py                     # 默认全量
     python tests/comparison/bench_hilbert.py --sizes 256 4096 65536
     python tests/comparison/bench_hilbert.py --configs scipy fft fht
-    python tests/comparison/bench_hilbert.py --out docs/test/Hilbert_Backend_Results.json
+    python tests/comparison/bench_hilbert.py --out tests/comparison/results/utils/hilbert/Hilbert_Backend_Results.json
 """
 
 from __future__ import annotations
@@ -364,7 +364,8 @@ def main() -> int:
                     default=[1000, 10000, 100000])
     ap.add_argument("--configs", nargs="*", default=list(ALL_CONFIGS))
     ap.add_argument("--out", default=os.path.join(
-        _ROOT, "docs", "test", "Hilbert_Backend_Results.json"))
+        _ROOT, "tests", "comparison", "results", "utils", "hilbert",
+        "Hilbert_Backend_Results.json"))
     ap.add_argument("--skip", nargs="*", default=[],
                     choices=["correctness", "timing", "memory", "primitives",
                              "effect", "pad_scan"])

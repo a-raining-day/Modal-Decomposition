@@ -88,7 +88,7 @@ ratio = aux_std / input_noise_std
 - `amp >= 1.0` 后 SNR 明显下降，shape 也回升；辅助噪声过大会把输出推向
   “含噪原信号”，而不是主形态。
 
-![shape/SNR vs amp](figures/noise_amp_shape_snr.png)
+![shape/SNR vs amp](../../../fig/explore/denoise/noise_amp_shape_snr.png)
 
 ### 3.2 按输入噪声档
 
@@ -120,7 +120,7 @@ ratio = aux_std / input_noise_std
 - **尖峰**：0.3 左右，增益很小；尖峰不是靠加噪能“平均掉”的。
 - **冲击**：任何 amp 都救不了（0.747-0.761）；不要用它处理冲击包络。
 
-![per-case shape vs amp](figures/noise_amp_per_case.png)
+![per-case shape vs amp](../../../fig/explore/denoise/noise_amp_per_case.png)
 
 ### 3.4 辅助/输入噪声比分箱（描述性）
 
@@ -183,8 +183,8 @@ ratio = aux_std / input_noise_std
 - `explore/denoise/results/high_noise_noise_amp.json`（1350 条）
 - `explore/denoise/results/high_noise_noise_amp_summary.csv`
 - `explore/denoise/results/high_noise_noise_amp_ranking.csv`
-- `docs/explore/denoise/figures/noise_amp_shape_snr.png`
-- `docs/explore/denoise/figures/noise_amp_per_case.png`
+- `fig/explore/denoise/noise_amp_shape_snr.png`
+- `fig/explore/denoise/noise_amp_per_case.png`
 
 ## 7. 局限
 

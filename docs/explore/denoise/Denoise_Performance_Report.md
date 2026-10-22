@@ -181,11 +181,11 @@
 
 **图 1：示例波形**（noise=0.3；clean / noisy / P-K2-M32 / Butter150）
 
-![example waveforms](figures/example_waveforms.png)
+![example waveforms](../../../fig/explore/denoise/example_waveforms.png)
 
 **图 2：SNR 提升随噪声水平的变化**
 
-![SNR vs noise](figures/snr_vs_noise.png)
+![SNR vs noise](../../../fig/explore/denoise/snr_vs_noise.png)
 
 图 2 显示 proposed 的典型形态：K=2/3 在低噪声时低于 0 dB，K=1 也仅约 +0.8 dB
 （不含 impact）；高噪声时才追上经典方法，impact 子图始终为负。
@@ -247,7 +247,7 @@ EEMD-corr 的 RMSE 也不好（见 §7），但包络保留明显更好（12.28 
 
 **图 3：impact 包络谱**
 
-![impact envelope spectrum](figures/impact_envelope_spectrum.png)
+![impact envelope spectrum](../../../fig/explore/denoise/impact_envelope_spectrum.png)
 
 ### 5.3 阶跃（step，noise=0.3）
 
@@ -304,7 +304,7 @@ proposed 确实降低了 RMS，但 K=1 的 max abs 达到 5.687（比 raw 大 62
 
 **图 4：K/M 对 trend 与 impact 的影响**
 
-![K/M sensitivity](figures/km_sensitivity.png)
+![K/M sensitivity](../../../fig/explore/denoise/km_sensitivity.png)
 
 整体表（与表 1 同源）：
 
@@ -418,7 +418,7 @@ K=2,M=32，noise=0.3（敏感性网格使用独立观测，绝对值与主表略
 
 - 原始记录：`explore/denoise/results/benchmark.json`（1269 条）
 - 汇总：`explore/denoise/results/summary.csv`、`ranking.csv`、`summary.json`
-- 图：`docs/explore/denoise/figures/*.png`
+- 图：`fig/explore/denoise/*.png`
 - 代码说明：`explore/denoise/README.md`
 
 ## 10. 局限

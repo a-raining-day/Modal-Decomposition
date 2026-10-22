@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+monotonicity,monotonic_chunked_1mib,ramp,1,131072,1048576,float64,0.289,0.322,0.1,0.0,6181.2,3,3460.21,1,
+monotonicity,monotonic_chunked_1mib,ramp,50,6553600,52428800,float64,7.555,7.917,6.3,0.0,6181.2,3,6618.13,1,
+monotonicity,monotonic_chunked_1mib,ramp,100,13107200,104857600,float64,20.711,28.552,12.5,0.0,6181.2,3,4828.35,1,
+monotonicity,monotonic_chunked_1mib,ramp,200,26214400,209715200,float64,40.281,60.854,25.0,0.0,6181.2,3,4965.12,1,
+monotonicity,monotonic_chunked_1mib,ramp,500,65536000,524288000,float64,85.347,87.043,62.5,0.0,6181.2,2,5858.44,1,
+monotonicity,monotonic_chunked_1mib,ramp,600,78643200,629145600,float64,98.296,104.407,75.0,0.0,6181.2,2,6104.01,1,

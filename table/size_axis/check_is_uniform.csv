@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+check,is_uniform,ramp,1,131072,1048576,float64,0.745,0.817,3.0,4.9,43.9,3,1342.28,1,
+check,is_uniform,ramp,50,6553600,52428800,float64,41.33,41.443,150.0,0.0,239.9,3,1209.77,1,
+check,is_uniform,ramp,100,13107200,104857600,float64,85.944,87.271,300.0,0.0,439.9,3,1163.55,1,
+check,is_uniform,ramp,200,26214400,209715200,float64,171.279,176.919,600.0,0.0,839.9,3,1167.69,1,
+check,is_uniform,ramp,500,65536000,524288000,float64,474.656,490.985,1500.0,0.0,2039.9,2,1053.39,1,
+check,is_uniform,ramp,600,78643200,629145600,float64,626.034,681.615,1800.0,0.0,2439.9,2,958.41,1,

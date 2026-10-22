@@ -1,0 +1,17 @@
+case,method,rmse,corr,best_ms
+clean,Hilbert,0.000466,0.999999,0.346
+clean,Lowpass,0.017286,1.0,0.435
+clean,IQ,4e-06,1.0,0.977
+clean,PeakInterpolation,5e-06,1.0,0.475
+deep,Hilbert,0.000149,1.0,0.578
+deep,Lowpass,0.010189,1.0,0.459
+deep,IQ,1e-06,1.0,0.884
+deep,PeakInterpolation,3e-06,1.0,0.404
+two_tone,Hilbert,0.000421,0.999999,0.562
+two_tone,Lowpass,0.017174,1.0,0.432
+two_tone,IQ,3.2e-05,1.0,0.974
+two_tone,PeakInterpolation,9e-06,1.0,0.412
+noisy,Hilbert,0.04993,0.984778,0.561
+noisy,Lowpass,0.024203,0.998578,0.427
+noisy,IQ,0.013882,0.998806,0.868
+noisy,PeakInterpolation,0.074757,0.967606,0.42

@@ -4,7 +4,7 @@
 - 环境：Python 3.10.11 · numpy 2.2.6 · scipy 1.15.3 · matplotlib 3.10.9
 - 代码：`explore/denoise/{run_real_eeg.py, analyze_real_eeg.py, make_real_eeg_figure.py}`
 - 结果：`explore/denoise/results/{real_eeg.json, real_eeg_summary.csv, real_eeg_summary.json}`
-- 图：`docs/explore/denoise/figures/real_eeg_example.png`
+- 图：`fig/explore/denoise/real_eeg_example.png`
 - 机械数据检查另见：[Real_Data_CWRU_Report.md](Real_Data_CWRU_Report.md)
 
 ## 1. 数据来源与限制（先说清楚）
@@ -70,7 +70,7 @@
   proposed 的 SNR 也只有 +1.99 dB，而 Butter15 是 +3.94 dB；
 - 没有找到“proposed 比 Butter 更好或更省事”的真实 EEG 例子。
 
-![real EEG](figures/real_eeg_example.png)
+![real EEG](../../../fig/explore/denoise/real_eeg_example.png)
 
 ## 4. 结论：对最终定位的影响
 
@@ -105,7 +105,7 @@
 - `explore/denoise/results/real_eeg.json`（360 条）
 - `explore/denoise/results/real_eeg_summary.csv`
 - `explore/denoise/results/real_eeg_summary.json`
-- `docs/explore/denoise/figures/real_eeg_example.png`
+- `fig/explore/denoise/real_eeg_example.png`
 
 ## 6. 数据来源说明
 

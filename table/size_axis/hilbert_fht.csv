@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+hilbert,fht,mixed,1,131072,1048576,float64,3.413,3.604,4.0,0.0,5118.5,3,293.0,1,
+hilbert,fht,mixed,50,6553600,52428800,float64,253.981,256.935,200.0,0.0,5118.5,3,196.87,1,
+hilbert,fht,mixed,100,13107200,104857600,float64,559.277,583.181,400.0,0.0,5118.5,3,178.8,1,
+hilbert,fht,mixed,200,26214400,209715200,float64,1152.358,1210.768,800.0,0.0,5118.5,3,173.56,1,
+hilbert,fht,mixed,500,65536000,524288000,float64,3109.955,3335.372,2000.0,-0.1,5118.5,2,160.77,1,
+hilbert,fht,mixed,600,78643200,629145600,float64,3929.199,4177.298,2400.0,0.0,5118.5,2,152.7,1,

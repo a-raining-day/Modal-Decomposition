@@ -1,0 +1,7 @@
+tool,op,input,size_mib,n,nbytes,dtype,best_ms,median_ms,alloc_peak_mib,rss_delta_mib,peak_process_mib,repeat,mb_per_s,ok,error
+peaks,numpy_both,mixed,1,131072,1048576,float64,0.295,0.319,0.4,0.0,2441.2,3,3389.83,1,
+peaks,numpy_both,mixed,50,6553600,52428800,float64,28.174,28.756,18.8,0.0,2441.2,3,1774.69,1,
+peaks,numpy_both,mixed,100,13107200,104857600,float64,44.024,47.813,37.5,0.0,2441.2,3,2271.49,1,
+peaks,numpy_both,mixed,200,26214400,209715200,float64,103.054,104.689,75.0,0.0,2441.2,3,1940.73,1,
+peaks,numpy_both,mixed,500,65536000,524288000,float64,261.68,268.197,187.5,0.0,2441.2,2,1910.73,1,
+peaks,numpy_both,mixed,600,78643200,629145600,float64,324.176,349.721,225.0,0.0,2441.2,2,1850.85,1,

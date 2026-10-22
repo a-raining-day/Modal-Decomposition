@@ -5,7 +5,7 @@ for the three implementations on deterministic signals.
 One cell is (implementation, case, length). Every cell runs ``--repeats``
 times with round-robin implementation order so drift between repeats hits all
 implementations equally; imports / warm-ups are excluded from measurements.
-Raw per-run rows stream to ``results/timing_raw.csv`` (crash-resilient), and
+Raw per-run rows stream to ``table/methods/<method>/timing_raw.csv``, and
 quality metrics (computed once per cell on the first repeat) stream to
 ``results/timing_metrics.json``.
 
@@ -57,6 +57,7 @@ from workers import (
 )
 
 DEFAULT_RESULTS = _HERE / "results"
+DEFAULT_TABLE = _HERE.parents[1] / "table" / "methods"   # csv 汇总目录
 
 
 class _RssSampler:
@@ -161,7 +162,9 @@ def main() -> int:
     repeats = max(1, args.repeats)
     noise_cap = args.noise_cap
 
-    csv_path = out / "timing_raw.csv"
+    csv_dir = out if args.out is not None else DEFAULT_TABLE / out.name
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = csv_dir / "timing_raw.csv"
     new_file = not csv_path.exists()
     fh = open(csv_path, "a", newline="", encoding="utf-8")
     writer = __import__("csv").DictWriter(fh, fieldnames=_CSV_FIELDS)

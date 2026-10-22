@@ -67,22 +67,42 @@ def test_getters():
     assert set(pm) == {"rss", "private"} and pm["rss"] > 0
 
 
-def test_budget_formula():
+def test_budget_formula(monkeypatch):
     """预算 = min(物理可用, 可提交余量) × (1 - reserve) 再扣 extras。
 
-    注意：两次取快照之间可用内存会变（尤其在本机同时跑别的基准时），所以这里用
-    1% 相对容差比较，而不是逐字节相等。
+    用**固定的假快照**做断言，避免"两次取快照之间可用内存变了"造成的抖动
+    （真机上差几百 MB 很常见，曾经因此偶发失败）。
     """
     MemoryPolicy.memory_reserve_ratio = 0.25
-    snap = _Mem.get_memory_snapshot(force=True)
+    fake = {
+        "total": 16 << 30, "available": 8 << 30,
+        "swap_total": 0, "swap_free": 0,
+        "commit_available": 8 << 30,
+        "process_rss": 0, "process_private": 0,
+    }
+    monkeypatch.setattr(_Mem, "get_memory_snapshot", lambda force=False: dict(fake))
+
     mb = _Mem.memory_budget(force=True)
-    physical = snap["available"] * 0.75
-    commit = snap["commit_available"] * 0.75 * MemoryPolicy.commit_ratio_limit
+    physical = fake["available"] * 0.75
+    commit = fake["commit_available"] * 0.75 * MemoryPolicy.commit_ratio_limit
     expect = int(min(physical, commit))
-    assert abs(mb["budget"] - expect) <= max(1, int(0.01 * expect))
+    assert mb["budget"] == expect
     assert mb["limited_by"] in ("physical", "commit")
-    assert mb["ok"] is (mb["budget"] > 0)
-    assert mb["reserve"] == int(min(snap["available"], snap["commit_available"]) * 0.25)
+    assert mb["ok"] is True
+    assert mb["reserve"] == int(min(fake["available"], fake["commit_available"]) * 0.25)
+
+    # extras 直接从预算里扣
+    mb2 = _Mem.memory_budget(extras_bytes=1 << 20, force=True)
+    assert mb2["budget"] == expect - (1 << 20)
+
+
+def test_budget_live_sanity():
+    """真实快照下：预算 > 0，且不超过物理可用。"""
+    mb = _Mem.memory_budget(force=True)
+    snap = _Mem.get_memory_snapshot(force=True)
+    assert mb["budget"] > 0
+    assert mb["budget"] <= snap["available"]
+    assert mb["physical"] <= snap["available"]
 
 
 def test_budget_extras_reduces():

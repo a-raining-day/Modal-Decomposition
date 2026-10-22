@@ -85,7 +85,8 @@
 | 3 | `Monotonicity._give_monotony` | ① 边界增量折进累加器；② 单元素块（`Equal` 是空信息）不再参与合并 | `test_give_monotony_chunked_matches_whole` + 旧 `test_chunked_give_monotony_matches_whole` |
 | 4 | `Envelope.envelope` | `peak_mod` / `hilbert_mod` 由 `kwargs.get` 改成 **`kwargs.pop`**，不再透传给 `hilbert()` / `CubicSpline()` | `test_hilbert_backend_switch_works`、`test_peak_mod_kwarg_no_longer_leaks` |
 | 5 | `Chunk.chunk_size` | 单位修正：入参字节、返回**元素数**（小输入 8 Mi 元素；大输入 = `min(nbytes, 0.75×budget)` 字节 ÷ `itemsize`），新增 `itemsize=` 并由 `chunk()`/`fill_memmap()` 传真实值 | `test_chunk_size_units_are_bytes_in_elements_out`、`_above_budget_is_capped`、`_itemsize_validation` |
-| 附 | `Memory.cleanup_memmaps` | 错误分支 `_ERROR_FILES.add(list)` → `update()`（否则"清理失败"变成 `TypeError`） | `test_cleanup_memmaps_with_live_reference_returns_false` |
+| 附 | `Memory.cleanup_memmaps` | 错误分支 `_ERROR_FILES.add(list)` → `update()`（否则"清理失败"变成 `TypeError`）；并把 `FileNotFoundError` 视作"已删除"（POSIX 上外部删文件是常态） | `test_cleanup_memmaps_with_live_reference_is_platform_aware`、`test_cleanup_memmaps_tolerates_externally_removed_file` |
+| 附 | `LMD` 在途重构 | 恢复 `d01fa2a` 里被删的 4 个模块级辅助函数（`_safe_interpolate`、`_safe_interpolate_pchip`、`_check_convergence`、`mirror_extrema`，150 行） | `tests/methods/test_LMD.py` + `tests/test_memmap_output.py`（148 passed） |
 
 > 这 5 处修完后 `Chunk` 在 1–600 MiB **仍是 1 块** —— 这是**设计意图**（块长按预算取，
 > 这几个档位都装得下），不是缺陷；单位修正只影响"超出 0.75×budget"的输入（原本会
@@ -117,13 +118,19 @@
 | `test_memory` 的 `_runs/*.report.json` | 作为内存轴的底层证据保留，不单独出报告 |
 | `tests/import_time.py` | 三种惰性导入写法的耗时对比（A: try/except、B: flag+try/except、C: Cache.import_module），结论见 `Base/Cache_Engine_Report.md` §5.2 |
 
-## 5.1 已知失败（本轮体检，非本轮引入）
+## 5.1 CI 修复轮（跨平台，全部已修）
 
-| 现象 | 范围 | 根因 | 记录 |
+| 现象 | 平台 | 根因 | 修法 |
 |---|---|---|---|
-| `LMD.decompose` 抛 `NameError: mirror_extrema`（构造已修好） | `tests/methods/test_LMD.py` 9 条 + `tests/test_memmap_output.py` 2 条 = **11 条** | 工作区未提交的 `LMD.py` 改动删掉了模块级 `mirror_extrema`，但两处调用点还在（`LMD.py:283`、`:352`）；本轮已按指示把 `hilbert_mod` 默认值改成 `"scipy"` 并去掉 `f_LMD` 对已废弃 `hilbert_backend` 的透传 | `docs/test/methods/LMD_Native_Engine_Report.md`「已知失败」（含 A/B 两种修法） |
+| `LMD.decompose` 抛 `NameError: mirror_extrema`（+3 个同批被删的辅助函数） | 全部 | 在途重构删掉了模块级 `_safe_interpolate` / `_safe_interpolate_pchip` / `_check_convergence` / `mirror_extrema`，调用点仍在 | 从 `d01fa2a` 逐字恢复这 4 个函数（150 行），签名与调用点一致 |
+| `test_base_reexport_is_a_stale_snapshot` → `num of value must in (0, 3)]` | CI runner 只有 3 核 | 测试硬编码 `set_allocable(4)` | 改成相对 `cpu_num` 取值；单核时 `skip` |
+| `test_exo_memory_chunks_stay_valid_after_iteration` / `test_cleanup_memmaps_with_live_reference_is_platform_aware` → `DID NOT WARN` | Linux / macOS | POSIX **允许删除已映射的文件**，`cleanup_memmaps()` 返回 `True` 且不告警；Windows 才是 `False` + 告警 | 测试按 `os.name` 分支断言；两种平台都要求"块仍可读" |
+| `test_fill_memmap_rejects_list` / `tests/base/test_Memory.py` → `FileNotFoundError` | Linux / macOS | 注册表里的文件被前一个用例手删后，`cleanup_memmaps()` 的 `os.remove` 只捕 `PermissionError` | `Memory.cleanup_memmaps` 把 `FileNotFoundError` 视作"已删除"（重试循环里同样处理），并新增回归用例 |
+| `test_numba_compiled_once` | 全部（CI 不装 numba） | `_get_compiled` 从未被调用，`cache_info().currsize == 0` | 用例内先探测 numba，缺失则 `skip` |
+| `test_linear_time_in_x_new` → `ratio 47.8 < 50` | macOS / Linux | 计时比值区间过窄（10k 档被固定开销主导） | 放宽到 `15 < ratio < 400`（O(n²) 会是 ~10000×） |
 
-其余 **1499 条**测试全绿（`pytest tests -q`：`10 failed, 1499 passed`）。
+`pytest tests -q` → **1510 passed, 2 skipped, 1 xfailed**（Windows/py3.10 本地实测；
+CI 矩阵为 ubuntu/windows/macos × py3.10/3.12）。
 
 ## 6. tests/ 结构（本轮后）
 

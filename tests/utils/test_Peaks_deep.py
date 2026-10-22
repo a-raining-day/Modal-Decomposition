@@ -346,6 +346,8 @@ def test_numba_missing_falls_back(monkeypatch):
 
 
 def test_numba_compiled_once():
+    if _PeaksMod.cache.import_module("numba", verbose=False) is None:
+        pytest.skip("numba unavailable; backend falls back to numpy")
     S = signal("smooth")
     find_peaks(S, mod="max", backend="numba")
     c1 = _PeaksMod._get_compiled.cache_info()

@@ -106,11 +106,16 @@ def cleanup_memmaps(try_times: int=5, force: bool=False) -> bool:
 
         try:
             os.remove(path)
+        except FileNotFoundError:
+            continue                     # 已被外部删掉（如 tmp 清理器/测试手删）: 视作成功
         except PermissionError:
             dose_del = False
             for times in range(try_times):
                 try:
                     os.remove(path)
+                    dose_del = True
+                    break
+                except FileNotFoundError:
                     dose_del = True
                     break
                 except PermissionError:

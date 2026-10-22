@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import os
 import shutil
 import sys
 import tempfile
@@ -43,6 +44,7 @@ from Modal_Decomposition.Base import (  # noqa: E402
     CHUNK_MOD,
     Chunk,
     cleanup_memmaps,
+    drop_memmap,
     temp_memmap,
 )
 import importlib
@@ -288,11 +290,17 @@ def test_exo_memory_chunks_stay_valid_after_iteration(tmp_path):
     assert not any(c._mmap.closed for c in chunks), "仍被引用的块不得关闭"
     assert np.array_equal(np.asarray(chunks[0]), np.array([0.0, 1.0, 2.0, 3.0]))
     assert np.array_equal(np.asarray(chunks[1]), np.array([4.0, 5.0]))
-    with pytest.warns(UserWarning, match="not be closed"):
-        assert cleanup_memmaps() is False, "还有活引用时删不掉，应返回 False 而不是抛 TypeError"
+    # Windows: 映射还开着 → 删不掉（告警 + False）；POSIX: 允许删除已映射文件 → True
+    if os.name == "nt":
+        with pytest.warns(UserWarning, match="not be closed"):
+            assert cleanup_memmaps() is False
+    else:
+        assert cleanup_memmaps() is True
+    # 两种平台下块本身都必须仍可读（映射随块存活）
     assert np.array_equal(np.asarray(chunks[0]), np.array([0.0, 1.0, 2.0, 3.0]))
     del chunks
     gc.collect()
+    cleanup_memmaps()
 
 
 def test_exo_memory_creates_temp_dir(tmp_path):
@@ -341,13 +349,9 @@ def test_chunked_map_memmap_out(tmp_path):
     out = Chunk.chunked_map(lambda c: c * 3, S, chunk_size=4, out=fp)
     assert isinstance(out, np.memmap)
     assert np.array_equal(np.asarray(out), S * 3)
-    path = fp.filename
+    drop_memmap(fp, force=True)
     del fp, out
     gc.collect()
-    try:
-        Path(path).unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def test_chunked_map_chunk_size_errors():
@@ -455,24 +459,38 @@ def test_fill_memmap_rejects_list():
         cleanup_memmaps()
 
 
-def test_cleanup_memmaps_with_live_reference_returns_false():
-    """回归（本轮修好）：还有外部引用时不能删文件，应**告警 + 返回 False**。
+def test_cleanup_memmaps_with_live_reference_is_platform_aware():
+    """回归（本轮修好）：还有外部引用时**不得崩溃**。
 
     旧实现在错误分支 ``_ERROR_FILES.add(unexpected_files)`` 里塞 **list**（set 不收），
-    于是抛 ``TypeError: unhashable type: 'list'``，把"清理失败"变成崩溃。
+    于是抛 ``TypeError: unhashable type: 'list'``。
+    现在：Windows（映射开着删不掉）告警并返回 ``False``；POSIX（允许删除已映射文件）
+    直接返回 ``True``；两种情况下块都仍可读。
     """
     fp = temp_memmap((8,), np.float64)
+    path = fp.filename
     try:
-        with pytest.warns(UserWarning, match="not be closed"):
-            assert cleanup_memmaps() is False
+        if os.name == "nt":
+            with pytest.warns(UserWarning, match="not be closed"):
+                assert cleanup_memmaps() is False
+        else:
+            assert cleanup_memmaps() is True      # POSIX 可删已映射文件
+        assert cleanup_memmaps() is True          # 幂等, 且不得抛错
     finally:
-        path = fp.filename
         del fp
         gc.collect()
-        try:
-            Path(path).unlink(missing_ok=True)
-        except OSError:
-            pass
+        Path(path).unlink(missing_ok=True)
+
+
+def test_cleanup_memmaps_tolerates_externally_removed_file(tmp_path):
+    """回归：注册表里的文件被外部删掉（tmp 清理器 / 测试手删）时不得抛 FileNotFoundError。"""
+    fp = temp_memmap((4,), np.float64, temp_dir=str(tmp_path))
+    path = Path(fp.filename)
+    fp._mmap.close()                              # Windows: 映射开着就删不掉
+    path.unlink()                                 # 绕过注册表直接删
+    del fp
+    gc.collect()
+    assert cleanup_memmaps() is True
 
 
 # --------------------------------------------------------------------------- #

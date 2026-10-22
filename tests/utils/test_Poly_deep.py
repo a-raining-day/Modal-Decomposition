@@ -288,7 +288,8 @@ def test_linear_time_in_x_new():
         r = B.timeit(lambda: fast_poly(x, y, 3, xn), repeat=3, warmup=1)
         t[n] = r["best_ms"]
     ratio = t[1_000_000] / t[10_000]
-    assert 50 < ratio < 400, (t, ratio)      # 100× 数据，允许显著常数项
+    # 100× 数据；固定开销让比值明显低于 100，但 O(n²) 会给出 ~10000×
+    assert 15 < ratio < 400, (t, ratio)
 
 
 # --------------------------------------------------------------------------- #

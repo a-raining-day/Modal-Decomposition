@@ -64,7 +64,7 @@ Chunked processing utilities (统一分块工具)
 | **F2（危险）·已修** | `_exo_chunks` 在 `finally` 里关掉**所有**块的映射并删文件 ⇒ 迭代结束后再 dereference 块会让解释器 **access violation 崩溃**（不是异常）。开发期实测：`np.array_equal(chunks[0], ...)` 处 `Windows fatal exception` | **已修**：每块改由 `Memory.temp_memmap` 拥有，迭代结束**不关闭**映射；临时文件登记在 `Memory` 注册表，由 `cleanup_memmaps()` / 解释器退出统一回收。回归见 `test_exo_memory_chunks_stay_valid_after_iteration` |
 | **F3** | `chunked_fill(dst, src)` 不校验长度：`len(src) > len(dst)` 时**静默截断**（尾部丢弃），反方向才抛广播错误 | 显式长度校验 |
 | **F4** | `fill_memmap(fp, list)` 必抛 `TypeError: src must be an ndarray or a memmap`（`Check._load` 的超长 list 分支因此从不生效） | 先 `np.asarray` |
-| **F5 ·已修** | `cleanup_memmaps()` 的错误分支 `_ERROR_FILES.add(unexpected_files)` 加的是 **list**（集合）⇒ `TypeError: unhashable type: 'list'` | **已修**：改成 `update()`；现在"还有活引用"时告警并返回 `False`，块仍可读 |
+| **F5 ·已修** | `cleanup_memmaps()` 的错误分支 `_ERROR_FILES.add(unexpected_files)` 加的是 **list**（集合）⇒ `TypeError: unhashable type: 'list'` | **已修**：改成 `update()`；同一轮还把 `FileNotFoundError` 视作"已删除"（POSIX 允许删除已映射文件、tmp 清理器也可能先删），现在"还有活引用"时 Windows 告警 + `False`、POSIX 直接 `True`，块两种情况下都可读 |
 | **F6** | 死代码：`chunk` 里 `S.ndim == 0 and S.size == 0` 不可达（0-d 数组 size 恒 1） | 删或改注释 |
 | **F7** | 列表输入在 NumPy ≥ 2 下 `np.asarray(list, copy=False, dtype=float64)` 直接 `ValueError`（原样抛出，未包装） | 已在 `Chunk_Engine_Report` §6 记录；建议 `np.asarray(list)` 不带 `copy=False` |
 

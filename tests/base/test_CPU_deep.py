@@ -95,11 +95,14 @@ def test_set_allocable_invalid(value, exc):
 
 def test_base_reexport_is_a_stale_snapshot():
     """**缺陷**：``Base.allocable_cpu_num`` 不跟随 ``set_allocable``（按值转发）。"""
+    if _CPU.cpu_num < 2:
+        pytest.skip("runner reports a single CPU; allocation cannot be changed")
     before_base = BasePkg.allocable_cpu_num
-    _CPU.set_allocable(4)
-    assert _CPU.allocable_cpu_num == 4
+    target = 1 if before_base != 1 else 2          # 保证 target != before_base
+    _CPU.set_allocable(target)
+    assert _CPU.allocable_cpu_num == target
     assert BasePkg.allocable_cpu_num == before_base, "Base 的副本不会更新"
-    assert BasePkg.allocable_cpu_num != 4
+    assert BasePkg.allocable_cpu_num != target
     _CPU.set_allocable(-1)
     assert _CPU.allocable_cpu_num == _CPU.cpu_num
     assert BasePkg.allocable_cpu_num == before_base

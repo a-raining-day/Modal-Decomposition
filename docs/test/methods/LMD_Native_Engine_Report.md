@@ -53,30 +53,17 @@ Local Mean Decomposition
 .\.venv\Scripts\python.exe -u .scratch\eemd_new\pareto_all.py LMD
 ```
 
-## 已知失败（本轮体检发现，**非本轮引入**）
+## 本轮修复（CI 修复轮）
 
-工作区里 `src/Modal_Decomposition/LMD.py` 存在**未提交的改动**（`git diff` 显示 -198 行）。
-本轮按指示只做了两处最小修改：
+工作区里 `src/Modal_Decomposition/LMD.py` 是一次**未完成的在途重构**（相对 `d01fa2a`
+删掉了 4 个模块级辅助函数，但两处调用点仍在）。本轮按 CI 报错做了**恢复性**修改，
+不改变算法语义：
 
-1. `hilbert_mod` 默认值 `"Scipy"` → **`"scipy"`**（不做大小写归一）—— `LMD(...)` 与
-   `Function.LMD(...)` 的构造阶段不再抛
-   `ValueError: the parameter of mod can only be [...]`；
-2. `f_LMD` 不再把已废弃的 `hilbert_backend` 透传进类（类已不接受该参数，否则每次调用
-   都会 `TypeError: unexpected keyword arguments`）。
+| # | 改动 | 说明 |
+|---|---|---|
+| 1 | `hilbert_mod` 默认值 `"Scipy"` → **`"scipy"`**（不做 `.lower()` 归一） | `LMD()` / `Function.LMD()` 的构造不再抛 `ValueError` |
+| 2 | `f_LMD` 不再把已废弃的 `hilbert_backend` 透传进类 | 否则每次调用都 `TypeError: unexpected keyword arguments` |
+| 3 | 从 `d01fa2a` **逐字恢复** 4 个被删辅助函数：`_safe_interpolate`、`_safe_interpolate_pchip`、`_check_convergence`、`mirror_extrema`（共 150 行） | 当前调用点的签名与 `d01fa2a` 完全一致（`mirror_extrema(idx, vals, nbsym=0, edges=(...))`），因此行为等价；`LMD.py` 也从 `NameError` 恢复 |
 
-**仍未修**（属在途重构，未擅自改动）：`LMD.decompose` 仍调用已被删除的模块级
-`mirror_extrema`，因此：
-
-```
-src/Modal_Decomposition/LMD.py:283  ext_idx, ext_vals = mirror_extrema(...)
-src/Modal_Decomposition/LMD.py:352  ext_idx, ext_vals = mirror_extrema(...)
-NameError: name 'mirror_extrema' is not defined
-```
-
-受影响：`tests/methods/test_LMD.py` 6 条 + `tests/test_memmap_output.py` 4 条（LMD 参数化），
-共 **10 条**；其余 **1499 条**测试全绿（`pytest tests -q`）。两种修法（都需你确认走哪条）：
-
-* **A**：把 HEAD（提交 `d01fa2a`）里的 `mirror_extrema`（约 80 行）恢复回来；
-* **B**：把这两处调用改成 `Utils.Mirror.mirror(...)`（`mirror()` 返回 `(T, A, is_max)`，
-  注意它需要整条信号而非极值表）。
-
+验证：`pytest tests/methods/test_LMD.py tests/test_memmap_output.py -q` → **148 passed**；
+`pytest tests -q` → **1510 passed, 2 skipped, 1 xfailed**。

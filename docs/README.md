@@ -21,8 +21,10 @@ docs/
 │   ├── Scale_Axis_Report.md      # 1 MiB–600 MiB 规模轴（8 个低成本工具）
 │   ├── LICENSE                   # 与仓库根 LICENSE 同源
 │   └── _template/                # 报告模板与生成器（FunctionTemplate / Template_Generate.py）
-└── explore/                      # 探索性研究（非契约性结论）
-    └── denoise/                  # 去噪专题：只放报告（图在 fig/explore/denoise/）
+├── explore/                      # 探索性研究（非契约性结论）
+│   └── denoise/                  # 去噪专题：只放报告（图在 fig/explore/denoise/）
+└── competition/                  # 参赛材料（对外报告，不参与包行为）
+    └── AIC2026_技术报告.md        # 2026 AIC·AI+开源 算法主题赛技术报告（含作品简介、架构、验证与合规附录）
 ```
 
 ## 材料落位规则
@@ -51,3 +53,4 @@ docs/
 - 想知道**工具层契约**：`docs/test/base/Utils_Base_API_Report.md` → 具体模块报告
 - 想知道**大数组能不能跑**：`docs/test/methods/Large_Array_Memory_Report.md`（分解法）、
   `docs/test/Scale_Axis_Report.md`（工具层 1 MiB–600 MiB 规模轴）
+- 想看**对外一页式总述**：`docs/competition/AIC2026_技术报告.md`

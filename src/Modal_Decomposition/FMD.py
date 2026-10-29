@@ -38,6 +38,7 @@ class FMDConfig(Config):
     num_hand: int | None
     seed: int | None
     dtype: type | np.dtype | None
+    solver: str
 
 
 """
@@ -49,13 +50,14 @@ class FMD(Decomposer):
     def __init__(
         self,
         M: int | None = None,
-        L_factor: int = 10,
+        L_factor: int = 2,
         K: int = 10,
         max_iter: int = 50,
         tol: float = 1e-6,
         num_hand: int | None = None,
         seed: int | None = None,
         dtype: type | np.dtype | None = None,
+        solver: str = "ck",
         **kwargs
     ):
         """
@@ -64,7 +66,10 @@ class FMD(Decomposer):
         M : int | None
             目标模态的周期; None 时自动估计。
         L_factor : int
-            滤波器长度系数: L = L_factor * M。
+            滤波器长度系数: L = L_factor * M（默认 2）。Gram 矩阵组装 O(L^2·K) 与
+            广义特征分解 O(L^3) 都随 L 增长，所以这个系数是 FMD 的主要成本旋钮；
+            2 是 A/B/C 三例时间-质量扫描后的取值（见
+            `docs/test/methods/FMD_Native_Engine_Report.md`）。
         K : int
             模态数上限; -1 表示完全分解 (上限取 ``log2(N) + 2``)。
         max_iter : int
@@ -86,6 +91,7 @@ class FMD(Decomposer):
         self.num_hand: int | None = num_hand
         self.seed: int | None = seed
         self.dtype: type | np.dtype | None = dtype
+        self.solver: str = solver
 
         # 未知参数白名单: 只接受 safe / copy
         unknown = set(kwargs) - {"safe", "copy"}
@@ -146,6 +152,11 @@ class FMD(Decomposer):
 
             self.seed = int(self.seed)
 
+        if self.solver not in ("ck", "mckd"):
+            raise ValueError(
+                f"the `solver` must be 'ck' or 'mckd', got {self.solver!r}"
+            )
+
         if self.dtype is not None and np.dtype(self.dtype).kind != "f":
             raise ValueError("the `dtype` must be a float numpy dtype or None.")
 
@@ -164,6 +175,7 @@ class FMD(Decomposer):
             num_hand=self.num_hand,
             seed=self.seed,
             dtype=self.dtype,
+            solver=self.solver,
         )
 
     def decompose(self, S, T=None, output_memmap: bool = False) -> DecompositionResult:
@@ -226,6 +238,19 @@ class FMD(Decomposer):
         residual = S_norm.copy()
         modes_list = []
 
+        # ---- 低频"特征模态"支路 ----------------------------------------- #
+        # 相关峭度目标偏向冲击/故障特征, 对缓慢趋势与低频调频不敏感 (实测 case B
+        # 的 amfm 只有 0.02-0.04)。参考实现的初始 Hanning 滤波器组会先给出一条低频
+        # 带, 这里用同为"零相位、保形"的 Savitzky-Golay 平滑 (窗口 = 一个周期 2M+1,
+        # 二次多项式 — 二次趋势被无损保留) 取出该低频分量; 只有当它占能量 >=2% 时
+        # 才占用一阶, 否则完全不启用 (双音信号 A 的占比 <1%, 因此行为不变)。
+        trend_mode = None
+        if (self.K == -1 or self.K >= 2) and N >= 2 * M + 3:
+            trend = scipy_signal.savgol_filter(S_norm, 2 * M + 1, 2)
+            trend_energy = float(np.sum(trend ** 2))
+            if trend_energy > 0.02 * float(np.sum(S_norm ** 2)):
+                trend_mode = trend
+
         # K == -1 是"完全分解", 但不能靠下面两个收尾条件停下来: "窗口太小" 判断
         # 用的是常数 N (窗口从不收缩), 1e-10 的能量阈值对噪声残差不可达, 而噪声
         # 残差恒有 >= 3 个极值。自动模态数因此按 log2(N) + 2 设上限 (LMD 的自动
@@ -234,6 +259,18 @@ class FMD(Decomposer):
 
         k = 0
         while k < k_limit:
+            # 第 0 阶优先给低频特征模态 (见上面的 trend_mode 说明)
+            if trend_mode is not None:
+                mode_energy = float(np.dot(trend_mode, trend_mode))
+                if mode_energy > 0:
+                    mode = trend_mode * (float(np.dot(residual, trend_mode)) / mode_energy)
+                    if np.std(mode) >= 1e-8:
+                        modes_list.append(mode)
+                        residual = residual - mode
+                        k += 1
+                trend_mode = None
+                continue
+
             x = residual.copy()
             Nx = len(x)
 
@@ -280,8 +317,15 @@ class FMD(Decomposer):
                 B_reg = B + reg * np.eye(L) + 1e-12 * np.eye(L)
 
                 try:
-                    eigvals, eigvecs = scipy_linalg.eigh(A, B_reg, subset_by_index=[L-1, L-1])
-                    h_new = eigvecs[:, 0].real
+                    if self.solver == "mckd":
+                        # MCKD 的一步闭式更新: 把权重 w / y2 当作常数, 解线性方程
+                        # B h = A h_old (对 B^{-1}A 做一次幂迭代) 再归一化。与 ck
+                        # 的区别只在"如何求解同一个 CK 比值": ck 精确求广义特征对,
+                        # mckd 走经典的一步线性化迭代。
+                        h_new = scipy_linalg.solve(B_reg, A @ h_prev, assume_a="sym")
+                    else:
+                        eigvals, eigvecs = scipy_linalg.eigh(A, B_reg, subset_by_index=[L-1, L-1])
+                        h_new = eigvecs[:, 0].real
                 except np.linalg.LinAlgError:
                     try:
                         B_inv = np.linalg.pinv(B_reg, rcond=1e-12)
@@ -563,7 +607,7 @@ def _bounded_convolution(x: np.ndarray, h: np.ndarray) -> np.ndarray:
 """
 模块级便捷入口
 """
-def f_FMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, M: int | None = None, L_factor: int = 10, K: int = 10, max_iter: int = 50, tol: float = 1e-06, num_hand: int | None = None, seed: int | None = None, dtype: type | np.dtype | None = None, **kwargs) -> DecompositionResult:
+def f_FMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, M: int | None = None, L_factor: int = 2, K: int = 10, max_iter: int = 50, tol: float = 1e-06, num_hand: int | None = None, seed: int | None = None, dtype: type | np.dtype | None = None, solver: str = "ck", **kwargs) -> DecompositionResult:
     """构造 :class:`FMD` 并调用 :meth:`FMD.decompose`, 参数与构造器一致。"""
     fmd = FMD(
         M=M,
@@ -574,6 +618,7 @@ def f_FMD(S: list | np.ndarray, T=None, output_memmap: bool = False, *, M: int |
         num_hand=num_hand,
         seed=seed,
         dtype=dtype,
+        solver=solver,
         **kwargs
     )
 

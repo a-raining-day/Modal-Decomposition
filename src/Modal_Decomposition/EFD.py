@@ -111,62 +111,62 @@ class EFD(Decomposer):
         magnitude = np.abs(F)
         phase = np.angle(F)
 
-        edge_magnitude = magnitude[: N // 2 + 1].copy()[1:] * 2  # 去掉直流分量 (下标 0)
-        freq_N = N // 2
+        # 单边幅值谱: 下标 0 = 直流, 下标 M-1 = Nyquist (实信号共轭对称)
+        M = N // 2 + 1
+        one_sided = magnitude[:M]
 
-        local_maximum_points_tuple = scipy_signal.argrelmax(edge_magnitude)
-        local_maximum_points = local_maximum_points_tuple[0]
-        local_maximum = edge_magnitude[local_maximum_points]
+        # ---- 频谱分段 (EFD 论文的 Segm_tec) ------------------------------ #
+        # 候选 = 严格局部极大 + 两端点; 取幅值最大的 max_IMFs 个; 边界取相邻
+        # 候选之间的幅值最小处。旧实现只保留 max_IMFs-2 个极大, 在双音信号上
+        # 会把两个音吞进同一个带 (实测 case A: 某阶占 99.5% 能量)。
+        is_local_max = np.zeros(M, dtype=bool)
+        if M >= 3:
+            is_local_max[1:-1] = ((one_sided[1:-1] > one_sided[:-2])
+                                  & (one_sided[1:-1] > one_sided[2:]))
+        is_local_max[0] = True                       # 端点也是候选 (与 Segm_tec 一致)
+        is_local_max[-1] = True
 
-        if self.max_IMFs != -1:
-            # 分段规则产生 (内部极大值 + 2) 个频带, 所以想要 m 个 IMF 只需保留 m-2 个
-            # 内部极大值 (两端各贡献一个边界); 取能量最大的那几个极大值。
-            zipped = sorted(zip(local_maximum_points.tolist(), local_maximum.tolist()),
-                            reverse=True, key=lambda x: x[1])
-            local_maximum_points = sorted(p for p, _ in zipped[: max(0, self.max_IMFs - 2)])
+        candidates = np.flatnonzero(is_local_max)
 
-        bounds = np.concatenate(([0], local_maximum_points, [freq_N - 1])).astype(np.int64)
-        bounds = np.unique(bounds)
-        bounds = np.sort(bounds)
+        if self.max_IMFs != -1 and candidates.size > self.max_IMFs:
+            keep = np.argsort(-one_sided[candidates], kind="stable")[: self.max_IMFs]
+            candidates = np.sort(candidates[keep])
 
-        if self.max_IMFs == 1:
-            # 只要 1 阶时整条正频率谱就是一个频带
-            wn = np.array([0, freq_N - 1])
-        else:
-            wn = []  # 零相位滤波器的频带边界 (频点下标)
-            for p in range(len(bounds) - 1):
-                next_point = bounds[p + 1]
-                current_point = bounds[p]
+        # 每个内部边界: 相邻候选之间 (含两端) 幅值最小处
+        edges = [0]
+        for left, right in zip(candidates[:-1], candidates[1:]):
+            if right <= left:
+                continue
+            edges.append(int(left + np.argmin(one_sided[left:right + 1])))
+        edges.append(M - 1)
+        edges = np.unique(np.asarray(edges, dtype=np.int64))
 
-                if edge_magnitude[current_point] == edge_magnitude[next_point]:
-                    wn.append(current_point)
-                else:
-                    wn.append(current_point + np.argmin(edge_magnitude[current_point:next_point + 1]))
-            wn = np.concatenate(([0], wn, [freq_N - 1]))
+        # 各带是频谱上的**不重叠**区间 [lo, hi); 最后一个带含 Nyquist,
+        # 因此 ΣIMFs 恰好等于 S - mean (重构恒等式由分段完整性保证)。
+        bands = [(int(lo), int(hi)) for lo, hi in zip(edges[:-1], edges[1:]) if hi > lo]
+        if not bands:                                # 退化: 单带覆盖全谱
+            bands = [(0, M - 1)]
+        bands[-1] = (bands[-1][0], M)
 
-        # 每个频带只由一对边界下标定义: 其支撑集就是闭区间 [wn[e-1], wn[e]]。
-        # 不在这里物化 N/2 长的 0/1 掩码 —— 那会让内存变成 O(N × 频带数)。
-        bands = [(int(wn[e - 1]), int(wn[e])) for e in range(1, len(wn))]
+        # 顶带右界收到"最后一个保留极大之后的幅值最小处": 该极大右侧的噪声尾巴
+        # 不属于任何频带, 由残差吸收 (参考实现同样把这段丢掉; 我们的区别是
+        # 低端 0..第一个极小 仍然作为一阶, 因此趋势分量不会被丢)。
+        # 残差按 S - ΣIMFs 计算, 所以重构恒等式不受影响。
+        if candidates.size and candidates[-1] < M - 1:
+            cut = int(candidates[-1] + np.argmin(one_sided[candidates[-1]:]))
+            if cut > bands[-1][0]:
+                bands[-1] = (bands[-1][0], cut)
 
         # 直接预分配 (K, N), 不用"list 追加 + asarray" —— 后者会让模态峰值翻倍
         K: int = len(bands)
         IMFs = np.empty((K, N), dtype=S.dtype)
-        M = N // 2 + 1
-        # 实信号的频谱共轭对称: 只取正频率半边, 负频率半边按共轭补回即可
-        for idx, (last_point, current_point) in enumerate(bands):
-            filtered_magnitude = np.zeros(M, dtype=float)
-            # filtered_magnitude 的下标 1+j 对应 edge_magnitude 的下标 j
-            # (下标 0 是直流, 恒置 0), 故支撑集平移到 [last_point+1, current_point+1]。
-            lo = min(max(last_point + 1, 1), M)
-            hi = min(max(current_point + 2, lo), M)
-            if hi > lo:
-                filtered_magnitude[lo:hi] = magnitude[lo:hi]
-            temp_spectrum = filtered_magnitude * np.exp(1j * phase[:M])
-
-            full_spectrum = np.zeros(N, dtype=complex)
-            full_spectrum[:M] = temp_spectrum  # 正频率半边 (复数)
-            full_spectrum[N - M + 2:] = np.conj(temp_spectrum[1:M - 1][::-1])
-            IMFs[idx] = np.fft.ifft(full_spectrum).real
+        spec = np.empty(M, dtype=complex)
+        # 每个带: 半谱置零后拷入原始频点, 一次实数逆变换。
+        # 旧实现每带都算一遍 exp(1j*phase) 并做全长复数 ifft, 白付 2 倍以上代价。
+        for idx, (lo, hi) in enumerate(bands):
+            spec[:] = 0.0
+            spec[lo:hi] = F[lo:hi]
+            IMFs[idx] = np.fft.irfft(spec, n=N)
 
         Res = S - np.sum(IMFs, axis=0) + MEAN
 

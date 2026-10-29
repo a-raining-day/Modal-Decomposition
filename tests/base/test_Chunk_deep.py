@@ -83,8 +83,16 @@ def test_chunk_size_units_are_bytes_in_elements_out():
         assert cs * arr.itemsize >= arr.nbytes
 
 
-def test_chunk_size_within_budget_is_single_chunk():
-    """在 0.75·预算以内，块长覆盖整个数组 ⇒ **单块是设计意图**（不是缺陷）。"""
+def test_chunk_size_within_budget_is_single_chunk(monkeypatch):
+    """在 0.75·预算以内，块长覆盖整个数组 ⇒ **单块是设计意图**（不是缺陷）。
+
+    预算用固定的假值（8 GiB），避免机器当前可用内存波动影响断言。
+    """
+    import importlib
+
+    CM = importlib.import_module("Modal_Decomposition.Base.Chunk")
+    monkeypatch.setattr(CM, "memory_budget",
+                        lambda **kw: {"budget": 8 << 30, "ok": True})
     for size_mib in (1, 50, 600):
         nbytes = size_mib * 1024 * 1024
         n_elems = nbytes // 8

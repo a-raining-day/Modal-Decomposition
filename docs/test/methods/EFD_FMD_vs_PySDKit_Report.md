@@ -123,3 +123,17 @@ $$J(h)=\frac{\sum_k (y_k\,y_{k+M})^2}{\left(\sum_k y_k^2\right)^2}=\frac{h^\top 
 | 原始 JSON（沙箱允许时） | `tests/comparison/results/efd_fmd_native/*.json` |
 | 基准脚本 | `tests/comparison/bench_efd_fmd_native.py` |
 | 回归测试 | `tests/methods/test_EFD_FMD_options.py` |
+
+## 7. 真实数据（CWRU / ECG / fmd_demo）
+
+合成信号之外，另在真实数据上跑了同一对比，完整矩阵见
+`docs/test/methods/Real_Data_Method_Matrix_Report.md`，要点：
+
+* **CWRU 内圈故障**（4096 点，12 kHz）：EFD 0.34 ms vs PySDKit 2.9 ms（**8.5×**）；
+  FMD(`ck`) 327 ms / 最高阶峰度 **126** vs PySDKit 492 ms / **7.1**（1.5× 快、18× 冲击性）；
+  8192 点时为 637 ms / **290** vs 755 ms / **6.4**（45× 冲击性）。
+* **ECG / fmd_demo**：FMD 反而落后（kurt 0.6 / 0.2 vs PySDKit 51.7 / 4.1）——CK 目标的
+  作用域是"周期冲击"，非周期尖峰与宽带信号上滤波器组覆盖更广。
+* 分解图：`table/methods/real_data/{cwru4k,ecg4k}_{decompositions,envelope}.png`
+  （沙箱放行后迁至 `fig/methods/real_data/`）。
+* 回归测试：`tests/methods/test_real_data_smoke.py`（数据缺失自动 skip）。

@@ -42,6 +42,7 @@
 | EFD（MD-EFD / PySDKit-EFD） | `comparison/bench_timing.py --method EFD` | `tests/comparison/results/efd_fixed/*` → `table/methods/efd_fixed/` | `docs/test/methods/EFD_Native_Engine_Report.md` |
 | 其余 6 个方法（CEEFD/MEMD/SSA/EWT/SVMD + Pareto 扫描） | `.scratch/eemd_new/pareto_all.py`、`pareto_report.py` | `tests/comparison/results/pareto/<METHOD>.json` | `docs/test/methods/<METHOD>_Native_Engine_Report.md` |
 | EFD / FMD 对 PySDKit 同口径基准（本轮） | `comparison/bench_efd_fmd_native.py`（`--mode compare` / `grid`） | `tests/comparison/results/efd_fmd_native/*.json` → `table/methods/efd_fmd_native/{compare,fmd_grid}.csv` | `docs/test/methods/EFD_FMD_vs_PySDKit_Report.md` |
+| 真实数据多方法矩阵（EMD 家族/VMD/FMD/EFD/EWT…） | `comparison/{bench_real_data,plot_real_data}.py` | `table/methods/real_data/{methods_matrix.csv,*.png}` | `docs/test/methods/Real_Data_Method_Matrix_Report.md` |
 | 大数组内存（100 MB / 500 MB / 1 GB） | `.scratch/eemd_new/{bench_tier,probe_one,bench_large}.py` | `tests/comparison/results/memory*` | `docs/test/methods/Large_Array_Memory_Report.md` |
 
 ## 3. 工具层深度测试（本轮，13 个模块）

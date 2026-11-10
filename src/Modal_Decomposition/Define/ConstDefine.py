@@ -37,7 +37,7 @@ DEFAULT_ALLOCABLE_CPU_RATIO = 2.0 / 3.0
 definition: big array
 """
 #: 大数组分界 (字节)
-BIG_ARRAY = 300 * SIZE["1MB"]       # 314572800 bytes
+BIG_ARRAY = 100 * SIZE["1MB"]       # 314572800 bytes
 
 """
 definition: Python Version

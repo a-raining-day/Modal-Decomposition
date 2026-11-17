@@ -55,7 +55,10 @@ class CEEFDConfig(Config):
 分解器
 """
 class CEEFD(Decomposer):
+
     name: ClassVar[str] = "CEEFD"
+
+    # __slots__ = ("fs", "min_peak_distance", "envelop_iter", "dtype", "safe", "copy", "imfs", "res")
 
     def __init__(
         self,

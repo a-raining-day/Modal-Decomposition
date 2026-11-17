@@ -125,6 +125,8 @@ class Decomposer(ABC):
 
     name: ClassVar[str]
 
+    __slots__ = ()  # avoid __dict__
+
     @abstractmethod
     def decompose(self, S) -> DecompositionResult:
         """

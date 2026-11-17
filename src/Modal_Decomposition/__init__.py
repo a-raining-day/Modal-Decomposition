@@ -15,8 +15,6 @@ Public interface
 Every method returns a ``DecompositionResult`` with ``.IMFs``, ``.Res``,
 ``.info`` and ``.config``. ``Res`` is None for methods without a residual
 concept (SSA, VMD).
-
-``EWT`` 是本库自研实现(不依赖 ewtpy)。
 """
 
 from .Base import *
@@ -42,6 +40,9 @@ from .VMD import VMD, f_VMD, VMDConfig
 from .EWT import EWT, f_EWT, EWTConfig
 from .SVMD import SVMD, f_SVMD, SVMDConfig
 
+import warnings
+import numpy as np
+
 __all__ = [
     "Class",
     "Function",
@@ -55,7 +56,7 @@ __all__ = [
     "__description__",
 ]
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __author__ = "a-raining-day(Mao)"
 __email__ = "2215269365@qq.com"
 __license__ = "Apache 2.0"
@@ -81,10 +82,32 @@ def set_seed(seed: int, lock: bool = False, verbose: bool = True) -> int:
     np.random.seed(int(seed))
     return Seed.set(seed, lock=lock, verbose=verbose)
 
-
 def get_seed() -> int:
     """读取当前进程级全局随机种子。"""
     return Seed.get()
+
+def set_allocable_cpu_ratio(cpu_ratio: float) -> None:
+    """设置并行时可用 cpu 数量, 默认为 2/3"""
+    if isinstance(cpu_ratio, float):
+        if 0 < cpu_ratio <= 1:
+            if cpu_ratio == 1:
+                warnings.warn("the `cpu ratio` is 1! means all cpu will be used!")
+            else:
+                pass
+        else:
+            raise ValueError("the `cpu ratio` must be between 0 and 1!")
+    else:
+        raise ValueError("the `cpu ratio` must be float!")
+
+    global DEFAULT_ALLOCABLE_CPU_RATIO
+    DEFAULT_ALLOCABLE_CPU_RATIO = cpu_ratio
+
+def set_numpy_default_type(dtype: float | np.floating) -> None:
+    if not isinstance(dtype, float) and not isinstance(dtype, np.floating):
+        raise ValueError("the `dtype` must be float or np.floating!")
+
+    global DEFAULT_NUMPY_TYPE
+    DEFAULT_NUMPY_TYPE = dtype
 
 class Class:
     EMD = EMD
@@ -119,3 +142,5 @@ class Function:
     VMD = f_VMD
     EWT = f_EWT
     SVMD = f_SVMD
+
+

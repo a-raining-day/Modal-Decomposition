@@ -21,10 +21,8 @@ docs/
 │   ├── Scale_Axis_Report.md      # 1 MiB–600 MiB 规模轴（8 个低成本工具）
 │   ├── LICENSE                   # 与仓库根 LICENSE 同源
 │   └── _template/                # 报告模板与生成器（FunctionTemplate / Template_Generate.py）
-├── explore/                      # 探索性研究（非契约性结论）
-│   └── denoise/                  # 去噪专题：只放报告（图在 fig/explore/denoise/）
-└── competition/                  # 参赛材料（对外报告，不参与包行为）
-    └── AIC2026_技术报告.md        # 2026 AIC·AI+开源 算法主题赛技术报告（含作品简介、架构、验证与合规附录）
+└── explore/                      # 探索性研究（非契约性结论）
+    └── denoise/                  # 去噪专题：只放报告（图在 fig/explore/denoise/）
 ```
 
 ## 材料落位规则
@@ -36,15 +34,6 @@ docs/
 | 汇总表格（csv/xlsx） | `table/` | `table/size_axis/monotonicity_scale.csv` |
 | 图片（png） | `fig/` | `fig/methods/emd/emd_pareto.png` |
 | 可执行测试 | `tests/` | `tests/utils/test_Monotonicity_deep.py` |
-
-## 写作约定
-
-1. **每个数字都要能追溯**：报告里出现的数值，必须能在 `tests/` 的某个 JSON、
-   或 `table/` 的某个 csv、或报告内直接给出的复现命令里找到。
-2. **图必须带相对链接**（`../../../fig/...`），不要写绝对路径；`tests/tools/check_links.py` 会检查。
-3. **不得美化回归**：变慢、变差、失败都要如实写进"已知问题"。
-4. 报告文件名与对象名对齐：`<Object>_<Kind>_Report.md`，`Kind ∈ {Native_Engine, Engine,
-   Backend, Deep, Scale}`。
 
 ## 快速导航
 

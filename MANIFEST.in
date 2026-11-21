@@ -7,3 +7,15 @@ include README.md
 recursive-include src/Modal_Decomposition/Utils/_Hilbert/_C *
 include src/Modal_Decomposition/Utils/_Hilbert/_fht_native.pyx
 recursive-include src/Modal_Decomposition/Utils/_Slepian/_C *.c *.h
+
+# ??????????: ??/??/??/??/???????? sdist
+prune tests
+prune docs
+prune table
+prune fig
+prune explore
+prune ref
+prune .scratch
+prune .github
+prune .vscode
+global-exclude *.py[cod] __pycache__ *.ipynb

@@ -23,3 +23,5 @@ src/Modal_Decomposition/Utils/_Hilbert/_fht_native*.so
 /src/.idea/
 /.pytest_tmp/
 /explore/
+/TEMP/
+/material/

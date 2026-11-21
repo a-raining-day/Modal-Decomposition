@@ -56,7 +56,7 @@ __all__ = [
     "__description__",
 ]
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 __author__ = "a-raining-day(Mao)"
 __email__ = "2215269365@qq.com"
 __license__ = "Apache 2.0"
